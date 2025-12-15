@@ -1,26 +1,54 @@
 // App.tsx
+// App.tsx
+const API_BASE_URL = 'https://bushido-log-server.onrender.com';
 
+async function callSamuraiKing(message: string) {
+  console.log('SamuraiKing: calling', `${API_BASE_URL}/samurai-chat`);
+
+  try {
+    const res = await fetch(`${API_BASE_URL}/samurai-chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message }), // ← ここにお前の本音が入る
+    });
+
+    console.log('SamuraiKing: status', res.status);
+
+    if (!res.ok) {
+      const text = await res.text();
+      console.log('SamuraiKing: server error body', text);
+      throw new Error('Samurai server error');
+    }
+
+    const data = await res.json();
+    console.log('SamuraiKing: reply', data);
+
+    // server.js 側で { reply: '〜〜' } を返している想定
+    return data.reply as string;
+  } catch (error: any) {
+    console.log('SamuraiKing: fetch error', error?.message || error);
+    throw error;
+  }
+}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import * as Speech from 'expo-speech';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
-
-// ====== OpenAI API Key ======
-const OPENAI_API_KEY =
-  '';
 
 // ====== サウンド ======
 const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
@@ -51,6 +79,8 @@ const HISTORY_KEY = 'BUSHIDO_LOG_HISTORY_V1';
 const DAILY_LOGS_KEY = 'BUSHIDO_DAILY_LOGS_V1';
 const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
 const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
+const API_KEY_STORAGE_KEY = 'BUSHIDO_OPENAI_API_KEY_V1';
+const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
 
 // ===== サムライRPG用 定数 =====
 const MAX_LEVEL = 10;
@@ -70,9 +100,7 @@ const DEFAULT_ROUTINES = [
   '自然に触れる（太陽・海・風）',
 ];
 
-const urgeMessage = `
-その欲望、一刀両断！サムライキング参上。
-`;
+const urgeMessage = `その欲望、一刀両断！サムライキング参上。`;
 
 // ===== 型 =====
 type Message = {
@@ -121,6 +149,22 @@ type OnboardingData = {
   identity: string;
   quit: string;
   rule: string;
+};
+
+type AppSettings = {
+  autoVoice: boolean;
+  readingSpeed: 'slow' | 'normal' | 'fast';
+  enableHaptics: boolean;
+  enableSfx: boolean;
+  strictness: 'soft' | 'normal' | 'hard';
+};
+
+const DEFAULT_SETTINGS: AppSettings = {
+  autoVoice: true,
+  readingSpeed: 'normal',
+  enableHaptics: true,
+  enableSfx: true,
+  strictness: 'normal',
 };
 
 // ===== ユーティリティ =====
@@ -426,10 +470,24 @@ const MAX_CHAT_TURNS = 3;
 // =======================================================
 // メイン画面（App）
 // =======================================================
+// サムライキングを声で呼び出す
+const callSamuraiKingVoice = () => {
+  // ちょっと強めのバイブ
+  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
+  // 前の読み上げを止める
+  Speech.stop();
+
+  // サムライキングのセリフ
+  Speech.speak('おいおいどうした？ その欲望を断ち切るぞ。', {
+    language: 'ja-JP',
+    rate: 1.0,
+  });
+};
 export default function App() {
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review'>('consult');
-  const [isOpening, setIsOpening] = useState(true);
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings'>(
+    'consult',
+  );
   const [isOnboarding, setIsOnboarding] = useState(true);
 
   // ===== サムライ相談 =====
@@ -489,6 +547,14 @@ export default function App() {
 
   // ===== XP =====
   const [totalXp, setTotalXp] = useState(0);
+
+  // ===== 設定 =====
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+
+  // ===== APIキー（内部用・今はUIに出さない） =====
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
 
   // === 起動音 ===
   useEffect(() => {
@@ -585,6 +651,36 @@ export default function App() {
     })();
   }, []);
 
+  // ===== 設定ロード =====
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(SETTINGS_KEY);
+        if (json) {
+          const parsed: AppSettings = JSON.parse(json);
+          setSettings(prev => ({ ...prev, ...parsed }));
+        }
+      } catch (e) {
+        console.error('Failed to load settings', e);
+      }
+    })();
+  }, []);
+
+  // ===== APIキー読み込み（内部用） =====
+  useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem(API_KEY_STORAGE_KEY);
+        if (saved) {
+          setApiKey(saved);
+          setApiKeyInput(saved);
+        }
+      } catch (e) {
+        console.error('Failed to load API key', e);
+      }
+    })();
+  }, []);
+
   // ===== タブ切替時：今日のログ反映 =====
   useEffect(() => {
     const todayLog = dailyLogs.find(l => l.date === todayStr);
@@ -631,7 +727,7 @@ export default function App() {
   };
 
   const callChatGPT = async (
-    messagesForAI: { role: string; content: string }[],
+    messagesForAI: ChatMessageForAI[],
   ): Promise<string> => {
     const lastUserMessage =
       messagesForAI.filter(m => m.role === 'user').slice(-1)[0]?.content ?? '';
@@ -647,36 +743,89 @@ export default function App() {
 
       if (!res.ok) {
         console.log('server error: ', data);
-        return 'サーバー側でエラーが起きたでござる。少し時間をおいて再挑戦してほしいでござる。';
+        throw new Error('server error');
       }
 
       return (data.reply as string) || 'サーバーからの返答が空でござる。';
     } catch (error) {
-      console.error('network error: ', error);
+      console.error('server / network error: ', error);
+
+      if (apiKey.trim()) {
+        try {
+          const res2 = await fetch(
+            'https://api.openai.com/v1/chat/completions',
+            {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${apiKey.trim()}`,
+              },
+              body: JSON.stringify({
+                model: 'gpt-4o-mini',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  ...messagesForAI,
+                ],
+              }),
+            },
+          );
+
+          if (!res2.ok) {
+            const errText = await res2.text();
+            console.log('direct chat error raw:', errText);
+            const quotaMsg = parseQuotaMessage(errText);
+            if (quotaMsg) return quotaMsg;
+            return 'サムライキングとの会話でエラーが出たでござる。ネット環境とAPIキーを確認してほしいでござる。';
+          }
+
+          const data2: any = await res2.json();
+          const raw =
+            data2?.choices?.[0]?.message?.content?.trim() ?? '';
+          return raw || 'サムライキングの返事がうまく生成されなかったでござる。';
+        } catch (e2) {
+          console.error('direct chat fetch error:', e2);
+          return 'ネットワークエラーでござる。Wi-Fi などを確認してから、もう一度試してほしいでござる。';
+        }
+      }
+
       return 'ネットワークエラーでござる。Wi-Fi などを確認してから、もう一度試してほしいでござる。';
     }
   };
 
-  // サムライミッション（直接 OpenAI）
   const callSamuraiMissionGPT = async () => {
+    if (!apiKey.trim()) {
+      return 'OpenAI APIキーが未設定でござる。いったんはロボ声・通常機能だけで楽しんでくれでござる。';
+    }
+
+    const strictNote =
+      settings.strictness === 'soft'
+        ? '口調は優しめで、寄り添い重視で。'
+        : settings.strictness === 'hard'
+        ? '口調は少し厳しめで、ズバッと本音を伝えて。'
+        : '口調はふつう（優しさ＋少し厳しめ）で。';
+
     const userContent =
-      `${missionPromptBase}\n\n` +
       `【日付】${todayStr}\n` +
       `【サムライ宣言】${onboardingData?.identity ?? ''}\n` +
       `【やめたい習慣】${onboardingData?.quit ?? ''}\n` +
-      `【毎日のルール】${onboardingData?.rule ?? ''}\n`;
+      `【毎日のルール】${onboardingData?.rule ?? ''}\n` +
+      `【トーン指定】${strictNote}`;
 
     try {
       const res = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${apiKey.trim()}`,
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: missionPromptBase },
+            {
+              role: 'system',
+              content:
+                'あなたは一日の小さなサムライミッションを1つだけ提案するAIです。短く、1行で、具体的な行動だけを出してください。',
+            },
             { role: 'user', content: userContent },
           ],
         }),
@@ -732,14 +881,33 @@ export default function App() {
 
   const speakSamurai = (text: string) => {
     if (!text) return;
+    if (!settings.autoVoice) return;
+
+    const speechRate =
+      settings.readingSpeed === 'slow'
+        ? 0.8
+        : settings.readingSpeed === 'fast'
+        ? 1.1
+        : 0.95;
+
     (async () => {
       try {
         Speech.stop();
+
+        if (!apiKey.trim()) {
+          Speech.speak(text, {
+            language: 'ja-JP',
+            rate: speechRate,
+            pitch: 0.9,
+          });
+          return;
+        }
+
         const res = await fetch('https://api.openai.com/v1/audio/speech', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            Authorization: `Bearer ${apiKey.trim()}`,
           },
           body: JSON.stringify({
             model: 'gpt-4o-mini-tts',
@@ -756,14 +924,14 @@ export default function App() {
           if (quotaMsg) {
             Speech.speak(quotaMsg, {
               language: 'ja-JP',
-              rate: 0.9,
+              rate: speechRate,
               pitch: 0.9,
             });
             return;
           }
           Speech.speak(text, {
             language: 'ja-JP',
-            rate: 0.9,
+            rate: speechRate,
             pitch: 0.9,
           });
           return;
@@ -774,7 +942,7 @@ export default function App() {
         if (!base64) {
           Speech.speak(text, {
             language: 'ja-JP',
-            rate: 0.9,
+            rate: speechRate,
             pitch: 0.9,
           });
           return;
@@ -794,7 +962,7 @@ export default function App() {
         console.error('TTS play error:', e);
         Speech.speak(text, {
           language: 'ja-JP',
-          rate: 0.9,
+          rate: speechRate,
           pitch: 0.9,
         });
       }
@@ -807,8 +975,12 @@ export default function App() {
 
   const handleUrgePress = async () => {
     setIsSummoned(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
     speakSamurai(urgeMessage);
   };
 
@@ -822,6 +994,13 @@ export default function App() {
       text: userText,
     };
     setMessages(prev => [...prev, userMsg]);
+
+    const strictNoteForMessage =
+      settings.strictness === 'soft'
+        ? '\n\n【トーン指定】口調は優しめで、寄り添い重視で。'
+        : settings.strictness === 'hard'
+        ? '\n\n【トーン指定】口調は少し厳しめで、ズバッと本音を伝えて。'
+        : '\n\n【トーン指定】口調はふつう（優しさ＋少しの厳しさ）で。';
 
     if (phase === 'idle') {
       const questionText =
@@ -855,7 +1034,8 @@ export default function App() {
           issue +
           '\n\n【本当はこうなりたい】\n' +
           reflectionText +
-          '\n\nここから一緒に習慣を変えていこう。';
+          '\n\nここから一緒に習慣を変えていこう。' +
+          strictNoteForMessage;
 
         const replyText = await callChatGPT([
           { role: 'user', content: firstUserContent },
@@ -920,11 +1100,12 @@ export default function App() {
               (pendingIssue ? `悩み: ${pendingIssue}\n` : '') +
               (firstReflection ? `本当はこうなりたい: ${firstReflection}\n` : '') +
               '\n【ここからの追加相談】\n' +
-              followUpUser,
+              followUpUser +
+              strictNoteForMessage,
           },
         ];
 
-        const replyText = await callChatGPT(apiMessages);
+        const replyText = await callChatGPT(apiMessages as ChatMessageForAI[]);
 
         const kingMsg: Message = {
           id: Date.now().toString() + '-k2',
@@ -958,22 +1139,34 @@ export default function App() {
 
   const handleSend = async () => {
     if (!input.trim() || isSending) return;
-    Haptics.selectionAsync().catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
     const userText = input.trim();
     setInput('');
     await processUserText(userText);
-    Keyboard.dismiss();
   };
 
   const handleSwitchToChat = async () => {
-    Haptics.selectionAsync().catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
     setMode('chat');
   };
+
   const handleSwitchToHistory = async () => {
-    Haptics.selectionAsync().catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
     setMode('history');
     await loadHistory();
   };
@@ -1027,7 +1220,20 @@ export default function App() {
       setIsRecording(false);
       setRecording(null);
 
-      if (!uri) throw new Error('no uri');
+      if (!uri) {
+        throw new Error('no uri');
+      }
+
+      if (!apiKey.trim()) {
+        const errMsg: Message = {
+          id: Date.now().toString() + '-no-apikey-trans',
+          from: 'king',
+          text:
+            '音声から文字起こしするには OpenAI APIキーが必要でござる。いまは文字で打つスタイルで楽しむでござる。',
+        };
+        setMessages(prev => [...prev, errMsg]);
+        return;
+      }
 
       const formData = new FormData();
       formData.append('file', {
@@ -1041,7 +1247,7 @@ export default function App() {
         'https://api.openai.com/v1/audio/transcriptions',
         {
           method: 'POST',
-          headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+          headers: { Authorization: `Bearer ${apiKey.trim()}` },
           body: formData,
         },
       );
@@ -1093,8 +1299,12 @@ export default function App() {
   };
 
   const handleMicPress = async () => {
-    Haptics.selectionAsync().catch(() => {});
-    await playMicSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playMicSound();
+    }
     if (isRecording) {
       await stopRecordingAndTranscribe();
     } else {
@@ -1128,8 +1338,12 @@ export default function App() {
   };
 
   const handleSaveTodayMission = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     await upsertTodayLog(prev => {
       const prevTodos = prev?.todos ?? [];
@@ -1169,8 +1383,12 @@ export default function App() {
   };
 
   const handleSaveNightReview = async () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     await upsertTodayLog(prev => ({
       date: todayStr,
@@ -1189,8 +1407,12 @@ export default function App() {
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     const newLogs = dailyLogs.map(log => {
       if (log.date !== date) return log;
@@ -1206,8 +1428,12 @@ export default function App() {
   };
 
   const toggleRoutineDone = async (date: string, label: string) => {
-    Haptics.selectionAsync().catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     const newLogs = dailyLogs.map(log => {
       if (log.date !== date) return log;
@@ -1228,8 +1454,12 @@ export default function App() {
   const handleGenerateSamuraiMission = async () => {
     if (isGeneratingMission) return;
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     setIsGeneratingMission(true);
     try {
@@ -1263,10 +1493,14 @@ export default function App() {
   const handleCompleteSamuraiMission = async () => {
     if (!samuraiMissionText || missionCompletedToday) return;
 
-    Haptics.notificationAsync(
-      Haptics.NotificationFeedbackType.Success,
-    ).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.notificationAsync(
+        Haptics.NotificationFeedbackType.Success,
+      ).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     const gainedXp = 10;
     const newXp = totalXp + gainedXp;
@@ -1297,7 +1531,9 @@ export default function App() {
   };
 
   const handleToggleRoutineChip = (label: string) => {
-    Haptics.selectionAsync().catch(() => {});
+    if (settings.enableHaptics) {
+      Haptics.selectionAsync().catch(() => {});
+    }
     const lines = routineText
       .split('\n')
       .map(l => l.trim())
@@ -1320,7 +1556,7 @@ export default function App() {
       ? sortedDailyLogs[sortedDailyLogs.length - 1].date
       : null);
   const activeLog =
-    activeDate && sortedDailyLogs.find(log => log.date === activeDate);
+    activeDate ? sortedDailyLogs.find(log => log.date === activeDate) : null;
 
   // =====================================================
   // オンボーディング保存
@@ -1334,8 +1570,12 @@ export default function App() {
       return;
     }
 
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    await playPressSound();
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
 
     const data: OnboardingData = { identity, quit, rule };
 
@@ -1350,13 +1590,139 @@ export default function App() {
   };
 
   // =====================================================
+  // APIキー保存（内部用。今はUIからは呼ばない想定）
+  // =====================================================
+
+  const handleSaveApiKey = async () => {
+    if (settings.enableHaptics) {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    }
+    if (settings.enableSfx) {
+      await playPressSound();
+    }
+
+    const key = apiKeyInput.trim();
+    setIsSavingApiKey(true);
+    try {
+      await AsyncStorage.setItem(API_KEY_STORAGE_KEY, key);
+      setApiKey(key);
+    } catch (e) {
+      console.error('Failed to save API key', e);
+    } finally {
+      setIsSavingApiKey(false);
+    }
+  };
+
+  // =====================================================
+  // 設定の更新
+  // =====================================================
+
+  const updateSettings = async (patch: Partial<AppSettings>) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
+    try {
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    } catch (e) {
+      console.error('Failed to save settings', e);
+    }
+  };
+
+  // =====================================================
+  // データ管理（リセット系）
+  // =====================================================
+
+  const handleClearHistory = () => {
+    Alert.alert(
+      '相談履歴を削除',
+      'これまでのサムライ相談の履歴をすべて消すでござる。よろしいか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: '削除する',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.removeItem(HISTORY_KEY);
+              setHistory([]);
+            } catch (e) {
+              console.error('Failed to clear history', e);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // ★追加：チャット画面だけリセット
+  const handleClearChatMessages = () => {
+    Alert.alert(
+      'チャット画面をリセット',
+      'Samurai King との会話バブルを全部消して、最初の一言だけに戻すでござる。よろしいか？',
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'リセットする',
+          style: 'destructive',
+          onPress: () => {
+            setMessages([
+              {
+                id: 'first',
+                from: 'king',
+                text: 'おいおいどうした？その欲望を断ち切るぞ。',
+              },
+            ]);
+            setPhase('idle');
+            setPendingIssue(null);
+            setFirstReflection(null);
+            setChatHistory([]);
+            setTurnCount(0);
+          },
+        },
+      ],
+    );
+  };
+
+  const handleResetTodayLog = () => {
+    Alert.alert(
+      '今日の目標・日記をリセット',
+      `${todayStr} の目標・ルーティン・振り返りを消すでござる。よろしいか？`,
+      [
+        { text: 'キャンセル', style: 'cancel' },
+        {
+          text: 'リセットする',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const newLogs = dailyLogs.filter(log => log.date !== todayStr);
+              setDailyLogs(newLogs);
+              await saveDailyLogsToStorage(newLogs);
+              setMissionInput('');
+              setRoutineText('');
+              setTodoInput('');
+              setProudInput('');
+              setLessonInput('');
+              setNextActionInput('');
+              setSamuraiMissionText('');
+              setMissionCompletedToday(false);
+            } catch (e) {
+              console.error('Failed to reset today log', e);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  // =====================================================
   // UI
   // =====================================================
 
   const renderTabButton = (value: typeof tab, label: string) => (
     <Pressable
       onPress={() => {
-        Haptics.selectionAsync().catch(() => {});
+        if (settings.enableHaptics) {
+          Haptics.selectionAsync().catch(() => {});
+        }
         setTab(value);
       }}
       style={[styles.tabButton, tab === value && styles.tabButtonActive]}
@@ -1371,12 +1737,17 @@ export default function App() {
 
   const renderConsultTab = () => (
     <View style={{ flex: 1 }}>
-      <Pressable style={styles.urgeButton} onPress={handleUrgePress}>
-        <Text style={styles.urgeText}>サムライキングに話してみろ！</Text>
-      </Pressable>
-
+      <Pressable
+  style={styles.urgeButton}
+  onPress={() => {
+    handleUrgePress();       // いままで通りチャットを開く処理
+    callSamuraiKingVoice();  // 新しく追加した「声で呼び出す」処理
+  }}
+>
+  <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
+</Pressable>
       <Text style={styles.caption}>
-        ムラムラ・不安・サボりたくなったら、このボタンでサムライキングを呼び出すのだ。
+        ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。
       </Text>
 
       {!isSummoned ? (
@@ -1489,7 +1860,6 @@ export default function App() {
                       const textToSend = input.trim();
                       setInput('');
                       processUserText(textToSend);
-                      Keyboard.dismiss();
                     }}
                   />
                   <Pressable
@@ -1694,7 +2064,9 @@ export default function App() {
             <Text style={styles.samuraiHeaderTitle}>サムライ宣言</Text>
             <Pressable
               onPress={() => {
-                Haptics.selectionAsync().catch(() => {});
+                if (settings.enableHaptics) {
+                  Haptics.selectionAsync().catch(() => {});
+                }
                 setIsEditingOnboarding(true);
                 setObIdentity(onboardingData.identity ?? '');
                 setObQuit(onboardingData.quit ?? '');
@@ -1747,7 +2119,9 @@ export default function App() {
                     },
                   ]}
                   onPress={() => {
-                    Haptics.selectionAsync().catch(() => {});
+                    if (settings.enableHaptics) {
+                      Haptics.selectionAsync().catch(() => {});
+                    }
                     setIsEditingOnboarding(false);
                     if (onboardingData) {
                       setObIdentity(onboardingData.identity ?? '');
@@ -1868,7 +2242,9 @@ export default function App() {
               <Pressable
                 key={log.date}
                 onPress={() => {
-                  Haptics.selectionAsync().catch(() => {});
+                  if (settings.enableHaptics) {
+                    Haptics.selectionAsync().catch(() => {});
+                  }
                   setSelectedDate(log.date);
                 }}
                 style={[styles.dateChip, isActive && styles.dateChipActive]}
@@ -1970,6 +2346,186 @@ export default function App() {
     </ScrollView>
   );
 
+  const renderSettingsTab = () => (
+    <ScrollView
+      style={{ flex: 1 }}
+      contentContainerStyle={{ paddingBottom: 24 }}
+    >
+      <View style={styles.goalCard}>
+        <Text style={styles.goalTitle}>設定</Text>
+        <Text style={styles.goalSub}>
+          サムライキングの声やバイブの強さを、自分好みにカスタムできるでござる。
+        </Text>
+
+        {/* サムライボイス設定 */}
+        <Text style={styles.sectionTitle}>サムライボイス</Text>
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>自動で声を再生する</Text>
+            <Text style={styles.settingsHint}>
+              OFFにすると、テキストだけ静かに読むモードになるでござる。
+            </Text>
+          </View>
+          <Switch
+            value={settings.autoVoice}
+            onValueChange={v => updateSettings({ autoVoice: v })}
+          />
+        </View>
+
+        <Text style={[styles.settingsLabel, { marginTop: 8 }]}>
+          読み上げスピード
+        </Text>
+        <View style={styles.segmentRow}>
+          {[
+            { key: 'slow', label: 'ゆっくり' },
+            { key: 'normal', label: 'ふつう' },
+            { key: 'fast', label: '速め' },
+          ].map(opt => {
+            const active = settings.readingSpeed === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                style={[
+                  styles.segmentButton,
+                  active && styles.segmentButtonActive,
+                ]}
+                onPress={() =>
+                  updateSettings({
+                    readingSpeed: opt.key as AppSettings['readingSpeed'],
+                  })
+                }
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    active && styles.segmentButtonTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 振動・効果音 */}
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+          振動・効果音
+        </Text>
+
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>ボタン操作でバイブする</Text>
+            <Text style={styles.settingsHint}>
+              OFFにすると、スマホの振動なしで静かに操作できるでござる。
+            </Text>
+          </View>
+          <Switch
+            value={settings.enableHaptics}
+            onValueChange={v => updateSettings({ enableHaptics: v })}
+          />
+        </View>
+
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>太鼓・マイクの効果音</Text>
+            <Text style={styles.settingsHint}>
+              OFFにすると、効果音なしのステルスモードになるでござる。
+            </Text>
+          </View>
+          <Switch
+            value={settings.enableSfx}
+            onValueChange={v => updateSettings({ enableSfx: v })}
+          />
+        </View>
+
+        {/* サムライの厳しさ */}
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+          サムライの厳しさ（口調レベル）
+        </Text>
+        <Text style={styles.settingsHint}>
+          今のメンタルに合わせて、どれくらいズバッと言ってほしいか選べるでござる。
+        </Text>
+
+        <View style={styles.segmentRow}>
+          {[
+            { key: 'soft', label: '優しめ' },
+            { key: 'normal', label: 'ふつう' },
+            { key: 'hard', label: 'ちょい厳しめ' },
+          ].map(opt => {
+            const active = settings.strictness === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                style={[
+                  styles.segmentButton,
+                  active && styles.segmentButtonActive,
+                ]}
+                onPress={() =>
+                  updateSettings({
+                    strictness: opt.key as AppSettings['strictness'],
+                  })
+                }
+              >
+                <Text
+                  style={[
+                    styles.segmentButtonText,
+                    active && styles.segmentButtonTextActive,
+                  ]}
+                >
+                  {opt.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 通知（あとで実装） */}
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+          通知リマインド（準備中）
+        </Text>
+        <Text style={styles.settingsHint}>
+          朝ミッション・夜の振り返りのプッシュ通知は、今後のアップデートで実装予定でござる。
+        </Text>
+
+        {/* データ管理 */}
+        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
+          データ管理
+        </Text>
+        <Text style={styles.settingsHint}>
+          誤爆したときや、一度リセットしたいとき用だ。押す前によく考えるでござる。
+        </Text>
+
+        {/* 相談ログ（履歴タブ用）を全部削除 */}
+        <Pressable style={styles.dangerButton} onPress={handleClearHistory}>
+          <Text style={styles.dangerButtonText}>
+            相談履歴（ログ）をすべて削除
+          </Text>
+        </Pressable>
+
+        {/* チャット画面だけリセット */}
+        <Pressable
+          style={[styles.dangerButton, { marginTop: 6 }]}
+          onPress={handleClearChatMessages}
+        >
+          <Text style={styles.dangerButtonText}>
+            チャット画面の会話をリセット
+          </Text>
+        </Pressable>
+
+        {/* 今日の目標・日記だけリセット */}
+        <Pressable
+          style={[styles.dangerButton, { marginTop: 6 }]}
+          onPress={handleResetTodayLog}
+        >
+          <Text style={styles.dangerButtonText}>
+            今日の目標・日記をリセット
+          </Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+
   // ===== オンボーディング画面 =====
 
   if (isLoadingOnboarding) {
@@ -2051,6 +2607,7 @@ export default function App() {
             {renderTabButton('consult', '相談')}
             {renderTabButton('goal', '今日の目標')}
             {renderTabButton('review', '振り返り')}
+            {renderTabButton('settings', '設定')}
           </View>
 
           <View style={{ flex: 1 }}>
@@ -2058,7 +2615,9 @@ export default function App() {
               ? renderConsultTab()
               : tab === 'goal'
               ? renderGoalTab()
-              : renderReviewTab()}
+              : tab === 'review'
+              ? renderReviewTab()
+              : renderSettingsTab()}
           </View>
         </View>
       </TouchableWithoutFeedback>
@@ -2102,8 +2661,6 @@ const styles = StyleSheet.create({
   tabButtonTextActive: {
     color: '#000',
   },
-
-  // 相談タブ
   urgeButton: {
     paddingVertical: 12,
     borderRadius: 999,
@@ -2171,96 +2728,101 @@ const styles = StyleSheet.create({
     borderColor: '#1f2937',
   },
   chatTitle: {
-    color: '#fff',
-    fontWeight: '600',
-    marginBottom: 4,
+    color: '#e5e7eb',
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 6,
   },
   messages: {
     flex: 1,
-    marginBottom: 6,
+    maxHeight: 260,
   },
   bubble: {
     padding: 8,
     borderRadius: 10,
     marginBottom: 6,
-    maxWidth: '92%',
   },
   userBubble: {
     alignSelf: 'flex-end',
-    backgroundColor: '#0f766e',
+    backgroundColor: '#1f2937',
   },
   kingBubble: {
     alignSelf: 'flex-start',
     backgroundColor: '#111827',
   },
   bubbleLabel: {
-    color: '#e5e7eb',
     fontSize: 10,
+    color: '#9ca3af',
     marginBottom: 2,
   },
   bubbleText: {
-    color: '#f9fafb',
+    color: '#e5e7eb',
     fontSize: 13,
     lineHeight: 18,
   },
   inputRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
+    marginTop: 6,
   },
   micButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 999,
-    backgroundColor: '#111827',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#4b5563',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 4,
   },
   micButtonActive: {
-    backgroundColor: '#dc2626',
+    backgroundColor: '#ef4444',
+    borderColor: '#ef4444',
   },
   micIcon: {
-    color: '#fff',
+    color: '#e5e7eb',
     fontSize: 16,
   },
   input: {
     flex: 1,
-    maxHeight: 80,
-    borderRadius: 999,
+    minHeight: 36,
+    maxHeight: 100,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 10,
     backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#374151',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    color: '#fff',
+    borderColor: '#4b5563',
+    color: '#e5e7eb',
     fontSize: 13,
   },
   sendButton: {
     marginLeft: 4,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#22c55e',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sendText: {
-    color: '#fff',
+    color: '#022c22',
     fontWeight: '700',
-    fontSize: 12,
+    fontSize: 13,
   },
   historyInfo: {
     color: '#9ca3af',
     fontSize: 12,
-    padding: 4,
+    lineHeight: 18,
+    marginTop: 4,
   },
   historyEntry: {
+    padding: 8,
     borderRadius: 10,
+    backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: '#1f2937',
-    padding: 8,
-    marginBottom: 6,
-    backgroundColor: '#020617',
+    marginBottom: 8,
   },
   historyDate: {
     color: '#9ca3af',
@@ -2268,31 +2830,27 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   historyLabel: {
-    color: '#e5e7eb',
+    color: '#fbbf24',
     fontSize: 11,
     marginTop: 4,
-    marginBottom: 2,
-    fontWeight: '600',
   },
   historyText: {
-    color: '#d1d5db',
+    color: '#e5e7eb',
     fontSize: 12,
     lineHeight: 18,
   },
-
-  // 目標/レビュー共通
   goalCard: {
+    marginTop: 8,
+    padding: 12,
     borderRadius: 14,
+    backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: '#1f2937',
-    padding: 10,
-    marginTop: 10,
-    backgroundColor: '#020617',
   },
   goalTitle: {
-    color: '#fff',
+    color: '#f9fafb',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 16,
     marginBottom: 4,
   },
   goalSub: {
@@ -2300,13 +2858,52 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 8,
   },
+  samuraiMissionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 2,
+  },
+  samuraiMissionTitle: {
+    color: '#fbbf24',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  samuraiMissionXp: {
+    color: '#a5b4fc',
+    fontSize: 11,
+  },
+  samuraiMissionBox: {
+    marginTop: 4,
+    padding: 8,
+    borderRadius: 10,
+    backgroundColor: '#111827',
+  },
+  samuraiMissionText: {
+    color: '#e5e7eb',
+    fontSize: 13,
+    marginBottom: 6,
+  },
+  samuraiMissionButton: {
+    marginTop: 4,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+  },
+  samuraiMissionButtonText: {
+    color: '#022c22',
+    fontWeight: '700',
+    fontSize: 13,
+  },
   bigInput: {
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#374151',
     backgroundColor: '#020617',
-    padding: 8,
-    color: '#fff',
+    color: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     fontSize: 13,
     minHeight: 60,
     marginBottom: 8,
@@ -2321,40 +2918,42 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#4b5563',
     marginRight: 4,
     marginBottom: 4,
   },
   routineChipActive: {
-    backgroundColor: '#22c55e33',
-    borderColor: '#22c55e',
+    backgroundColor: '#0ea5e9',
+    borderColor: '#0ea5e9',
   },
   routineChipText: {
     color: '#e5e7eb',
     fontSize: 11,
   },
   routineChipTextActive: {
-    color: '#bbf7d0',
+    color: '#02131d',
+    fontWeight: '600',
   },
   todoInput: {
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#374151',
     backgroundColor: '#020617',
-    padding: 8,
-    color: '#fff',
+    color: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
     fontSize: 13,
-    minHeight: 70,
+    minHeight: 60,
   },
   primaryButton: {
-    marginTop: 10,
-    borderRadius: 999,
-    backgroundColor: '#f59e0b',
+    marginTop: 12,
     paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#3b82f6',
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#111827',
+    color: '#e5e7eb',
     fontWeight: '700',
     fontSize: 14,
   },
@@ -2363,94 +2962,52 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 6,
     marginBottom: 4,
-    fontWeight: '600',
   },
-
-  // サムライミッション
-  samuraiMissionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 2,
-  },
-  samuraiMissionTitle: {
-    color: '#fff',
-    fontWeight: '600',
-  },
-  samuraiMissionXp: {
-    color: '#facc15',
-    fontSize: 11,
-  },
-  samuraiMissionBox: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#4b5563',
-    padding: 8,
-    marginTop: 4,
-  },
-  samuraiMissionText: {
-    color: '#e5e7eb',
-    fontSize: 13,
-    marginBottom: 6,
-  },
-  samuraiMissionButton: {
-    marginTop: 4,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
-    paddingVertical: 8,
-    alignItems: 'center',
-  },
-  samuraiMissionButtonText: {
-    color: '#052e16',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-
-  // RPG Dashboard
   progressBar: {
-    height: 6,
+    height: 8,
     borderRadius: 999,
     backgroundColor: '#111827',
     overflow: 'hidden',
-    marginTop: 4,
-    marginBottom: 4,
+    marginTop: 8,
   },
   progressFill: {
     height: '100%',
+    borderRadius: 999,
     backgroundColor: '#22c55e',
   },
   progressHint: {
     color: '#9ca3af',
     fontSize: 11,
-    marginBottom: 6,
+    marginTop: 4,
   },
   dateChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: '#4b5563',
     marginRight: 4,
   },
   dateChipActive: {
-    backgroundColor: '#60a5fa33',
-    borderColor: '#60a5fa',
+    backgroundColor: '#2563eb',
+    borderColor: '#2563eb',
   },
   dateChipText: {
-    color: '#e5e7eb',
+    color: '#9ca3af',
     fontSize: 11,
   },
   dateChipTextActive: {
-    color: '#bfdbfe',
+    color: '#e5e7eb',
+    fontWeight: '600',
   },
   todoRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
+    marginTop: 4,
   },
   checkbox: {
-    width: 16,
-    height: 16,
+    width: 18,
+    height: 18,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: '#4b5563',
@@ -2462,14 +3019,129 @@ const styles = StyleSheet.create({
   },
   todoText: {
     color: '#e5e7eb',
-    fontSize: 12,
+    fontSize: 13,
   },
   todoTextDone: {
+    color: '#6b7280',
     textDecorationLine: 'line-through',
-    color: '#9ca3af',
   },
-
-  // サムライ宣言表示＆編集
+  sectionTitle: {
+    color: '#e5e7eb',
+    fontWeight: '700',
+    fontSize: 14,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  settingsRowText: {
+    flex: 1,
+    paddingRight: 8,
+  },
+  settingsLabel: {
+    color: '#e5e7eb',
+    fontSize: 13,
+  },
+  settingsHint: {
+    color: '#9ca3af',
+    fontSize: 11,
+    marginTop: 2,
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  segmentButton: {
+    flex: 1,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#0ea5e9',
+    borderColor: '#0ea5e9',
+  },
+  segmentButtonText: {
+    color: '#9ca3af',
+    fontSize: 12,
+  },
+  segmentButtonTextActive: {
+    color: '#02131d',
+    fontWeight: '700',
+  },
+  dangerButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#ef4444',
+    alignItems: 'center',
+  },
+  dangerButtonText: {
+    color: '#fecaca',
+    fontWeight: '600',
+    fontSize: 13,
+  },
+  onboardingContainer: {
+    flex: 1,
+    backgroundColor: '#050810',
+    paddingTop: 60,
+    paddingHorizontal: 16,
+  },
+  onboardingInner: {
+    flex: 1,
+  },
+  onboardingTitle: {
+    color: '#fbbf24',
+    fontWeight: '700',
+    fontSize: 18,
+    marginBottom: 12,
+  },
+  onboardingLabel: {
+    color: '#e5e7eb',
+    fontSize: 13,
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  onboardingInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#374151',
+    backgroundColor: '#020617',
+    color: '#e5e7eb',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    minHeight: 60,
+  },
+  onboardingButton: {
+    marginTop: 16,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+  },
+  onboardingButtonText: {
+    color: '#022c22',
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  onboardingSkip: {
+    marginTop: 12,
+    alignItems: 'center',
+  },
+  onboardingSkipText: {
+    color: '#9ca3af',
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
   samuraiHeaderTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -2477,7 +3149,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   samuraiHeaderTitle: {
-    color: '#fff',
+    color: '#fbbf24',
     fontWeight: '700',
     fontSize: 15,
   },
@@ -2496,106 +3168,51 @@ const styles = StyleSheet.create({
     color: '#9ca3af',
     fontSize: 11,
     marginTop: 4,
-    marginBottom: 2,
   },
   samuraiHeaderText: {
     color: '#e5e7eb',
     fontSize: 12,
     lineHeight: 18,
   },
-
-  // Avatar
   avatarCard: {
     flexDirection: 'row',
-    marginTop: 8,
-    borderRadius: 10,
+    alignItems: 'center',
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: '#1f2937',
-    padding: 8,
-    backgroundColor: '#020617',
   },
   avatarCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 999,
-    backgroundColor: '#111827',
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    backgroundColor: '#111827',
+    marginRight: 10,
   },
   avatarEmoji: {
-    fontSize: 26,
+    fontSize: 30,
   },
   avatarInfo: {
     flex: 1,
   },
   avatarTitle: {
-    color: '#fff',
+    color: '#f9fafb',
     fontWeight: '700',
     fontSize: 14,
+    marginBottom: 2,
   },
   avatarRank: {
-    color: '#facc15',
+    color: '#a5b4fc',
     fontSize: 12,
-    marginTop: 2,
+    marginBottom: 2,
   },
   avatarDesc: {
     color: '#9ca3af',
     fontSize: 11,
-    marginTop: 4,
-  },
-
-  // オンボーディング
-  onboardingContainer: {
-    flex: 1,
-    backgroundColor: '#020617',
-    paddingTop: 40,
-    paddingHorizontal: 16,
-  },
-  onboardingInner: {
-    flex: 1,
-  },
-  onboardingTitle: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 18,
-    marginBottom: 12,
-  },
-  onboardingLabel: {
-    color: '#e5e7eb',
-    fontSize: 13,
-    marginBottom: 4,
-    marginTop: 6,
-  },
-  onboardingInput: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#020617',
-    padding: 8,
-    color: '#fff',
-    fontSize: 13,
-    minHeight: 60,
-  },
-  onboardingButton: {
-    marginTop: 12,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  onboardingButtonText: {
-    color: '#052e16',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  onboardingSkip: {
-    marginTop: 10,
-    alignItems: 'center',
-  },
-  onboardingSkipText: {
-    color: '#9ca3af',
-    fontSize: 12,
-    textDecorationLine: 'underline',
+    lineHeight: 16,
   },
 });

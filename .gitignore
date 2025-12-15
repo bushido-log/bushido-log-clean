@@ -49,3 +49,9 @@ build/
 .env
 .env.*
 .DS_Store
+node_modules
+.env
+#   node_modules/
+#   .env
+#   .env.*
+#   .DS_Store

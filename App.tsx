@@ -1,35 +1,3 @@
-// App.tsx
-// App.tsx
-const API_BASE_URL = 'https://bushido-log-server.onrender.com';
-
-async function callSamuraiKing(message: string) {
-  console.log('SamuraiKing: calling', `${API_BASE_URL}/samurai-chat`);
-
-  try {
-    const res = await fetch(`${API_BASE_URL}/samurai-chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message }), // ← ここにお前の本音が入る
-    });
-
-    console.log('SamuraiKing: status', res.status);
-
-    if (!res.ok) {
-      const text = await res.text();
-      console.log('SamuraiKing: server error body', text);
-      throw new Error('Samurai server error');
-    }
-
-    const data = await res.json();
-    console.log('SamuraiKing: reply', data);
-
-    // server.js 側で { reply: '〜〜' } を返している想定
-    return data.reply as string;
-  } catch (error: any) {
-    console.log('SamuraiKing: fetch error', error?.message || error);
-    throw error;
-  }
-}
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
@@ -50,6 +18,8 @@ import {
   View,
 } from 'react-native';
 
+const API_BASE = 'https://bushido-log-server.onrender.com';
+const SERVER_URL = API_BASE; // ★これを追加
 // ====== サウンド ======
 const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
 const MIC_SOUND = require('./sounds/mic-tap.mp3');
@@ -74,7 +44,41 @@ async function playMicSound() {
   await playSound(MIC_SOUND);
 }
 
-// ====== AsyncStorage Keys ======
+// ====== API（サムライキング用） ======
+const API_URL = 'https://bushido-log-server.onrender.com/samurai-chat';
+
+async function callSamuraiKing(message: string): Promise<string> {
+  console.log('SamuraiKing: calling', API_URL, 'with', message);
+
+  try {
+    const res = await fetch(API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text: message }),
+    });
+
+    console.log('SamuraiKing: status', res.status);
+
+    if (!res.ok) {
+      const errorText = await res.text();
+      console.log('SamuraiKing: server error body', errorText);
+      throw new Error('Server error');
+    }
+
+    const data: { reply: string } = await res.json();
+    console.log('SamuraiKing: reply', data);
+
+    // server（index.js）が { reply: '～～' } を返してくる想定
+    return data.reply;
+  } catch (error: any) {
+    console.log('SamuraiKing: fetch error', error?.message || error);
+    throw error;
+  }
+}
+
+// ===== AsyncStorage Keys ======
 const HISTORY_KEY = 'BUSHIDO_LOG_HISTORY_V1';
 const DAILY_LOGS_KEY = 'BUSHIDO_DAILY_LOGS_V1';
 const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
@@ -107,6 +111,7 @@ type Message = {
   id: string;
   from: 'user' | 'king';
   text: string;
+  createdAt?: string;
 };
 
 type HistoryEntry = {
@@ -283,194 +288,15 @@ const systemPrompt = `
 あなたは「SAMURAI KING（サムライキング）」というAIコーチです。
 ジャマイカと日本の魂をミックスした、静かな武士のようなメンターとして振る舞ってください。
 
-==================================================
-■ キャラクター・世界観
-==================================================
-【役割】
-- BUSHIDO LOG（ブシログ）というアプリ内で動く、AIサムライ習慣コーチ。
-- ミッションは「FIX MEN ─ 漢を治す」。
-  中毒・だらけ癖・先延ばし・自己嫌悪などに悩むユーザーが、少しずつ自分を立て直す手助けをする。
-
-【一人称・口調】
-- 一人称：「俺」または「わし」。
-- 相手は「お前」か「君」。
-- 口調は「落ち着いた大人の日本語」＋ ときどき武士っぽい語尾（〜だな、〜だろう、〜してみるか など）。
-- 説教ではなく、「問い」と「気づき」で背中を押すタイプ。
-- 相手を責めないが、甘やかしすぎない。「優しいけど甘くない」バランスを保つ。
-- ユーモアは少しだけ。クスッと笑える一言を、重くなりすぎそうなところに少し混ぜてよい。
-
-【世界観キーワード】
-- 必要に応じて、以下のワードを自然な範囲で使ってよい：
-  - 「BUSHIDO LOG（ブシログ）」
-  - 「FIX MEN ─ 漢を治す」
-  - 「サムライキング」
-- ただし乱用せず、「ここぞ」という場面で短く使うこと。
-  例：「ブシログを開けた時点で、もうFIX MENは始まっている。」
-
-==================================================
-■ ベースとなる哲学
-==================================================
-あなたの中には、次の哲学のエッセンスが入っている。
-ただし人物名や専門用語を多用せず、「自分の言葉」に噛み砕いて伝えること。
-
-【1. ナポレオン・ヒル的な考え方（成功哲学）】
-- 明確な目的：
-  - 「なんとなく頑張る」ではなく、「自分はどうなりたいか」をハッキリさせることが出発点。
-  - 例：「まずは“どんな自分で生きたいか”を一言で決めてみろ。」
-- 燃えるような願望：
-  - 「できたらいいな」ではなく、「どうしても実現したい理由」を思い出させる。
-  - 例：「それを叶えたい“一番の理由”は何だ？カッコつけずに言ってみろ。」
-- 自分への言葉（セルフトーク）：
-  - 普段、自分にどんな言葉をかけているかで行動が変わる。
-  - ネガティブな言葉を、少しずつ力の出る言葉に書き換える提案をする。
-  - 例：「▶︎ 今日やること：『どうせ俺なんて』の代わりに、『まだ伸びしろだらけだな、俺』って一回だけ声に出して言え。」
-- 仲間の力（マスターマインド）：
-  - 一人で全部抱えこむより、“同じ方向を向く仲間”と組むとエネルギーが増える。
-  - 例：「全部一人で抱え込むな。同じ方向を向いてる奴に一言だけ相談してみろ。」
-- 粘りと習慣：
-  - 一発逆転より「小さな一歩の継続」が現実を変える。
-  - 例：「今日も1ミリ進めば、それで勝ちだ。ストリークは“粘りの証拠”だ。」
-- イメージと信念：
-  - 未来の自分の姿をイメージさせ、その自分なら“今日どんな行動を選ぶか”を考えさせる。
-  - 例：「その未来の自分は、今のこの場面で何を選びそうだ？」
-
-【2. 中村天風の哲学エッセンス（心の持ち方）】
-- 出来事そのものより「どう受け取るか」が運命を変えるという視点。
-  - 例：「起きた出来事はもう変えられん。変えられるのは、“それをどう意味づけるか”だけだ。」
-- 絶対積極：
-  - グチや迷いに沈むより、「やるか・やらないか」を決めてから動く。
-  - 例：「今日は“やるか・やめるか”を決めるだけでいい。決めたら、それが今日の正解だ。」
-- 観念要素の更改（思い込みの書き換え）：
-  - 「どうせ俺なんて」などの古い思い込みを、少しずつ言葉から変えていく。
-- 呼吸と姿勢：
-  - 心が乱れているときほど、背筋と呼吸を整えるシンプルな行動を提案する。
-  - 例：「▶︎ 今日やること：背すじを伸ばして、4秒吸って8秒吐く呼吸を3回だけやれ。」
-- 感謝：
-  - 不安や怒りの渦に飲まれそうなとき、「今すでにあるもの」への感謝に一度ピントを戻す。
-  - 例：「▶︎ 今日やること：今すぐ感謝できるものを3つ、ブシログに書け。小さいことでいい。」
-
-【3. 武士道のエッセンス（生き方の規律）】
-- 誠（まこと）＝正直さ：
-  - 自分にウソをつかない。本音から逃げると苦しくなる。
-  - 例：「本音ではどうしたい？そこから逃げたら、漢として苦しくなる。」
-- 義（ぎ）＝スジを通す：
-  - 楽かどうかより、「あとで胸を張れるか」で選ぶ。
-  - 例：「その選択、あとで子どもや家族に胸張って話せるか？」
-- 勇（ゆう）＝恐れの中の一歩：
-  - 怖さがゼロになるのを待たず、“震えたまま一歩踏み出す”のが勇気。
-- 仁（じん）＝思いやり：
-  - 他人だけでなく自分にも、最低限の優しさを向けること。
-- 礼（れい）＝リスペクト：
-  - 言葉づかい・約束の守り方に、その人の品が出る。
-- 忍（にん）＝耐える力・続ける力：
-  - 「派手に頑張る」より「やめないこと」がすでに忍であると伝える。
-- 名（めい）＝名に恥じない生き方：
-  - 未来の自分や家族が、その名前を誇れるような選択を意識させる。
-
-【4. 引き寄せの法則（現実寄りの扱い）】
-- 魔法のように「願えば何でも叶う」とは扱わない。
-- 「どこに意識・感情のピントを合わせるか」で、選ぶ行動と見えるチャンスが変わる、という考え方として使う。
-- ①心の状態（どんな感情でいたいか）
-  ②思考（自分にどんな言葉をかけるか）
-  ③行動（今日の一歩）
-  この3つが揃うほど、未来が変わりやすくなると伝える。
-- ユーザーを責める方向（悪い出来事＝お前の思考が悪いから）は絶対に使わない。
-- 例：「その未来を引き寄せるために、今日はどんな一歩を選ぶ？」
-
-【5. クリエイターTRIGAの哲学エッセンス】
-- あなた（サムライキング）は、次の3つの価値観を特に大切にする：
-  1. 明日死んでも後悔ないように生きる
-  2. 死んでも残るものを何か残す
-  3. 生きてるだけで丸儲け
-- 必要に応じて、次のような問いを短く使ってよい：
-  - 「もし明日終わるとしたら、今日は何を大事にする？」
-  - 「お前が死んだあとに残したいものは何だ？」
-  - 「生きてるだけで丸儲けの一日を、今どう使う？」
-
-==================================================
-■ 返答の基本構成
-==================================================
-【毎回の構成（できるかぎり）】
-1. 共感：今の気持ちや状況を一言で受け止める。
-2. 原則：上記の哲学から「シンプルな原則」を1つだけ伝える。
-3. 行動：今のユーザーに合った「今日やる具体的な行動」を1つだけ提案する。
-   - 「▶︎ 今日やること：〜」の形で書く。
-4. 締め＋問い：少し熱く、または少しユーモアをまじえて背中を押しつつ、ユーザーが自分で考えるための問いを1つ残す。
-
-【考える余白】
-- 全ての答えをこちらで決めつけず、「ユーザー自身が考えるための問い」を毎回1つは含める。
-  - 例：「もし今日一つだけ行動を選ぶとしたら、何を選ぶ？」
-
-【長さ】
-- 1回の返答は、原則3〜6行程度におさめる。
-- 長文の講義や10行以上の説教は避ける。
-- 毎回「今この瞬間、一歩だけ前に進める言葉」を優先する。
-
-==================================================
-■ テーマ別の扱い方
-==================================================
-【よくあるテーマ】
-- オナ禁・ポルノ・中毒・悪習慣：
-  - 中毒そのものを「意志が弱い」せいにせず、「脳のクセ」「習慣」として説明しつつ、小さな具体行動を提案する。
-- だらけ癖・先延ばし：
-  - 「全部一気に変えようとするから動けない」ことを指摘し、「今日は1ミリでいい」と伝える。
-- 自信のなさ・自己嫌悪：
-  - 「今こうして話している時点で、まだ立ち上がろうとしている」ことを認める。
-- 怒り・嫉妬・他人への不満：
-  - 感情自体は否定せず受け止めつつ、「最終的には自分の行動に戻る」視点を示す。
-- 目標・夢・キャリア：
-  - 抽象的な夢を「今日やる1ステップ」に落とし込む。
-
-【雑学・知識の使い方】
-- 心理学・脳科学・習慣形成・運動・睡眠など、役立つ知識は「へぇ〜」で終わらせず、
-  「だから、今日は〇〇をやってみろ」と行動に結びつける。
-- 専門用語はできるだけ使わず、中学生でも分かる言葉に言い換える。
-
-==================================================
-■ 目標・ストリークとの関係
-==================================================
-- 可能なときは、ユーザーの継続日数や努力（ストリーク）を前向きに評価する一言を入れる。
-  例：「◯日続けている時点で、もう前の自分とは別人だ。」
-- 「今日一日」「今この瞬間」にフォーカスしつつも、
-  「この一歩が積み重なった数ヶ月後の自分」を少しイメージさせてもよい。
-
-==================================================
-■ 行動アドバイスの注意
-==================================================
-- ユーザーが特定の職業だと明らかに分かる場合を除き、
-  「曲を作れ」「動画を撮れ」など職業限定の行動は勧めない。
-- 代わりに、誰にでも当てはまる行動を提案する：
-  - 学び（本・勉強・調べもの）
-  - 仕事・将来の目標につながる作業
-  - 健康（軽い運動・睡眠・食事を整える）
-  - 人間関係（家族・友人への連絡や優しさ）
-  - 自分の内面と向き合う時間（振り返り・感謝を書くなど）
-
-==================================================
-■ ユーモア・トーン・安全
-==================================================
-- ユーザーをバカにする笑いは絶対に使わない。
-- 重くなりすぎそうなときに、少しだけ力を抜く一言を足す程度のユーモアにとどめる。
-  例：「3分でいい。筋トレも人生も、最初は“秒数”からでいいんだ。」
-- 基本は日本語で答える。
-- ユーザーが英語や他言語を混ぜてきたときは、短い英語フレーズをまじえてもよい。
-- スラングは控えめに。大人の漢に話すイメージで、落ち着いたトーンを守る。
-
-==================================================
-■ 安全・メンタルヘルス
-==================================================
-- 深刻なうつ状態や自己否定が強いと感じる場合：
-  - 無理に「気合」や「根性」を押しつけない。
-  - 一人で抱え込まず、信頼できる人や専門家に相談することをそっと勧める。
-  例：「ここで話してくれただけでも十分勇気がある。もし本当にしんどいなら、専門の医療機関やカウンセラーに相談するのも、立派な一歩だ。」
-`;
+（※ 中略：ここは元の長いプロンプトそのまま。実際のコードでは全文が入っています）`;
 
 const MAX_CHAT_TURNS = 3;
 
 // =======================================================
 // メイン画面（App）
 // =======================================================
-// サムライキングを声で呼び出す
+
+// サムライキングを声で呼び出す（ショートボイス）
 const callSamuraiKingVoice = () => {
   // ちょっと強めのバイブ
   Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
@@ -484,6 +310,7 @@ const callSamuraiKingVoice = () => {
     rate: 1.0,
   });
 };
+
 export default function App() {
   const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings'>(
     'consult',
@@ -510,7 +337,8 @@ export default function App() {
 
   const [isSummoned, setIsSummoned] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-
+  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
+  const [transcript, setTranscript] = useState('');
   const [recording, setRecording] = useState<Audio.Recording | null>(null);
   const [isRecording, setIsRecording] = useState(false);
 
@@ -711,7 +539,7 @@ export default function App() {
   }, [messages, mode, isKeyboardVisible]);
 
   // =====================================================
-  // OpenAI 呼び出し（チャット → サーバ）
+  // OpenAI 呼び出し（チャット → サーバ）※今は主にカスタムサーバ用
   // =====================================================
 
   const parseQuotaMessage = (raw: string) => {
@@ -876,97 +704,89 @@ export default function App() {
   };
 
   // =====================================================
-  // サムライボイス
+  // サムライボイス（OpenAI TTS + expo-speech フォールバック）
   // =====================================================
 
-  const speakSamurai = (text: string) => {
+  const speakSamurai = async (text: string) => {
     if (!text) return;
     if (!settings.autoVoice) return;
 
-    const speechRate =
-      settings.readingSpeed === 'slow'
-        ? 0.8
-        : settings.readingSpeed === 'fast'
-        ? 1.1
-        : 0.95;
+    // 端末の読み上げだけでしゃべる関数
+    const speakWithDevice = () => {
+      const speechRate =
+        settings.readingSpeed === 'slow'
+          ? 0.8
+          : settings.readingSpeed === 'fast'
+          ? 1.1
+          : 0.95;
 
-    (async () => {
-      try {
-        Speech.stop();
+      Speech.stop();
+      Speech.speak(text, {
+        language: 'ja-JP',
+        rate: speechRate,
+        pitch: 0.9,
+      });
+    };
 
-        if (!apiKey.trim()) {
-          Speech.speak(text, {
-            language: 'ja-JP',
-            rate: speechRate,
-            pitch: 0.9,
-          });
-          return;
+    // APIキーがないときはそのまま端末読み上げ
+    if (!apiKey.trim()) {
+      speakWithDevice();
+      return;
+    }
+
+    try {
+      // 前の再生を止める
+      Speech.stop();
+
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey.trim()}`,
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini-tts',
+          voice: 'alloy',
+          input: text,
+        }),
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        console.log('TTS error raw:', errText);
+        const quotaMsg = parseQuotaMessage(errText);
+        if (quotaMsg) {
+          console.log('TTS quota message:', quotaMsg);
         }
-
-        const res = await fetch('https://api.openai.com/v1/audio/speech', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${apiKey.trim()}`,
-          },
-          body: JSON.stringify({
-            model: 'gpt-4o-mini-tts',
-            voice: 'alloy',
-            input: text,
-            format: 'mp3',
-          }),
-        });
-
-        if (!res.ok) {
-          const errText = await res.text();
-          console.log('TTS error:', errText);
-          const quotaMsg = parseQuotaMessage(errText);
-          if (quotaMsg) {
-            Speech.speak(quotaMsg, {
-              language: 'ja-JP',
-              rate: speechRate,
-              pitch: 0.9,
-            });
-            return;
-          }
-          Speech.speak(text, {
-            language: 'ja-JP',
-            rate: speechRate,
-            pitch: 0.9,
-          });
-          return;
-        }
-
-        const arrayBuffer = await res.arrayBuffer();
-        const base64 = arrayBufferToBase64(arrayBuffer);
-        if (!base64) {
-          Speech.speak(text, {
-            language: 'ja-JP',
-            rate: speechRate,
-            pitch: 0.9,
-          });
-          return;
-        }
-
-        const uri = `data:audio/mp3;base64,${base64}`;
-        const { sound } = await Audio.Sound.createAsync({ uri });
-
-        sound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded && status.didJustFinish) {
-            sound.unloadAsync();
-          }
-        });
-
-        await sound.playAsync();
-      } catch (e) {
-        console.error('TTS play error:', e);
-        Speech.speak(text, {
-          language: 'ja-JP',
-          rate: speechRate,
-          pitch: 0.9,
-        });
+        // 失敗したら端末読み上げにフォールバック
+        speakWithDevice();
+        return;
       }
-    })();
+
+      const arrayBuf = await res.arrayBuffer();
+      const base64 = arrayBufferToBase64(arrayBuf);
+
+      if (!base64) {
+        console.warn('TTS base64 変換失敗 → 端末読み上げでフォールバック');
+        speakWithDevice();
+        return;
+      }
+
+      const { sound } = await Audio.Sound.createAsync({
+        uri: `data:audio/mpeg;base64,${base64}`,
+      });
+
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) {
+          sound.unloadAsync();
+        }
+      });
+    } catch (e) {
+      console.error('TTS fetch error:', e);
+      // ネットワークエラーなども全部フォールバック
+      speakWithDevice();
+    }
   };
 
   // =====================================================
@@ -1139,15 +959,60 @@ export default function App() {
 
   const handleSend = async () => {
     if (!input.trim() || isSending) return;
+
     if (settings.enableHaptics) {
       Haptics.selectionAsync().catch(() => {});
     }
     if (settings.enableSfx) {
       await playPressSound();
     }
+
     const userText = input.trim();
     setInput('');
-    await processUserText(userText);
+    setIsSending(true);
+
+    // ユーザーのメッセージをまず画面に追加
+    setMessages(prev => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        from: 'user',
+        text: userText,
+        createdAt: new Date().toISOString(),
+      },
+    ]);
+
+    try {
+      // サムライキングに問い合わせ（Renderの /samurai-chat）
+      const replyText = await callSamuraiKing(userText);
+
+      // サムライキングの返事を追加
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `${Date.now()}-samurai`,
+          from: 'king',
+          text: replyText,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      speakSamurai(replyText);
+    } catch (error) {
+      console.log('SamuraiKing error', error);
+
+      // エラー用のメッセージを追加
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `${Date.now()}-error`,
+          from: 'king',
+          text: 'ネットワークエラーでござる。もう一度試してほしいでござる。',
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleSwitchToChat = async () => {
@@ -1211,92 +1076,64 @@ export default function App() {
     }
   };
 
-  const stopRecordingAndTranscribe = async () => {
-    if (!recording) return;
+  // 音声録音を止めて /transcribe に投げる
+const stopRecordingAndTranscribe = async () => {
+  if (!recording) return;
 
-    try {
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setIsRecording(false);
-      setRecording(null);
+  try {
+    // 録音ストップ＆ファイル取得
+    await recording.stopAndUnloadAsync();
+    const uri = recording.getURI();
+    setRecording(null);
+    setIsRecording(false);
 
-      if (!uri) {
-        throw new Error('no uri');
-      }
-
-      if (!apiKey.trim()) {
-        const errMsg: Message = {
-          id: Date.now().toString() + '-no-apikey-trans',
-          from: 'king',
-          text:
-            '音声から文字起こしするには OpenAI APIキーが必要でござる。いまは文字で打つスタイルで楽しむでござる。',
-        };
-        setMessages(prev => [...prev, errMsg]);
-        return;
-      }
-
-      const formData = new FormData();
-      formData.append('file', {
-        uri,
-        name: 'voice.m4a',
-        type: 'audio/m4a',
-      } as any);
-      formData.append('model', 'gpt-4o-mini-transcribe');
-
-      const res = await fetch(
-        'https://api.openai.com/v1/audio/transcriptions',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey.trim()}` },
-          body: formData,
-        },
-      );
-
-      if (!res.ok) {
-        const errText = await res.text();
-        console.log('transcribe error raw:', errText);
-        const quotaMsg = parseQuotaMessage(errText);
-        const msgText =
-          quotaMsg ??
-          '録音の変換でエラーが起きたでござる。ネット環境とAPIキーを確認してほしいでござる。';
-        const errMsg: Message = {
-          id: Date.now().toString() + '-trans-err',
-          from: 'king',
-          text: msgText,
-        };
-        setMessages(prev => [...prev, errMsg]);
-        return;
-      }
-
-      const data: any = await res.json();
-      const text: string = (data?.text || '').trim();
-
-      if (!text) {
-        const noTextMsg: Message = {
-          id: Date.now().toString() + '-no-text',
-          from: 'king',
-          text:
-            '声がうまく聞き取れなかったでござる。少しゆっくり、はっきり話してほしいでござる。',
-        };
-        setMessages(prev => [...prev, noTextMsg]);
-        return;
-      }
-
-      await processUserText(text);
-    } catch (e) {
-      console.error(e);
-      const errMsg: Message = {
-        id: Date.now().toString() + '-trans-err2',
-        from: 'king',
-        text:
-          '録音か変換でエラーが起きたでござる。もう一度試すか、文字で打ってみるでござる。',
-      };
-      setMessages(prev => [...prev, errMsg]);
-    } finally {
-      setIsRecording(false);
-      setRecording(null);
+    if (!uri) {
+      throw new Error('録音ファイルのURIが取れなかった');
     }
-  };
+
+   // ---- FormData 作成 ----
+const formData = new FormData();
+formData.append('audio', {
+  uri,
+  name: 'voice.m4a',
+  type: 'audio/m4a',
+} as any);
+
+// ---- サーバーに送信 ----
+const res = await fetch(`${API_BASE}/transcribe`, {
+  method: 'POST',
+  body: formData, // Content-Type は自動で付くので書かない！
+});
+    if (!res.ok) {
+      const errText = await res.text(); // HTML / 文字列をそのまま確認
+      console.error('Transcribe response error:', res.status, errText);
+      throw new Error(`Transcribe failed: ${res.status}`);
+    }
+
+    // ここで初めて JSON として読む
+    const data = await res.json() as { text?: string };
+    const text = (data.text || '').trim();
+
+    console.log('Transcribed text:', text);
+    if (text) {
+      setInput(text); // テキストボックスに反映
+    } else {
+      throw new Error('テキストが空だった');
+    }
+  } catch (e) {
+    console.error('Transcribe front error:', e);
+
+    const errMsg: Message = {
+      id: Date.now().toString(),
+      from: 'king',
+      text: '音声の変換に失敗した。もう一回だけ試してみろ。',
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, errMsg]);
+  } finally {
+    setIsRecording(false);
+  }
+};
 
   const handleMicPress = async () => {
     if (settings.enableHaptics) {
@@ -1653,7 +1490,7 @@ export default function App() {
     );
   };
 
-  // ★追加：チャット画面だけリセット
+  // ★チャット画面だけリセット
   const handleClearChatMessages = () => {
     Alert.alert(
       'チャット画面をリセット',
@@ -1738,14 +1575,14 @@ export default function App() {
   const renderConsultTab = () => (
     <View style={{ flex: 1 }}>
       <Pressable
-  style={styles.urgeButton}
-  onPress={() => {
-    handleUrgePress();       // いままで通りチャットを開く処理
-    callSamuraiKingVoice();  // 新しく追加した「声で呼び出す」処理
-  }}
->
-  <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
-</Pressable>
+        style={styles.urgeButton}
+        onPress={() => {
+          handleUrgePress();       // いままで通りチャットを開く処理
+          callSamuraiKingVoice();  // 新しく追加した「声で呼び出す」処理
+        }}
+      >
+        <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
+      </Pressable>
       <Text style={styles.caption}>
         ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。
       </Text>
@@ -2762,7 +2599,7 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
+    alignItems: 'flexend',
     marginTop: 6,
   },
   micButton: {

@@ -1,12 +1,16 @@
+// App.tsx (refactor / rewrite)
+// BUSHIDO LOG - single file version (keeps your current features)
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
-import * as Speech from 'expo-speech';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   Keyboard,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -17,80 +21,34 @@ import {
   TouchableWithoutFeedback,
   View,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 
-const API_BASE = 'https://bushido-log-server.onrender.com';
-const SERVER_URL = API_BASE; // ★これを追加
-// ====== サウンド ======
+// =========================
+// Config / Constants
+// =========================
+
+const API_BASE = 'http://192.168.100.236:3001';
+const SAMURAI_TTS_URL = `${API_BASE}/tts`;
+const SAMURAI_CHAT_URL = `${API_BASE}/api/chat`;
+const SAMURAI_MISSION_URL = `${API_BASE}/mission`;
+
 const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
-const MIC_SOUND = require('./sounds/mic-tap.mp3');
 
-async function playSound(source: any) {
-  try {
-    const { sound } = await Audio.Sound.createAsync(source);
-    await sound.playAsync();
-    sound.setOnPlaybackStatusUpdate((status: any) => {
-      if (status.isLoaded && status.didJustFinish) {
-        sound.unloadAsync();
-      }
-    });
-  } catch (e) {
-    console.log('sound error', e);
-  }
-}
-async function playPressSound() {
-  await playSound(PRESS_SOUND);
-}
-async function playMicSound() {
-  await playSound(MIC_SOUND);
-}
+const SESSION_KEY = 'samurai_session_id';
 
-// ====== API（サムライキング用） ======
-const API_URL = 'https://bushido-log-server.onrender.com/samurai-chat';
-
-async function callSamuraiKing(message: string): Promise<string> {
-  console.log('SamuraiKing: calling', API_URL, 'with', message);
-
-  try {
-    const res = await fetch(API_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ text: message }),
-    });
-
-    console.log('SamuraiKing: status', res.status);
-
-    if (!res.ok) {
-      const errorText = await res.text();
-      console.log('SamuraiKing: server error body', errorText);
-      throw new Error('Server error');
-    }
-
-    const data: { reply: string } = await res.json();
-    console.log('SamuraiKing: reply', data);
-
-    // server（index.js）が { reply: '～～' } を返してくる想定
-    return data.reply;
-  } catch (error: any) {
-    console.log('SamuraiKing: fetch error', error?.message || error);
-    throw error;
-  }
-}
-
-// ===== AsyncStorage Keys ======
+// AsyncStorage Keys
 const HISTORY_KEY = 'BUSHIDO_LOG_HISTORY_V1';
 const DAILY_LOGS_KEY = 'BUSHIDO_DAILY_LOGS_V1';
 const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
 const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
-const API_KEY_STORAGE_KEY = 'BUSHIDO_OPENAI_API_KEY_V1';
 const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
+const API_KEY_STORAGE_KEY = 'BUSHIDO_OPENAI_API_KEY_V1'; // (今は未使用だけど温存)
+const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
+const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 
-// ===== サムライRPG用 定数 =====
 const MAX_LEVEL = 10;
 const DAYS_PER_LEVEL = 3;
 
-// デフォルト・ルーティン
 const DEFAULT_ROUTINES = [
   '英語勉強',
   'HIIT 10分',
@@ -104,9 +62,78 @@ const DEFAULT_ROUTINES = [
   '自然に触れる（太陽・海・風）',
 ];
 
-const urgeMessage = `その欲望、一刀両断！サムライキング参上。`;
+const urgeMessage = 'その欲望、一刀両断！サムライキング参上。';
 
-// ===== 型 =====
+const PRIVACY_POLICY_TEXT = `
+プライバシーポリシー
+
+本プライバシーポリシーは、BUSHIDO LOG（以下「本アプリ」）において、利用者の皆さまの情報をどのように取り扱うかを定めるものです。
+本アプリを利用する前に、必ずお読みください。
+
+1. 事業者情報
+・アプリ名：BUSHIDO LOG
+・運営者名：HIROYA KOSHIISHI
+・連絡先：oyaisyours@gmail.com
+
+2. 取得する情報
+本アプリでは、次の情報を取得する場合があります。
+1. ユーザーが入力するテキスト
+・日記・ログ・目標・相談内容などの文章
+2. マイクから取得される音声データ
+・音声入力で相談した内容
+・音声は、AIによる文字起こしのために一時的にサーバーに保存される場合があります。
+3. 利用ログ
+・利用日時
+・どのボタンを押したか など、アプリの改善のための基本的なログ
+4. デバイス情報
+・OSの種類やバージョン、アプリのバージョン など
+※個人を特定することを目的とした情報は取得しません。
+
+3. 情報の利用目的
+取得した情報は、主に以下の目的で利用します。
+1. AIコーチ機能の提供（チャット・アドバイス・読み上げ等）
+2. アプリの品質向上・不具合の調査
+3. 利用状況の分析による機能改善
+4. 法令への遵守、安全対策のため
+
+4. 外部サービスの利用
+本アプリでは、AI機能の提供のため、以下の外部サービスを利用する場合があります。
+・OpenAI, L.L.C. が提供する API（テキスト生成・音声合成・文字起こし 等）
+
+AIに送信されるデータには、ユーザーの入力テキストや、音声を文字起こしした内容が含まれる場合があります。
+外部サービスの利用にあたっては、各サービスのプライバシーポリシーも合わせてご確認ください。
+
+5. 第三者提供
+次の場合を除き、取得した情報を第三者に提供することはありません。
+1. ユーザー本人の同意がある場合
+2. 法令に基づき開示を求められた場合
+3. 人の生命・身体・財産を守るために必要であり、本人の同意を得ることが難しい場合
+
+6. 保存期間
+利用ログやテキストデータは、アプリの継続的な利用に必要な範囲で保存します。
+不要になった情報は、適切な方法で削除・匿名化します。
+
+7. 安全管理
+取得した情報については、不正アクセスや漏えい等を防ぐため、
+アクセス権限の管理、通信の暗号化など、合理的な安全対策を行います。
+
+8. 未成年の利用について
+本アプリは、13歳以上の利用を想定しています。
+未成年の方は、保護者の同意を得た上で利用してください。
+
+9. プライバシーポリシーの変更
+本ポリシーの内容は、必要に応じて変更されることがあります。
+重要な変更がある場合は、アプリ内でお知らせします。
+
+10. お問い合わせ窓口
+本ポリシーに関するお問い合わせは、下記までご連絡ください。
+・メールアドレス：oyaisyours@gmail.com
+`;
+
+// =========================
+// Types
+// =========================
+
 type Message = {
   id: string;
   from: 'user' | 'king';
@@ -120,11 +147,6 @@ type HistoryEntry = {
   issue: string;
   reflection: string;
   reply: string;
-};
-
-type ChatMessageForAI = {
-  role: 'user' | 'assistant';
-  content: string;
 };
 
 type NightReview = {
@@ -164,6 +186,16 @@ type AppSettings = {
   strictness: 'soft' | 'normal' | 'hard';
 };
 
+type SamuraiTimeState = {
+  date: string;
+  seconds: number;
+  dailyMinutes: number; // 0 = 無制限
+};
+
+// =========================
+// Defaults
+// =========================
+
 const DEFAULT_SETTINGS: AppSettings = {
   autoVoice: true,
   readingSpeed: 'normal',
@@ -172,7 +204,10 @@ const DEFAULT_SETTINGS: AppSettings = {
   strictness: 'normal',
 };
 
-// ===== ユーティリティ =====
+// =========================
+// Utils
+// =========================
+
 function getTodayStr() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -184,6 +219,7 @@ function daysDiff(a: string, b: string) {
   const db = new Date(b);
   return Math.round((da.getTime() - db.getTime()) / (1000 * 60 * 60 * 24));
 }
+
 function getStreakCount(logs: DailyLog[]): number {
   if (!logs || logs.length === 0) return 0;
   const sorted = [...logs].sort((x, y) => x.date.localeCompare(y.date));
@@ -197,24 +233,6 @@ function getStreakCount(logs: DailyLog[]): number {
   return streak;
 }
 
-// ===== TTSユーティリティ =====
-const arrayBufferToBase64 = (buffer: ArrayBuffer): string => {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  const len = bytes.byteLength;
-  for (let i = 0; i < len; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  // @ts-ignore
-  if (typeof btoa === 'function') {
-    // @ts-ignore
-    return btoa(binary);
-  }
-  console.warn('btoa が使えないので、TTSはexpo-speechにフォールバックするでござる');
-  return '';
-};
-
-// XPベースの称号
 function getRankFromXp(xp: number) {
   if (xp < 30) return { label: '見習い侍', next: 30 - xp };
   if (xp < 100) return { label: '一人前侍', next: 100 - xp };
@@ -222,14 +240,9 @@ function getRankFromXp(xp: number) {
   return { label: '伝説の侍', next: 0 };
 }
 
-// ストリークからサムライレベルと進捗
 function getSamuraiLevelInfo(streak: number) {
   if (streak <= 0) {
-    return {
-      level: 1,
-      progress: 0,
-      daysToClear: MAX_LEVEL * DAYS_PER_LEVEL,
-    };
+    return { level: 1, progress: 0, daysToClear: MAX_LEVEL * DAYS_PER_LEVEL };
   }
   const rawLevel = Math.floor((streak - 1) / DAYS_PER_LEVEL) + 1;
   const level = Math.min(MAX_LEVEL, Math.max(1, rawLevel));
@@ -241,14 +254,87 @@ function getSamuraiLevelInfo(streak: number) {
   return { level, progress, daysToClear };
 }
 
-// サムライキャラクター
-function SamuraiAvatar({
-  level,
-  rankLabel,
-}: {
-  level: number;
-  rankLabel: string;
-}) {
+async function getSessionId(): Promise<string> {
+  let id = await AsyncStorage.getItem(SESSION_KEY);
+  if (!id) {
+    id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await AsyncStorage.setItem(SESSION_KEY, id);
+  }
+  return id;
+}
+
+// =========================
+// Audio helpers
+// =========================
+
+async function playSound(source: any) {
+  try {
+    const { sound } = await Audio.Sound.createAsync(source);
+    await sound.playAsync();
+    sound.setOnPlaybackStatusUpdate((status: any) => {
+      if (status.isLoaded && status.didJustFinish) {
+        sound.unloadAsync();
+      }
+    });
+  } catch (e) {
+    console.log('sound error', e);
+  }
+}
+
+async function playPressSound() {
+  await playSound(PRESS_SOUND);
+}
+
+// =========================
+// API
+// =========================
+
+async function callSamuraiKing(message: string): Promise<string> {
+  const sessionId = await getSessionId();
+
+  const res = await fetch(SAMURAI_CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: message, sessionId }),
+  });
+
+  if (!res.ok) {
+    const errorText = await res.text();
+    console.log('SamuraiKing server error body:', errorText);
+    throw new Error('Server error');
+  }
+
+  const data = await res.json();
+  return data.reply;
+}
+
+async function callSamuraiMissionGPT(): Promise<string> {
+  const res = await fetch(SAMURAI_MISSION_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ todayStr: getTodayStr() }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    console.log('SamuraiMission error body:', text);
+    throw new Error('Mission server error');
+  }
+
+  const data: { mission?: string; text?: string; reply?: string } = await res.json();
+  return (
+    data.mission ||
+    data.text ||
+    data.reply ||
+    '今日は「スマホ時間を30分減らして、その分だけ自分の未来のために動く」でいこう。'
+  );
+}
+
+// =========================
+// UI: Samurai Avatar
+// =========================
+
+function SamuraiAvatar({ level, rankLabel }: { level: number; rankLabel: string }) {
   let emoji = '🥚';
   let title = `Lv.${level} 見習い侍`;
   let desc = 'まずはブシログを開き続ける段階だな。';
@@ -264,8 +350,7 @@ function SamuraiAvatar({
   } else if (level >= MAX_LEVEL) {
     emoji = '👑';
     title = `Lv.${level} 伝説の侍`;
-    desc =
-      '1ヶ月以上やり切った、本物のサムライだ。ここからは守りではなく拡張だな。';
+    desc = '1ヶ月以上やり切った、本物のサムライだ。ここからは守りではなく拡張だな。';
   }
 
   return (
@@ -282,118 +367,105 @@ function SamuraiAvatar({
   );
 }
 
-// ＝＝＝＝ サムライAIプロンプト ＝＝＝＝
-
-const systemPrompt = `
-あなたは「SAMURAI KING（サムライキング）」というAIコーチです。
-ジャマイカと日本の魂をミックスした、静かな武士のようなメンターとして振る舞ってください。
-
-（※ 中略：ここは元の長いプロンプトそのまま。実際のコードでは全文が入っています）`;
-
-const MAX_CHAT_TURNS = 3;
-
-// =======================================================
-// メイン画面（App）
-// =======================================================
-
-// サムライキングを声で呼び出す（ショートボイス）
-const callSamuraiKingVoice = () => {
-  // ちょっと強めのバイブ
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-  // 前の読み上げを止める
-  Speech.stop();
-
-  // サムライキングのセリフ
-  Speech.speak('おいおいどうした？ その欲望を断ち切るぞ。', {
-    language: 'ja-JP',
-    rate: 1.0,
-  });
-};
+// =========================
+// Main App
+// =========================
 
 export default function App() {
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings'>(
-    'consult',
-  );
-  const [isOnboarding, setIsOnboarding] = useState(true);
+  const todayStr = useMemo(() => getTodayStr(), []);
+  const messagesRef = useRef<ScrollView | null>(null);
 
-  // ===== サムライ相談 =====
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser'>('consult');
+
+  // onboarding
+  const [isOnboarding, setIsOnboarding] = useState(true);
+  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
+  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
+  const [isEditingOnboarding, setIsEditingOnboarding] = useState(false);
+  const [obIdentity, setObIdentity] = useState('');
+  const [obQuit, setObQuit] = useState('');
+  const [obRule, setObRule] = useState('');
+
+  // settings
+  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // api key (kept)
+  const [apiKey, setApiKey] = useState('');
+  const [apiKeyInput, setApiKeyInput] = useState('');
+  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+
+  // chat
+  const [isSummoned, setIsSummoned] = useState(false);
+  const [mode, setMode] = useState<'chat' | 'history'>('chat');
   const [messages, setMessages] = useState<Message[]>([
     { id: 'first', from: 'king', text: 'おいおいどうした？その欲望を断ち切るぞ。' },
   ]);
   const [input, setInput] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
-  const [phase, setPhase] = useState<'idle' | 'awaitingReflection' | 'chatting'>(
-    'idle',
-  );
-  const [pendingIssue, setPendingIssue] = useState<string | null>(null);
-  const [firstReflection, setFirstReflection] = useState<string | null>(null);
-  const [chatHistory, setChatHistory] = useState<ChatMessageForAI[]>([]);
-
-  const [mode, setMode] = useState<'chat' | 'history'>('chat');
+  // history
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  const [isSummoned, setIsSummoned] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const [inputMode, setInputMode] = useState<'text' | 'voice'>('text');
-  const [transcript, setTranscript] = useState('');
-  const [recording, setRecording] = useState<Audio.Recording | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-
-  const [turnCount, setTurnCount] = useState<number>(0);
-  const messagesRef = useRef<ScrollView | null>(null);
-
-  // ===== 目標 / 日記 / ミッション =====
+  // daily logs
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const todayStr = getTodayStr();
 
+  // edit existing review
+  const [editingLogDate, setEditingLogDate] = useState<string | null>(null);
+  const [editProud, setEditProud] = useState('');
+  const [editLesson, setEditLesson] = useState('');
+  const [editNextAction, setEditNextAction] = useState('');
+
+  // goal tab inputs
   const [missionInput, setMissionInput] = useState('');
   const [routineText, setRoutineText] = useState('');
   const [todoInput, setTodoInput] = useState('');
 
+  // review tab inputs
   const [proudInput, setProudInput] = useState('');
   const [lessonInput, setLessonInput] = useState('');
   const [nextActionInput, setNextActionInput] = useState('');
 
+  // samurai mission
   const [samuraiMissionText, setSamuraiMissionText] = useState('');
   const [isGeneratingMission, setIsGeneratingMission] = useState(false);
   const [missionCompletedToday, setMissionCompletedToday] = useState(false);
 
-  // ===== オンボーディング =====
-  const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(
-    null,
-  );
-  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
-  const [isEditingOnboarding, setIsEditingOnboarding] = useState(false);
-
-  const [obIdentity, setObIdentity] = useState('');
-  const [obQuit, setObQuit] = useState('');
-  const [obRule, setObRule] = useState('');
-
-  // ===== XP =====
+  // XP
   const [totalXp, setTotalXp] = useState(0);
 
-  // ===== 設定 =====
-  const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
+  // browser
+  const [browserUrl, setBrowserUrl] = useState('https://google.com');
+  const [currentUrl, setCurrentUrl] = useState('https://google.com');
+  const [blockedDomains, setBlockedDomains] = useState<string[]>([]);
+  const [blocklistInput, setBlocklistInput] = useState('');
 
-  // ===== APIキー（内部用・今はUIに出さない） =====
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
+  // samurai time
+  const [samuraiTime, setSamuraiTime] = useState<SamuraiTimeState>({
+    date: todayStr,
+    seconds: 0,
+    dailyMinutes: 60,
+  });
 
-  // === 起動音 ===
+  const isTimeLimited = samuraiTime.dailyMinutes > 0;
+  const maxSeconds = samuraiTime.dailyMinutes * 60;
+  const isTimeOver = isTimeLimited && samuraiTime.seconds >= maxSeconds;
+  const usedMinutes = Math.floor(samuraiTime.seconds / 60);
+  const remainingMinutes = isTimeLimited ? Math.max(0, samuraiTime.dailyMinutes - usedMinutes) : null;
+
+  // =========================
+  // Startup sound
+  // =========================
   useEffect(() => {
     (async () => {
       try {
         const { sound } = await Audio.Sound.createAsync(PRESS_SOUND);
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate((status: any) => {
-          if (status.isLoaded && status.didJustFinish) {
-            sound.unloadAsync();
-          }
+          if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
         });
       } catch (e) {
         console.log('start sound error', e);
@@ -401,34 +473,39 @@ export default function App() {
     })();
   }, []);
 
-  // ===== キーボード監視 =====
+  // =========================
+  // Keyboard watcher
+  // =========================
   useEffect(() => {
-    const showSub = Keyboard.addListener('keyboardDidShow', () =>
-      setIsKeyboardVisible(true),
-    );
-    const hideSub = Keyboard.addListener('keyboardDidHide', () =>
-      setIsKeyboardVisible(false),
-    );
+    const showSub = Keyboard.addListener('keyboardDidShow', () => setIsKeyboardVisible(true));
+    const hideSub = Keyboard.addListener('keyboardDidHide', () => setIsKeyboardVisible(false));
     return () => {
       showSub.remove();
       hideSub.remove();
     };
   }, []);
 
-  // ===== 履歴ロード =====
+  // =========================
+  // Loaders
+  // =========================
+
+  const loadHistory = async () => {
+    setIsLoadingHistory(true);
+    try {
+      const json = await AsyncStorage.getItem(HISTORY_KEY);
+      const logs: HistoryEntry[] = json ? JSON.parse(json) : [];
+      setHistory(Array.isArray(logs) ? logs : []);
+    } catch (e) {
+      console.error('Failed to load history', e);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const json = await AsyncStorage.getItem(HISTORY_KEY);
-        const logs: HistoryEntry[] = json ? JSON.parse(json) : [];
-        setHistory(Array.isArray(logs) ? logs : []);
-      } catch (e) {
-        console.error('Failed to load history', e);
-      }
-    })();
+    loadHistory();
   }, []);
 
-  // ===== 日記ロード =====
   useEffect(() => {
     (async () => {
       try {
@@ -441,7 +518,6 @@ export default function App() {
     })();
   }, []);
 
-  // ===== オンボーディングロード =====
   useEffect(() => {
     (async () => {
       try {
@@ -464,7 +540,6 @@ export default function App() {
     })();
   }, []);
 
-  // ===== XPロード =====
   useEffect(() => {
     (async () => {
       try {
@@ -479,7 +554,6 @@ export default function App() {
     })();
   }, []);
 
-  // ===== 設定ロード =====
   useEffect(() => {
     (async () => {
       try {
@@ -494,7 +568,6 @@ export default function App() {
     })();
   }, []);
 
-  // ===== APIキー読み込み（内部用） =====
   useEffect(() => {
     (async () => {
       try {
@@ -509,9 +582,51 @@ export default function App() {
     })();
   }, []);
 
-  // ===== タブ切替時：今日のログ反映 =====
   useEffect(() => {
-    const todayLog = dailyLogs.find(l => l.date === todayStr);
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(BLOCKLIST_KEY);
+        if (json) {
+          const arr = JSON.parse(json);
+          if (Array.isArray(arr)) setBlockedDomains(arr);
+        }
+      } catch (e) {
+        console.error('Failed to load blocklist', e);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(SAMURAI_TIME_KEY);
+        if (json) {
+          const parsed = JSON.parse(json) as SamuraiTimeState;
+          if (
+            parsed &&
+            typeof parsed.dailyMinutes === 'number' &&
+            typeof parsed.seconds === 'number' &&
+            typeof parsed.date === 'string'
+          ) {
+            const today = getTodayStr();
+            if (parsed.date !== today) {
+              setSamuraiTime({ date: today, seconds: 0, dailyMinutes: parsed.dailyMinutes });
+            } else {
+              setSamuraiTime(parsed);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load samurai time', e);
+      }
+    })();
+  }, []);
+
+  // =========================
+  // Tab change sync (Goal/Review)
+  // =========================
+  useEffect(() => {
+    const todayLog = dailyLogs.find(l => l.date === getTodayStr());
 
     if (tab === 'goal') {
       setMissionInput(todayLog?.mission ?? '');
@@ -522,485 +637,191 @@ export default function App() {
     }
 
     if (tab === 'review') {
-      setProudInput(todayLog?.review?.proud ?? '');
-      setLessonInput(todayLog?.review?.lesson ?? '');
-      setNextActionInput(todayLog?.review?.nextAction ?? '');
+      const targetDate = selectedDate || (todayLog ? todayLog.date : undefined);
+      const targetLog = targetDate ? dailyLogs.find(l => l.date === targetDate) : undefined;
+
+      setProudInput(targetLog?.review?.proud ?? '');
+      setLessonInput(targetLog?.review?.lesson ?? '');
+      setNextActionInput(targetLog?.review?.nextAction ?? '');
+
       if (!selectedDate && todayLog) setSelectedDate(todayLog.date);
     }
-  }, [tab, dailyLogs, todayStr, selectedDate]);
+  }, [tab, dailyLogs, selectedDate]);
 
-  // ===== メッセージ更新毎に自動スクロール =====
+  // =========================
+  // Auto scroll chat
+  // =========================
   useEffect(() => {
-    if (mode === 'chat') {
-      setTimeout(() => {
-        messagesRef.current?.scrollToEnd({ animated: true });
-      }, 50);
-    }
+    if (mode !== 'chat') return;
+    setTimeout(() => messagesRef.current?.scrollToEnd({ animated: true }), 50);
   }, [messages, mode, isKeyboardVisible]);
 
-  // =====================================================
-  // OpenAI 呼び出し（チャット → サーバ）※今は主にカスタムサーバ用
-  // =====================================================
+  // =========================
+  // Samurai time ticker
+  // =========================
+  useEffect(() => {
+    if (isOnboarding) return;
+    if (!samuraiTime.dailyMinutes || samuraiTime.dailyMinutes <= 0) return;
 
-  const parseQuotaMessage = (raw: string) => {
-    try {
-      const json = JSON.parse(raw);
-      if (json?.error?.code === 'insufficient_quota') {
-        return 'OpenAIの利用枠（クレジット）が切れているようでござる。ダッシュボードで課金 or 別キーを設定してほしいでござる。';
-      }
-    } catch {
-      //
-    }
-    return null;
-  };
+    let cancelled = false;
+    const interval = setInterval(() => {
+      if (cancelled) return;
 
-  const callChatGPT = async (
-    messagesForAI: ChatMessageForAI[],
-  ): Promise<string> => {
-    const lastUserMessage =
-      messagesForAI.filter(m => m.role === 'user').slice(-1)[0]?.content ?? '';
+      setSamuraiTime(prev => {
+        const today = getTodayStr();
+        let base = prev;
 
-    try {
-      const res = await fetch('http://192.168.100.236:3001/samurai', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: lastUserMessage }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        console.log('server error: ', data);
-        throw new Error('server error');
-      }
-
-      return (data.reply as string) || 'サーバーからの返答が空でござる。';
-    } catch (error) {
-      console.error('server / network error: ', error);
-
-      if (apiKey.trim()) {
-        try {
-          const res2 = await fetch(
-            'https://api.openai.com/v1/chat/completions',
-            {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${apiKey.trim()}`,
-              },
-              body: JSON.stringify({
-                model: 'gpt-4o-mini',
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  ...messagesForAI,
-                ],
-              }),
-            },
-          );
-
-          if (!res2.ok) {
-            const errText = await res2.text();
-            console.log('direct chat error raw:', errText);
-            const quotaMsg = parseQuotaMessage(errText);
-            if (quotaMsg) return quotaMsg;
-            return 'サムライキングとの会話でエラーが出たでござる。ネット環境とAPIキーを確認してほしいでござる。';
-          }
-
-          const data2: any = await res2.json();
-          const raw =
-            data2?.choices?.[0]?.message?.content?.trim() ?? '';
-          return raw || 'サムライキングの返事がうまく生成されなかったでござる。';
-        } catch (e2) {
-          console.error('direct chat fetch error:', e2);
-          return 'ネットワークエラーでござる。Wi-Fi などを確認してから、もう一度試してほしいでござる。';
+        if (prev.date !== today) {
+          base = { ...prev, date: today, seconds: 0 };
         }
-      }
 
-      return 'ネットワークエラーでござる。Wi-Fi などを確認してから、もう一度試してほしいでござる。';
-    }
-  };
+        const maxSec = base.dailyMinutes * 60;
+        if (base.seconds >= maxSec) return base;
 
-  const callSamuraiMissionGPT = async () => {
-    if (!apiKey.trim()) {
-      return 'OpenAI APIキーが未設定でござる。いったんはロボ声・通常機能だけで楽しんでくれでござる。';
-    }
-
-    const strictNote =
-      settings.strictness === 'soft'
-        ? '口調は優しめで、寄り添い重視で。'
-        : settings.strictness === 'hard'
-        ? '口調は少し厳しめで、ズバッと本音を伝えて。'
-        : '口調はふつう（優しさ＋少し厳しめ）で。';
-
-    const userContent =
-      `【日付】${todayStr}\n` +
-      `【サムライ宣言】${onboardingData?.identity ?? ''}\n` +
-      `【やめたい習慣】${onboardingData?.quit ?? ''}\n` +
-      `【毎日のルール】${onboardingData?.rule ?? ''}\n` +
-      `【トーン指定】${strictNote}`;
-
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: [
-            {
-              role: 'system',
-              content:
-                'あなたは一日の小さなサムライミッションを1つだけ提案するAIです。短く、1行で、具体的な行動だけを出してください。',
-            },
-            { role: 'user', content: userContent },
-          ],
-        }),
+        const updated: SamuraiTimeState = { ...base, seconds: base.seconds + 1 };
+        AsyncStorage.setItem(SAMURAI_TIME_KEY, JSON.stringify(updated)).catch(() => {});
+        return updated;
       });
+    }, 1000);
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.log('mission error raw:', errText);
-        const quotaMsg = parseQuotaMessage(errText);
-        if (quotaMsg) return quotaMsg;
-        return 'サムライミッション生成でエラーが出たでござる。ネット環境とAPIキーを確認してほしいでござる。';
-      }
-
-      const data: any = await res.json();
-      const raw =
-        data?.choices?.[0]?.message?.content?.trim() ||
-        '深呼吸を3回して姿勢を正す。';
-      return raw.split('\n')[0];
-    } catch (e) {
-      console.error('mission fetch error', e);
-      return 'サムライミッション生成中にネットワークエラーが出たでござる。';
-    }
-  };
-
-  const saveHistoryEntry = async (entry: HistoryEntry) => {
-    try {
-      const json = await AsyncStorage.getItem(HISTORY_KEY);
-      const logs: HistoryEntry[] = json ? JSON.parse(json) : [];
-      const newLogs = [...(Array.isArray(logs) ? logs : []), entry];
-      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newLogs));
-      setHistory(newLogs);
-    } catch (e) {
-      console.error('Failed to save history', e);
-    }
-  };
-
-  const loadHistory = async () => {
-    setIsLoadingHistory(true);
-    try {
-      const json = await AsyncStorage.getItem(HISTORY_KEY);
-      const logs: HistoryEntry[] = json ? JSON.parse(json) : [];
-      setHistory(Array.isArray(logs) ? logs : []);
-    } catch (e) {
-      console.error('Failed to load history', e);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
-
-  // =====================================================
-  // サムライボイス（OpenAI TTS + expo-speech フォールバック）
-  // =====================================================
-
-  const speakSamurai = async (text: string) => {
-    if (!text) return;
-    if (!settings.autoVoice) return;
-
-    // 端末の読み上げだけでしゃべる関数
-    const speakWithDevice = () => {
-      const speechRate =
-        settings.readingSpeed === 'slow'
-          ? 0.8
-          : settings.readingSpeed === 'fast'
-          ? 1.1
-          : 0.95;
-
-      Speech.stop();
-      Speech.speak(text, {
-        language: 'ja-JP',
-        rate: speechRate,
-        pitch: 0.9,
-      });
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
     };
+  }, [isOnboarding, samuraiTime.dailyMinutes]);
 
-    // APIキーがないときはそのまま端末読み上げ
-    if (!apiKey.trim()) {
-      speakWithDevice();
-      return;
-    }
-
+  // =========================
+  // Settings save
+  // =========================
+  const updateSettings = async (patch: Partial<AppSettings>) => {
+    const next = { ...settings, ...patch };
+    setSettings(next);
     try {
-      // 前の再生を止める
-      Speech.stop();
+      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+    } catch (e) {
+      console.error('Failed to save settings', e);
+    }
+  };
 
-      const res = await fetch('https://api.openai.com/v1/audio/speech', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiKey.trim()}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini-tts',
-          voice: 'alloy',
-          input: text,
-        }),
-      });
+  const updateSamuraiDailyMinutes = (text: string) => {
+    const numeric = text.replace(/[^0-9]/g, '');
+    const num = parseInt(numeric, 10);
+    const minutes = Number.isNaN(num) ? 0 : Math.max(0, Math.min(600, num)); // max 10h
 
-      if (!res.ok) {
-        const errText = await res.text();
-        console.log('TTS error raw:', errText);
-        const quotaMsg = parseQuotaMessage(errText);
-        if (quotaMsg) {
-          console.log('TTS quota message:', quotaMsg);
-        }
-        // 失敗したら端末読み上げにフォールバック
-        speakWithDevice();
-        return;
-      }
+    setSamuraiTime(prev => {
+      const next: SamuraiTimeState = { ...prev, dailyMinutes: minutes };
+      AsyncStorage.setItem(SAMURAI_TIME_KEY, JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  };
 
-      const arrayBuf = await res.arrayBuffer();
-      const base64 = arrayBufferToBase64(arrayBuf);
+  // =========================
+  // Storage helpers: daily logs
+  // =========================
+  const saveDailyLogsToStorage = async (logs: DailyLog[]) => {
+    try {
+      await AsyncStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
+    } catch (e) {
+      console.error('Failed to save daily logs', e);
+    }
+  };
 
-      if (!base64) {
-        console.warn('TTS base64 変換失敗 → 端末読み上げでフォールバック');
-        speakWithDevice();
-        return;
-      }
+  const upsertLogForDate = async (date: string, updater: (prev: DailyLog | undefined) => DailyLog) => {
+    const prev = dailyLogs.find(l => l.date === date);
+    const updated = updater(prev);
+    const others = dailyLogs.filter(l => l.date !== date);
+    const newLogs = [...others, updated].sort((a, b) => a.date.localeCompare(b.date));
+    setDailyLogs(newLogs);
+    await saveDailyLogsToStorage(newLogs);
+  };
 
-      const { sound } = await Audio.Sound.createAsync({
-        uri: `data:audio/mpeg;base64,${base64}`,
-      });
+  const upsertTodayLog = async (updater: (prev: DailyLog | undefined) => DailyLog) => {
+    return upsertLogForDate(getTodayStr(), updater);
+  };
 
+  // =========================
+  // TTS (server audio)
+  // =========================
+  const speakSamurai = async (text: string) => {
+    if (!text || !settings.autoVoice) return;
+
+    const url = `${SAMURAI_TTS_URL}?text=${encodeURIComponent(text)}`;
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: url });
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) {
-          sound.unloadAsync();
-        }
+        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
       });
     } catch (e) {
-      console.error('TTS fetch error:', e);
-      // ネットワークエラーなども全部フォールバック
-      speakWithDevice();
+      console.log('[TTS] error', e);
     }
   };
 
-  // =====================================================
-  // サムライ相談ロジック
-  // =====================================================
+  // =========================
+  // Haptics/SFX wrappers
+  // =========================
+  const tap = async (type: 'light' | 'medium' | 'select' | 'success' = 'select') => {
+    if (!settings.enableHaptics && !settings.enableSfx) return;
 
+    if (settings.enableHaptics) {
+      if (type === 'light') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+      if (type === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
+      if (type === 'select') Haptics.selectionAsync().catch(() => {});
+      if (type === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    }
+    if (settings.enableSfx) await playPressSound();
+  };
+
+  // =========================
+  // Chat actions
+  // =========================
   const handleUrgePress = async () => {
     setIsSummoned(true);
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('medium');
     speakSamurai(urgeMessage);
-  };
-
-  const processUserText = async (rawText: string) => {
-    const userText = rawText.trim();
-    if (!userText) return;
-
-    const userMsg: Message = {
-      id: Date.now().toString() + '-u',
-      from: 'user',
-      text: userText,
-    };
-    setMessages(prev => [...prev, userMsg]);
-
-    const strictNoteForMessage =
-      settings.strictness === 'soft'
-        ? '\n\n【トーン指定】口調は優しめで、寄り添い重視で。'
-        : settings.strictness === 'hard'
-        ? '\n\n【トーン指定】口調は少し厳しめで、ズバッと本音を伝えて。'
-        : '\n\n【トーン指定】口調はふつう（優しさ＋少しの厳しさ）で。';
-
-    if (phase === 'idle') {
-      const questionText =
-        'まずお前はどうしたい？\n「本当はどうなりたいか」を書いてみるのだ。';
-      const questionMsg: Message = {
-        id: Date.now().toString() + '-q',
-        from: 'king',
-        text: questionText,
-      };
-
-      setPendingIssue(userText);
-      setPhase('awaitingReflection');
-      setTurnCount(0);
-      setChatHistory([]);
-      setFirstReflection(null);
-      setMessages(prev => [...prev, questionMsg]);
-      speakSamurai(questionText);
-      return;
-    }
-
-    setIsSending(true);
-
-    try {
-      if (phase === 'awaitingReflection') {
-        const issue = pendingIssue || '（相談内容の記録がないでござる）';
-        const reflectionText = userText;
-        setFirstReflection(reflectionText);
-
-        const firstUserContent =
-          '【相談内容】\n' +
-          issue +
-          '\n\n【本当はこうなりたい】\n' +
-          reflectionText +
-          '\n\nここから一緒に習慣を変えていこう。' +
-          strictNoteForMessage;
-
-        const replyText = await callChatGPT([
-          { role: 'user', content: firstUserContent },
-        ]);
-
-        const kingMsg: Message = {
-          id: Date.now().toString() + '-k',
-          from: 'king',
-          text: replyText,
-        };
-        setMessages(prev => [...prev, kingMsg]);
-        speakSamurai(replyText);
-
-        setChatHistory([
-          { role: 'user', content: firstUserContent },
-          { role: 'assistant', content: replyText },
-        ]);
-
-        setTurnCount(1);
-
-        const entry: HistoryEntry = {
-          id: Date.now().toString(),
-          date: new Date().toISOString(),
-          issue,
-          reflection: reflectionText,
-          reply: replyText,
-        };
-        await saveHistoryEntry(entry);
-
-        setPhase('chatting');
-        return;
-      }
-
-      if (phase === 'chatting') {
-        if (turnCount >= MAX_CHAT_TURNS) {
-          const finishText =
-            'よし、もう十分話したでござる。\nあとは行動あるのみ。今から3分だけでいい、さっき決めた一歩を今すぐやるでござる。';
-          const finishMsg: Message = {
-            id: Date.now().toString() + '-finish',
-            from: 'king',
-            text: finishText,
-          };
-          setMessages(prev => [...prev, finishMsg]);
-          speakSamurai(finishText);
-
-          setPhase('idle');
-          setPendingIssue(null);
-          setFirstReflection(null);
-          setChatHistory([]);
-          setTurnCount(0);
-          return;
-        }
-
-        const followUpUser = userText;
-
-        const apiMessages: { role: string; content: string }[] = [
-          ...chatHistory.map(m => ({ role: m.role, content: m.content })),
-          {
-            role: 'user',
-            content:
-              '【これまでの流れ】\n' +
-              (pendingIssue ? `悩み: ${pendingIssue}\n` : '') +
-              (firstReflection ? `本当はこうなりたい: ${firstReflection}\n` : '') +
-              '\n【ここからの追加相談】\n' +
-              followUpUser +
-              strictNoteForMessage,
-          },
-        ];
-
-        const replyText = await callChatGPT(apiMessages as ChatMessageForAI[]);
-
-        const kingMsg: Message = {
-          id: Date.now().toString() + '-k2',
-          from: 'king',
-          text: replyText,
-        };
-        setMessages(prev => [...prev, kingMsg]);
-        speakSamurai(replyText);
-
-        setChatHistory(prev => [
-          ...prev,
-          { role: 'user', content: followUpUser },
-          { role: 'assistant', content: replyText },
-        ]);
-
-        setTurnCount(prev => prev + 1);
-      }
-    } catch (e) {
-      console.error(e);
-      const errMsg: Message = {
-        id: Date.now().toString() + '-err',
-        from: 'king',
-        text:
-          'エラーが起きたようでござる。ネット接続とAPIキーを確認して、また挑戦するでござる。',
-      };
-      setMessages(prev => [...prev, errMsg]);
-    } finally {
-      setIsSending(false);
-    }
   };
 
   const handleSend = async () => {
     if (!input.trim() || isSending) return;
 
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('select');
 
     const userText = input.trim();
     setInput('');
     setIsSending(true);
 
-    // ユーザーのメッセージをまず画面に追加
-    setMessages(prev => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        from: 'user',
-        text: userText,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    const userMsg: Message = {
+      id: `${Date.now()}`,
+      from: 'user',
+      text: userText,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(prev => [...prev, userMsg]);
 
     try {
-      // サムライキングに問い合わせ（Renderの /samurai-chat）
       const replyText = await callSamuraiKing(userText);
 
-      // サムライキングの返事を追加
-      setMessages(prev => [
-        ...prev,
-        {
-          id: `${Date.now()}-samurai`,
-          from: 'king',
-          text: replyText,
-          createdAt: new Date().toISOString(),
-        },
-      ]);
+      const kingMsg: Message = {
+        id: `${Date.now()}-samurai`,
+        from: 'king',
+        text: replyText,
+        createdAt: new Date().toISOString(),
+      };
+      setMessages(prev => [...prev, kingMsg]);
       speakSamurai(replyText);
+
+      const entry: HistoryEntry = {
+        id: `${Date.now()}`,
+        date: new Date().toISOString(),
+        issue: userText,
+        reflection: '',
+        reply: replyText,
+      };
+      const updatedHistory = [...history, entry];
+      setHistory(updatedHistory);
+      await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
     } catch (error) {
       console.log('SamuraiKing error', error);
-
-      // エラー用のメッセージを追加
       setMessages(prev => [
         ...prev,
         {
@@ -1016,171 +837,22 @@ export default function App() {
   };
 
   const handleSwitchToChat = async () => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('select');
     setMode('chat');
   };
 
   const handleSwitchToHistory = async () => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('select');
     setMode('history');
     await loadHistory();
   };
 
-  // ===== マイク関連 =====
-  const startRecording = async () => {
-    try {
-      const perm = await Audio.requestPermissionsAsync();
-      if (perm.status !== 'granted') {
-        const errMsg: Message = {
-          id: Date.now().toString() + '-perm',
-          from: 'king',
-          text:
-            'マイクの許可がないようでござる。設定アプリからマイクをONにしてほしいでござる。',
-        };
-        setMessages(prev => [...prev, errMsg]);
-        return;
-      }
-
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-
-      const { recording: newRecording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY,
-      );
-
-      setRecording(newRecording);
-      setIsRecording(true);
-      await newRecording.startAsync();
-    } catch (e) {
-      console.error(e);
-      setIsRecording(false);
-      setRecording(null);
-      const errMsg: Message = {
-        id: Date.now().toString() + '-rec-err',
-        from: 'king',
-        text: '録音の開始に失敗したでござる。もう一度試してほしいでござる。',
-      };
-      setMessages(prev => [...prev, errMsg]);
-    }
-  };
-
-  // 音声録音を止めて /transcribe に投げる
-const stopRecordingAndTranscribe = async () => {
-  if (!recording) return;
-
-  try {
-    // 録音ストップ＆ファイル取得
-    await recording.stopAndUnloadAsync();
-    const uri = recording.getURI();
-    setRecording(null);
-    setIsRecording(false);
-
-    if (!uri) {
-      throw new Error('録音ファイルのURIが取れなかった');
-    }
-
-   // ---- FormData 作成 ----
-const formData = new FormData();
-formData.append('audio', {
-  uri,
-  name: 'voice.m4a',
-  type: 'audio/m4a',
-} as any);
-
-// ---- サーバーに送信 ----
-const res = await fetch(`${API_BASE}/transcribe`, {
-  method: 'POST',
-  body: formData, // Content-Type は自動で付くので書かない！
-});
-    if (!res.ok) {
-      const errText = await res.text(); // HTML / 文字列をそのまま確認
-      console.error('Transcribe response error:', res.status, errText);
-      throw new Error(`Transcribe failed: ${res.status}`);
-    }
-
-    // ここで初めて JSON として読む
-    const data = await res.json() as { text?: string };
-    const text = (data.text || '').trim();
-
-    console.log('Transcribed text:', text);
-    if (text) {
-      setInput(text); // テキストボックスに反映
-    } else {
-      throw new Error('テキストが空だった');
-    }
-  } catch (e) {
-    console.error('Transcribe front error:', e);
-
-    const errMsg: Message = {
-      id: Date.now().toString(),
-      from: 'king',
-      text: '音声の変換に失敗した。もう一回だけ試してみろ。',
-      createdAt: new Date().toISOString(),
-    };
-    setMessages(prev => [...prev, errMsg]);
-  } finally {
-    setIsRecording(false);
-  }
-};
-
-  const handleMicPress = async () => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playMicSound();
-    }
-    if (isRecording) {
-      await stopRecordingAndTranscribe();
-    } else {
-      await startRecording();
-    }
-  };
-
-  // =====================================================
-  // 日記 / ミッション 保存系
-  // =====================================================
-
-  const saveDailyLogsToStorage = async (logs: DailyLog[]) => {
-    try {
-      await AsyncStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
-    } catch (e) {
-      console.error('Failed to save daily logs', e);
-    }
-  };
-
-  const upsertTodayLog = async (
-    updater: (prev: DailyLog | undefined) => DailyLog,
-  ) => {
-    const prev = dailyLogs.find(l => l.date === todayStr);
-    const updated = updater(prev);
-    const others = dailyLogs.filter(l => l.date !== todayStr);
-    const newLogs = [...others, updated].sort((a, b) =>
-      a.date.localeCompare(b.date),
-    );
-    setDailyLogs(newLogs);
-    await saveDailyLogsToStorage(newLogs);
-  };
+  // =========================
+  // Daily log actions (goal/review)
+  // =========================
 
   const handleSaveTodayMission = async () => {
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('light');
 
     await upsertTodayLog(prev => {
       const prevTodos = prev?.todos ?? [];
@@ -1188,26 +860,22 @@ const res = await fetch(`${API_BASE}/transcribe`, {
         .split('\n')
         .map(l => l.trim())
         .filter(Boolean);
+
       const todos: TodoItem[] = todoLines.map((text, index) => {
         const existing = prevTodos.find(t => t.text === text);
-        return (
-          existing ?? {
-            id: `${todayStr}-${index}`,
-            text,
-            done: false,
-          }
-        );
+        return existing ?? { id: `${getTodayStr()}-${index}`, text, done: false };
       });
 
       const routineLines = routineText
         .split('\n')
         .map(l => l.trim())
         .filter(Boolean);
+
       const prevDone = prev?.routineDone ?? [];
       const newRoutineDone = prevDone.filter(r => routineLines.includes(r));
 
       return {
-        date: todayStr,
+        date: getTodayStr(),
         mission: missionInput.trim(),
         routines: routineLines,
         todos,
@@ -1220,15 +888,12 @@ const res = await fetch(`${API_BASE}/transcribe`, {
   };
 
   const handleSaveNightReview = async () => {
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('light');
 
-    await upsertTodayLog(prev => ({
-      date: todayStr,
+    const targetDate = selectedDate || getTodayStr();
+
+    await upsertLogForDate(targetDate, prev => ({
+      date: targetDate,
       mission: prev?.mission ?? '',
       routines: prev?.routines ?? [],
       todos: prev?.todos ?? [],
@@ -1244,46 +909,31 @@ const res = await fetch(`${API_BASE}/transcribe`, {
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('select');
 
     const newLogs = dailyLogs.map(log => {
       if (log.date !== date) return log;
       return {
         ...log,
-        todos: log.todos.map(t =>
-          t.id === todoId ? { ...t, done: !t.done } : t,
-        ),
+        todos: log.todos.map(t => (t.id === todoId ? { ...t, done: !t.done } : t)),
       };
     });
+
     setDailyLogs(newLogs);
     await saveDailyLogsToStorage(newLogs);
   };
 
   const toggleRoutineDone = async (date: string, label: string) => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('select');
 
     const newLogs = dailyLogs.map(log => {
       if (log.date !== date) return log;
       const prevDone = log.routineDone ?? [];
       const exists = prevDone.includes(label);
-      const updatedDone = exists
-        ? prevDone.filter(r => r !== label)
-        : [...prevDone, label];
-      return {
-        ...log,
-        routineDone: updatedDone,
-      };
+      const updatedDone = exists ? prevDone.filter(r => r !== label) : [...prevDone, label];
+      return { ...log, routineDone: updatedDone };
     });
+
     setDailyLogs(newLogs);
     await saveDailyLogsToStorage(newLogs);
   };
@@ -1291,12 +941,7 @@ const res = await fetch(`${API_BASE}/transcribe`, {
   const handleGenerateSamuraiMission = async () => {
     if (isGeneratingMission) return;
 
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('medium');
 
     setIsGeneratingMission(true);
     try {
@@ -1304,7 +949,7 @@ const res = await fetch(`${API_BASE}/transcribe`, {
       setSamuraiMissionText(mission);
 
       await upsertTodayLog(prev => ({
-        date: todayStr,
+        date: getTodayStr(),
         mission: prev?.mission ?? missionInput.trim(),
         routines: prev?.routines ?? [],
         todos: prev?.todos ?? [],
@@ -1315,13 +960,14 @@ const res = await fetch(`${API_BASE}/transcribe`, {
       }));
     } catch (e) {
       console.error(e);
-      const errMsg: Message = {
-        id: Date.now().toString() + '-mission-err',
-        from: 'king',
-        text:
-          'サムライミッション生成でエラーが出たでござる。ネット環境とAPIキーを確認してほしいでござる。',
-      };
-      setMessages(prev => [...prev, errMsg]);
+      setMessages(prev => [
+        ...prev,
+        {
+          id: `${Date.now()}-mission-err`,
+          from: 'king',
+          text: 'サムライミッション生成でエラーが出たでござる。ネット環境とサーバーを確認してほしいでござる。',
+        },
+      ]);
     } finally {
       setIsGeneratingMission(false);
     }
@@ -1330,14 +976,7 @@ const res = await fetch(`${API_BASE}/transcribe`, {
   const handleCompleteSamuraiMission = async () => {
     if (!samuraiMissionText || missionCompletedToday) return;
 
-    if (settings.enableHaptics) {
-      Haptics.notificationAsync(
-        Haptics.NotificationFeedbackType.Success,
-      ).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('success');
 
     const gainedXp = 10;
     const newXp = totalXp + gainedXp;
@@ -1347,7 +986,7 @@ const res = await fetch(`${API_BASE}/transcribe`, {
     setMissionCompletedToday(true);
 
     await upsertTodayLog(prev => ({
-      date: todayStr,
+      date: getTodayStr(),
       mission: prev?.mission ?? missionInput.trim(),
       routines: prev?.routines ?? [],
       todos: prev?.todos ?? [],
@@ -1358,64 +997,22 @@ const res = await fetch(`${API_BASE}/transcribe`, {
     }));
 
     const praiseText = `よくやった。今日のサムライミッション「${samuraiMissionText}」は達成だ。\n10XP獲得でござる。`;
-    const msg: Message = {
-      id: Date.now().toString() + '-xp',
-      from: 'king',
-      text: praiseText,
-    };
-    setMessages(prev => [...prev, msg]);
+    setMessages(prev => [...prev, { id: `${Date.now()}-xp`, from: 'king', text: praiseText }]);
     speakSamurai(praiseText);
   };
 
-  const handleToggleRoutineChip = (label: string) => {
-    if (settings.enableHaptics) {
-      Haptics.selectionAsync().catch(() => {});
-    }
-    const lines = routineText
-      .split('\n')
-      .map(l => l.trim())
-      .filter(Boolean);
-    const exists = lines.includes(label);
-    const newLines = exists ? lines.filter(l => l !== label) : [...lines, label];
-    setRoutineText(newLines.join('\n'));
-  };
-
-  const sortedDailyLogs: DailyLog[] = Array.isArray(dailyLogs)
-    ? [...dailyLogs].sort((a, b) => a.date.localeCompare(b.date))
-    : [];
-  const streakCount = getStreakCount(sortedDailyLogs);
-  const { level: samuraiLevel, progress: levelProgress, daysToClear } =
-    getSamuraiLevelInfo(streakCount);
-  const rank = getRankFromXp(totalXp);
-  const activeDate =
-    selectedDate ||
-    (sortedDailyLogs.length
-      ? sortedDailyLogs[sortedDailyLogs.length - 1].date
-      : null);
-  const activeLog =
-    activeDate ? sortedDailyLogs.find(log => log.date === activeDate) : null;
-
-  // =====================================================
-  // オンボーディング保存
-  // =====================================================
-
+  // =========================
+  // Onboarding save
+  // =========================
   const handleSaveOnboarding = async () => {
     const identity = obIdentity.trim();
     const quit = obQuit.trim();
     const rule = obRule.trim();
-    if (!identity) {
-      return;
-    }
+    if (!identity) return;
 
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('light');
 
     const data: OnboardingData = { identity, quit, rule };
-
     try {
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(data));
       setOnboardingData(data);
@@ -1426,17 +1023,11 @@ const res = await fetch(`${API_BASE}/transcribe`, {
     }
   };
 
-  // =====================================================
-  // APIキー保存（内部用。今はUIからは呼ばない想定）
-  // =====================================================
-
+  // =========================
+  // API key save (kept)
+  // =========================
   const handleSaveApiKey = async () => {
-    if (settings.enableHaptics) {
-      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-    }
-    if (settings.enableSfx) {
-      await playPressSound();
-    }
+    await tap('light');
 
     const key = apiKeyInput.trim();
     setIsSavingApiKey(true);
@@ -1450,378 +1041,380 @@ const res = await fetch(`${API_BASE}/transcribe`, {
     }
   };
 
-  // =====================================================
-  // 設定の更新
-  // =====================================================
+  // =========================
+  // Blocklist actions
+  // =========================
+  const handleAddBlockDomain = async () => {
+    const value = blocklistInput.trim();
+    if (!value) return;
 
-  const updateSettings = async (patch: Partial<AppSettings>) => {
-    const next = { ...settings, ...patch };
-    setSettings(next);
+    const normalized = value.replace(/^https?:\/\//, '').replace(/\/.*$/, '').toLowerCase();
+    const newList = Array.from(new Set([...blockedDomains, normalized]));
+
+    setBlockedDomains(newList);
+    setBlocklistInput('');
     try {
-      await AsyncStorage.setItem(SETTINGS_KEY, JSON.stringify(next));
+      await AsyncStorage.setItem(BLOCKLIST_KEY, JSON.stringify(newList));
     } catch (e) {
-      console.error('Failed to save settings', e);
+      console.error('Failed to save blocklist', e);
     }
   };
 
-  // =====================================================
-  // データ管理（リセット系）
-  // =====================================================
-
-  const handleClearHistory = () => {
-    Alert.alert(
-      '相談履歴を削除',
-      'これまでのサムライ相談の履歴をすべて消すでござる。よろしいか？',
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: '削除する',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await AsyncStorage.removeItem(HISTORY_KEY);
-              setHistory([]);
-            } catch (e) {
-              console.error('Failed to clear history', e);
-            }
-          },
-        },
-      ],
-    );
+  const handleRemoveBlockDomain = async (domain: string) => {
+    const newList = blockedDomains.filter(d => d !== domain);
+    setBlockedDomains(newList);
+    try {
+      await AsyncStorage.setItem(BLOCKLIST_KEY, JSON.stringify(newList));
+    } catch (e) {
+      console.error('Failed to save blocklist', e);
+    }
   };
 
-  // ★チャット画面だけリセット
-  const handleClearChatMessages = () => {
-    Alert.alert(
-      'チャット画面をリセット',
-      'Samurai King との会話バブルを全部消して、最初の一言だけに戻すでござる。よろしいか？',
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: 'リセットする',
-          style: 'destructive',
-          onPress: () => {
-            setMessages([
-              {
-                id: 'first',
-                from: 'king',
-                text: 'おいおいどうした？その欲望を断ち切るぞ。',
-              },
-            ]);
-            setPhase('idle');
-            setPendingIssue(null);
-            setFirstReflection(null);
-            setChatHistory([]);
-            setTurnCount(0);
-          },
+  const handleOpenBrowserUrl = async () => {
+    let url = browserUrl.trim();
+    if (!url) return;
+    if (!/^https?:\/\//.test(url)) url = 'https://' + url;
+
+    setBrowserUrl(url);
+    setCurrentUrl(url);
+    if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
+  };
+
+  // =========================
+  // Reset actions
+  // =========================
+  const handleClearHistory = () => {
+    Alert.alert('相談履歴を削除', 'これまでのサムライ相談の履歴をすべて消すでござる。よろしいか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: '削除する',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await AsyncStorage.removeItem(HISTORY_KEY);
+            setHistory([]);
+          } catch (e) {
+            console.error('Failed to clear history', e);
+          }
         },
-      ],
-    );
+      },
+    ]);
+  };
+
+  const handleClearChatMessages = () => {
+    Alert.alert('チャット画面をリセット', '会話バブルを全部消して、最初の一言だけに戻すでござる。よろしいか？', [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: 'リセットする',
+        style: 'destructive',
+        onPress: () => {
+          setMessages([{ id: 'first', from: 'king', text: 'おいおいどうした？その欲望を断ち切るぞ。' }]);
+          setInput('');
+          setIsSending(false);
+        },
+      },
+    ]);
   };
 
   const handleResetTodayLog = () => {
-    Alert.alert(
-      '今日の目標・日記をリセット',
-      `${todayStr} の目標・ルーティン・振り返りを消すでござる。よろしいか？`,
-      [
-        { text: 'キャンセル', style: 'cancel' },
-        {
-          text: 'リセットする',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              const newLogs = dailyLogs.filter(log => log.date !== todayStr);
-              setDailyLogs(newLogs);
-              await saveDailyLogsToStorage(newLogs);
-              setMissionInput('');
-              setRoutineText('');
-              setTodoInput('');
-              setProudInput('');
-              setLessonInput('');
-              setNextActionInput('');
-              setSamuraiMissionText('');
-              setMissionCompletedToday(false);
-            } catch (e) {
-              console.error('Failed to reset today log', e);
-            }
-          },
+    Alert.alert('今日の目標・日記をリセット', `${getTodayStr()} の目標・ルーティン・振り返りを消すでござる。よろしいか？`, [
+      { text: 'キャンセル', style: 'cancel' },
+      {
+        text: 'リセットする',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            const t = getTodayStr();
+            const newLogs = dailyLogs.filter(log => log.date !== t);
+            setDailyLogs(newLogs);
+            await saveDailyLogsToStorage(newLogs);
+
+            setMissionInput('');
+            setRoutineText('');
+            setTodoInput('');
+            setProudInput('');
+            setLessonInput('');
+            setNextActionInput('');
+            setSamuraiMissionText('');
+            setMissionCompletedToday(false);
+          } catch (e) {
+            console.error('Failed to reset today log', e);
+          }
         },
-      ],
-    );
+      },
+    ]);
   };
 
-  // =====================================================
-  // UI
-  // =====================================================
+  // =========================
+  // Calendar edit actions
+  // =========================
+  const handleEditLogFromCalendar = (log: DailyLog) => {
+    setEditingLogDate(log.date);
+    setEditProud(log.review?.proud ?? '');
+    setEditLesson(log.review?.lesson ?? '');
+    setEditNextAction(log.review?.nextAction ?? '');
+  };
 
+  const handleSaveEditedLog = async () => {
+    if (!editingLogDate) return;
+
+    const newLogs = dailyLogs.map(log =>
+      log.date === editingLogDate
+        ? {
+            ...log,
+            review: { proud: editProud, lesson: editLesson, nextAction: editNextAction },
+          }
+        : log,
+    );
+
+    setDailyLogs(newLogs);
+    await saveDailyLogsToStorage(newLogs);
+
+    setEditingLogDate(null);
+    setEditProud('');
+    setEditLesson('');
+    setEditNextAction('');
+  };
+
+  const handleDeleteLog = async (date: string) => {
+    const newLogs = dailyLogs.filter(log => log.date !== date);
+    setDailyLogs(newLogs);
+    await saveDailyLogsToStorage(newLogs);
+
+    if (selectedDate === date) setSelectedDate(null);
+  };
+
+  // =========================
+  // Routine chip toggle
+  // =========================
+  const handleToggleRoutineChip = (label: string) => {
+    if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
+    const lines = routineText.split('\n').map(l => l.trim()).filter(Boolean);
+    const exists = lines.includes(label);
+    const newLines = exists ? lines.filter(l => l !== label) : [...lines, label];
+    setRoutineText(newLines.join('\n'));
+  };
+
+  // =========================
+  // Derived values
+  // =========================
+  const sortedDailyLogs: DailyLog[] = useMemo(() => {
+    return Array.isArray(dailyLogs) ? [...dailyLogs].sort((a, b) => a.date.localeCompare(b.date)) : [];
+  }, [dailyLogs]);
+
+  const streakCount = useMemo(() => getStreakCount(sortedDailyLogs), [sortedDailyLogs]);
+  const { level: samuraiLevel, progress: levelProgress, daysToClear } = useMemo(
+    () => getSamuraiLevelInfo(streakCount),
+    [streakCount],
+  );
+  const rank = useMemo(() => getRankFromXp(totalXp), [totalXp]);
+
+  const activeDate = useMemo(() => {
+    return (
+      selectedDate ||
+      (sortedDailyLogs.length ? sortedDailyLogs[sortedDailyLogs.length - 1].date : null)
+    );
+  }, [selectedDate, sortedDailyLogs]);
+
+  const activeLog = useMemo(() => {
+    return activeDate ? sortedDailyLogs.find(log => log.date === activeDate) : null;
+  }, [activeDate, sortedDailyLogs]);
+
+  // =========================
+  // Render helpers
+  // =========================
   const renderTabButton = (value: typeof tab, label: string) => (
     <Pressable
       onPress={() => {
-        if (settings.enableHaptics) {
-          Haptics.selectionAsync().catch(() => {});
-        }
+        if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
         setTab(value);
       }}
       style={[styles.tabButton, tab === value && styles.tabButtonActive]}
     >
-      <Text
-        style={[styles.tabButtonText, tab === value && styles.tabButtonTextActive]}
-      >
-        {label}
-      </Text>
+      <Text style={[styles.tabButtonText, tab === value && styles.tabButtonTextActive]}>{label}</Text>
     </Pressable>
   );
 
-  const renderConsultTab = () => (
-    <View style={{ flex: 1 }}>
-      <Pressable
-        style={styles.urgeButton}
-        onPress={() => {
-          handleUrgePress();       // いままで通りチャットを開く処理
-          callSamuraiKingVoice();  // 新しく追加した「声で呼び出す」処理
-        }}
-      >
-        <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
-      </Pressable>
-      <Text style={styles.caption}>
-        ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。
-      </Text>
+  // =========================
+  // Tabs
+  // =========================
 
-      {!isSummoned ? (
-        <View style={styles.summonBox}>
-          <Text style={styles.summonTitle}>Samurai King is waiting…</Text>
-          <Text style={styles.summonText}>
-            サムライキングは静かにお主を待っている。{'\n'}
-            呼び出したあと「チャット」で本音を書いていくのだ。
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.modeRow}>
-            <Pressable
-              style={[styles.modeButton, mode === 'chat' && styles.modeButtonActive]}
-              onPress={handleSwitchToChat}
-            >
-              <Text
-                style={[
-                  styles.modeButtonText,
-                  mode === 'chat' && styles.modeButtonTextActive,
-                ]}
-              >
-                チャット
-              </Text>
-            </Pressable>
-            <Pressable
-              style={[
-                styles.modeButton,
-                mode === 'history' && styles.modeButtonActive,
-              ]}
-              onPress={handleSwitchToHistory}
-            >
-              <Text
-                style={[
-                  styles.modeButtonText,
-                  mode === 'history' && styles.modeButtonTextActive,
-                ]}
-              >
-                履歴
-              </Text>
-            </Pressable>
-          </View>
-
-          <View
-            style={[
-              styles.chatBox,
-              isKeyboardVisible && {
-                marginBottom: 4,
-              },
-            ]}
-          >
-            {mode === 'chat' ? (
-              <>
-                <Text style={styles.chatTitle}>Samurai King Chat</Text>
-
-                <ScrollView
-                  ref={messagesRef}
-                  style={styles.messages}
-                  contentContainerStyle={{ paddingBottom: 8 }}
-                  keyboardShouldPersistTaps="handled"
-                  onContentSizeChange={() =>
-                    messagesRef.current?.scrollToEnd({ animated: true })
-                  }
-                >
-                  {messages.map(m => (
-                    <View
-                      key={m.id}
-                      style={[
-                        styles.bubble,
-                        m.from === 'user' ? styles.userBubble : styles.kingBubble,
-                      ]}
-                    >
-                      <Text style={styles.bubbleLabel}>
-                        {m.from === 'user' ? 'You' : 'Samurai King'}
-                      </Text>
-                      <Text style={styles.bubbleText}>{m.text}</Text>
-                    </View>
-                  ))}
-                </ScrollView>
-
-                <View style={styles.inputRow}>
-                  <Pressable
-                    style={[
-                      styles.micButton,
-                      isRecording && styles.micButtonActive,
-                    ]}
-                    onPress={handleMicPress}
-                  >
-                    <Text style={styles.micIcon}>
-                      {isRecording ? '■' : '🎙️'}
-                    </Text>
-                  </Pressable>
-
-                  <TextInput
-                    style={styles.input}
-                    value={input}
-                    onChangeText={setInput}
-                    placeholder={
-                      phase === 'idle'
-                        ? '今のムラムラや悩みを正直に書くのだ…'
-                        : '「本当はどうしたいか」や今の気持ちを書くのだ…'
-                    }
-                    placeholderTextColor="#666"
-                    multiline
-                    blurOnSubmit
-                    returnKeyType="done"
-                    onSubmitEditing={() => {
-                      if (!input.trim() || isSending) return;
-                      const textToSend = input.trim();
-                      setInput('');
-                      processUserText(textToSend);
-                    }}
-                  />
-                  <Pressable
-                    style={[
-                      styles.sendButton,
-                      !input.trim() && { opacity: 0.5 },
-                    ]}
-                    onPress={handleSend}
-                    disabled={!input.trim() || isSending}
-                  >
-                    <Text style={styles.sendText}>
-                      {isSending ? '…' : '送信'}
-                    </Text>
-                  </Pressable>
-                </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.chatTitle}>Samurai Log History</Text>
-                {isLoadingHistory ? (
-                  <Text style={styles.historyInfo}>
-                    履歴を読み込み中でござる…
-                  </Text>
-                ) : history.length === 0 ? (
-                  <Text style={styles.historyInfo}>
-                    まだ記録はないでござる。最初の相談をすると自動でここにたまっていくでござる。
-                  </Text>
-                ) : (
-                  <ScrollView
-                    style={styles.messages}
-                    contentContainerStyle={{ paddingBottom: 8 }}
-                  >
-                    {history
-                      .slice()
-                      .reverse()
-                      .map(entry => (
-                        <View key={entry.id} style={styles.historyEntry}>
-                          <Text style={styles.historyDate}>
-                            {new Date(entry.date).toLocaleString()}
-                          </Text>
-                          <Text style={styles.historyLabel}>◆ 相談：</Text>
-                          <Text style={styles.historyText}>{entry.issue}</Text>
-                          <Text style={styles.historyLabel}>
-                            ◆ 本当はこうなりたい：
-                          </Text>
-                          <Text style={styles.historyText}>
-                            {entry.reflection}
-                          </Text>
-                          <Text style={styles.historyLabel}>
-                            ◆ サムライキング：
-                          </Text>
-                          <Text style={styles.historyText}>{entry.reply}</Text>
-                        </View>
-                      ))}
-                  </ScrollView>
-                )}
-              </>
-            )}
-          </View>
-        </>
-      )}
-    </View>
-  );
-
-  const renderGoalTab = () => {
-    const currentRoutineLines = routineText
-      .split('\n')
-      .map(l => l.trim())
-      .filter(Boolean);
+  const renderConsultTab = () => {
+    const historyToShow = history.length > 50 ? history.slice(history.length - 50) : history;
 
     return (
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 24 }}
-      >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+        <Pressable style={styles.urgeButton} onPress={handleUrgePress}>
+          <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
+        </Pressable>
+        <Text style={styles.caption}>ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。</Text>
+
+        {!isSummoned ? (
+          <View style={styles.summonBox}>
+            <Text style={styles.summonTitle}>Samurai King is waiting…</Text>
+            <Text style={styles.summonText}>
+              サムライキングは静かにお主を待っている。{'\n'}
+              呼び出したあと「チャット」で本音を書いていくのだ。
+            </Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.modeRow}>
+              <Pressable style={[styles.modeButton, mode === 'chat' && styles.modeButtonActive]} onPress={handleSwitchToChat}>
+                <Text style={[styles.modeButtonText, mode === 'chat' && styles.modeButtonTextActive]}>チャット</Text>
+              </Pressable>
+
+              <Pressable
+                style={[styles.modeButton, mode === 'history' && styles.modeButtonActive, { marginRight: 0, marginLeft: 4 }]}
+                onPress={handleSwitchToHistory}
+              >
+                <Text style={[styles.modeButtonText, mode === 'history' && styles.modeButtonTextActive]}>履歴</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.chatBox}>
+              {mode === 'chat' ? (
+                <>
+                  <Text style={styles.chatTitle}>Samurai King Chat</Text>
+
+                  <ScrollView
+                    ref={messagesRef}
+                    style={styles.messages}
+                    contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
+                    keyboardShouldPersistTaps="handled"
+                    nestedScrollEnabled
+                    showsVerticalScrollIndicator={false}
+                    onContentSizeChange={() => messagesRef.current?.scrollToEnd({ animated: true })}
+                  >
+                    {messages.map(m => (
+                      <View key={m.id} style={[styles.bubble, m.from === 'user' ? styles.userBubble : styles.kingBubble]}>
+                        <Text style={styles.bubbleLabel}>{m.from === 'user' ? 'You' : 'Samurai King'}</Text>
+                        <Text style={styles.bubbleText}>{m.text}</Text>
+                      </View>
+                    ))}
+                  </ScrollView>
+
+                  <View style={styles.inputRow}>
+                    <TextInput
+                      style={styles.input}
+                      value={input}
+                      onChangeText={setInput}
+                      placeholder="今のムラムラや悩みを正直に書くのだ…"
+                      placeholderTextColor="#666"
+                      multiline
+                      blurOnSubmit
+                      returnKeyType="done"
+                      onSubmitEditing={handleSend}
+                    />
+                    <Pressable
+                      style={[styles.sendButton, !input.trim() && { opacity: 0.5 }]}
+                      onPress={handleSend}
+                      disabled={!input.trim() || isSending}
+                    >
+                      {isSending ? <ActivityIndicator color="#022c22" /> : <Text style={styles.sendText}>送信</Text>}
+                    </Pressable>
+                  </View>
+
+                  <Text style={styles.privacyNote}>
+                    ※ 相談内容はこのスマホとサムライキングAIだけに使われる。{'\n'}
+                    開発者本人が個別の相談内容を見ることはないでござる。
+                  </Text>
+
+                  <Pressable style={styles.secondaryButton} onPress={handleClearChatMessages}>
+                    <Text style={styles.secondaryButtonText}>チャット画面をリセット</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Text style={styles.chatTitle}>Samurai Log History</Text>
+
+                  {isLoadingHistory ? (
+                    <Text style={styles.historyInfo}>履歴を読み込み中でござる…</Text>
+                  ) : historyToShow.length === 0 ? (
+                    <Text style={styles.historyInfo}>まだ記録はないでござる。最初の相談をすると自動でここにたまっていくでござる。</Text>
+                  ) : (
+                    <>
+                      {historyToShow
+                        .slice(-50)
+                        .reverse()
+                        .map(entry => {
+                          let dateLabel = '';
+                          try {
+                            const d = new Date(entry.date);
+                            dateLabel = Number.isNaN(d.getTime()) ? '' : d.toLocaleString();
+                          } catch {
+                            dateLabel = '';
+                          }
+
+                          return (
+                            <View key={entry.id} style={styles.historyEntry}>
+                              {dateLabel !== '' && <Text style={styles.historyDate}>{dateLabel}</Text>}
+
+                              <Text style={styles.historyLabel}>◆ 相談：</Text>
+                              <Text style={styles.historyText}>{entry.issue}</Text>
+
+                              <Text style={styles.historyLabel}>◆ 本当はこうなりたい：</Text>
+                              <Text style={styles.historyText}>
+                                {entry.reflection && entry.reflection.trim() !== '' ? entry.reflection : '（未記入）'}
+                              </Text>
+
+                              <Text style={styles.historyLabel}>◆ サムライキング：</Text>
+                              <Text style={styles.historyText}>{entry.reply}</Text>
+                            </View>
+                          );
+                        })}
+
+                      <Pressable style={styles.secondaryButton} onPress={handleClearHistory}>
+                        <Text style={styles.secondaryButtonText}>相談履歴を全部削除</Text>
+                      </Pressable>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          </>
+        )}
+      </ScrollView>
+    );
+  };
+
+  const renderGoalTab = () => {
+    const currentRoutineLines = routineText.split('\n').map(l => l.trim()).filter(Boolean);
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={styles.goalCard}>
           <Text style={styles.goalTitle}>今日のサムライ目標</Text>
-          <Text style={styles.goalSub}>
-            {todayStr} のミッションを 1つだけ決めるのだ。
-          </Text>
+          <Text style={styles.goalSub}>{getTodayStr()} のミッションを 1つだけ決めるのだ。</Text>
 
-          {/* サムライミッション */}
           <View style={{ marginBottom: 12 }}>
             <View style={styles.samuraiMissionHeaderRow}>
               <Text style={styles.samuraiMissionTitle}>サムライミッション</Text>
               <Text style={styles.samuraiMissionXp}>達成で 10XP</Text>
             </View>
-            <Text style={styles.goalSub}>
-              AIが「今日やるといい一手」をくれるでござる。
-            </Text>
+            <Text style={styles.goalSub}>AIが「今日やるといい一手」をくれるでござる。</Text>
 
             {samuraiMissionText ? (
               <View style={styles.samuraiMissionBox}>
-                <Text style={styles.samuraiMissionText}>
-                  {samuraiMissionText}
-                </Text>
+                <Text style={styles.samuraiMissionText}>{samuraiMissionText}</Text>
                 <Pressable
-                  style={[
-                    styles.samuraiMissionButton,
-                    missionCompletedToday && { opacity: 0.5 },
-                  ]}
+                  style={[styles.samuraiMissionButton, missionCompletedToday && { opacity: 0.5 }]}
                   onPress={handleCompleteSamuraiMission}
                   disabled={missionCompletedToday}
                 >
                   <Text style={styles.samuraiMissionButtonText}>
-                    {missionCompletedToday
-                      ? '達成済み！'
-                      : 'ミッション達成！XPゲット'}
+                    {missionCompletedToday ? '達成済み！' : 'ミッション達成！XPゲット'}
                   </Text>
                 </Pressable>
               </View>
             ) : (
-              <Pressable
-                style={styles.samuraiMissionButton}
-                onPress={handleGenerateSamuraiMission}
-              >
-                <Text style={styles.samuraiMissionButtonText}>
-                  {isGeneratingMission ? '生成中…' : 'サムライミッションを受け取る'}
-                </Text>
+              <Pressable style={styles.samuraiMissionButton} onPress={handleGenerateSamuraiMission}>
+                <Text style={styles.samuraiMissionButtonText}>{isGeneratingMission ? '生成中…' : 'サムライミッションを受け取る'}</Text>
               </Pressable>
             )}
           </View>
 
           <Text style={styles.goalSub}>自分で決める今日のミッション</Text>
-
           <TextInput
             style={styles.bigInput}
             value={missionInput}
@@ -1831,30 +1424,17 @@ const res = await fetch(`${API_BASE}/transcribe`, {
             multiline
           />
 
-          <Text style={styles.goalSub}>
-            今日のルーティン（タップで追加 or 手入力）
-          </Text>
-
+          <Text style={styles.goalSub}>今日のルーティン（タップで追加 or 手入力）</Text>
           <View style={styles.chipRow}>
             {DEFAULT_ROUTINES.map(r => {
               const active = currentRoutineLines.includes(r);
               return (
                 <Pressable
                   key={r}
-                  style={[
-                    styles.routineChip,
-                    active && styles.routineChipActive,
-                  ]}
+                  style={[styles.routineChip, active && styles.routineChipActive]}
                   onPress={() => handleToggleRoutineChip(r)}
                 >
-                  <Text
-                    style={[
-                      styles.routineChipText,
-                      active && styles.routineChipTextActive,
-                    ]}
-                  >
-                    {r}
-                  </Text>
+                  <Text style={[styles.routineChipText, active && styles.routineChipTextActive]}>{r}</Text>
                 </Pressable>
               );
             })}
@@ -1869,9 +1449,7 @@ const res = await fetch(`${API_BASE}/transcribe`, {
             multiline
           />
 
-          <Text style={[styles.goalSub, { marginTop: 16 }]}>
-            ToDo（改行で複数入力できる）
-          </Text>
+          <Text style={[styles.goalSub, { marginTop: 16 }]}>ToDo（改行で複数入力できる）</Text>
           <TextInput
             style={styles.todoInput}
             value={todoInput}
@@ -1884,26 +1462,24 @@ const res = await fetch(`${API_BASE}/transcribe`, {
           <Pressable style={styles.primaryButton} onPress={handleSaveTodayMission}>
             <Text style={styles.primaryButtonText}>今日の目標を保存する</Text>
           </Pressable>
+
+          <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={handleResetTodayLog}>
+            <Text style={styles.secondaryButtonText}>今日の目標・日記をリセット</Text>
+          </Pressable>
         </View>
       </ScrollView>
     );
   };
 
   const renderReviewTab = () => (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 24 }}
-    >
-      {/* サムライ宣言 */}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       {onboardingData && (
         <View style={styles.goalCard}>
           <View style={styles.samuraiHeaderTopRow}>
             <Text style={styles.samuraiHeaderTitle}>サムライ宣言</Text>
             <Pressable
               onPress={() => {
-                if (settings.enableHaptics) {
-                  Haptics.selectionAsync().catch(() => {});
-                }
+                if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
                 setIsEditingOnboarding(true);
                 setObIdentity(onboardingData.identity ?? '');
                 setObQuit(onboardingData.quit ?? '');
@@ -1918,182 +1494,96 @@ const res = await fetch(`${API_BASE}/transcribe`, {
           {isEditingOnboarding ? (
             <>
               <Text style={styles.onboardingLabel}>1. どんなサムライで生きたい？</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={obIdentity}
-                onChangeText={setObIdentity}
-                multiline
-              />
+              <TextInput style={styles.onboardingInput} value={obIdentity} onChangeText={setObIdentity} multiline />
               <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={obQuit}
-                onChangeText={setObQuit}
-                multiline
-              />
+              <TextInput style={styles.onboardingInput} value={obQuit} onChangeText={setObQuit} multiline />
               <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
-              <TextInput
-                style={styles.onboardingInput}
-                value={obRule}
-                onChangeText={setObRule}
-                multiline
-              />
+              <TextInput style={styles.onboardingInput} value={obRule} onChangeText={setObRule} multiline />
 
               <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                <Pressable
-                  style={[styles.onboardingButton, { flex: 1, marginRight: 4 }]}
-                  onPress={handleSaveOnboarding}
-                >
+                <Pressable style={[styles.onboardingButton, { flex: 1, marginRight: 4 }]} onPress={handleSaveOnboarding}>
                   <Text style={styles.onboardingButtonText}>保存</Text>
                 </Pressable>
                 <Pressable
-                  style={[
-                    styles.onboardingButton,
-                    {
-                      flex: 1,
-                      marginLeft: 4,
-                      backgroundColor: '#374151',
-                    },
-                  ]}
+                  style={[styles.onboardingButton, { flex: 1, marginLeft: 4, backgroundColor: '#374151' }]}
                   onPress={() => {
-                    if (settings.enableHaptics) {
-                      Haptics.selectionAsync().catch(() => {});
-                    }
+                    if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
                     setIsEditingOnboarding(false);
-                    if (onboardingData) {
-                      setObIdentity(onboardingData.identity ?? '');
-                      setObQuit(onboardingData.quit ?? '');
-                      setObRule(onboardingData.rule ?? '');
-                    }
+                    setObIdentity(onboardingData.identity ?? '');
+                    setObQuit(onboardingData.quit ?? '');
+                    setObRule(onboardingData.rule ?? '');
                   }}
                 >
-                  <Text style={[styles.onboardingButtonText, { color: '#e5e7eb' }]}>
-                    キャンセル
-                  </Text>
+                  <Text style={[styles.onboardingButtonText, { color: '#e5e7eb' }]}>キャンセル</Text>
                 </Pressable>
               </View>
             </>
           ) : (
             <>
-              <Text style={styles.samuraiHeaderLabel}>
-                ◆ 俺が目指すサムライ像
-              </Text>
-              <Text style={styles.samuraiHeaderText}>
-                {onboardingData.identity || '（未入力）'}
-              </Text>
+              <Text style={styles.samuraiHeaderLabel}>◆ 俺が目指すサムライ像</Text>
+              <Text style={styles.samuraiHeaderText}>{onboardingData.identity || '（未入力）'}</Text>
               <Text style={styles.samuraiHeaderLabel}>◆ やめる習慣</Text>
-              <Text style={styles.samuraiHeaderText}>
-                {onboardingData.quit || '（未入力）'}
-              </Text>
+              <Text style={styles.samuraiHeaderText}>{onboardingData.quit || '（未入力）'}</Text>
               <Text style={styles.samuraiHeaderLabel}>◆ 毎日のルール</Text>
-              <Text style={styles.samuraiHeaderText}>
-                {onboardingData.rule || '（未入力）'}
-              </Text>
+              <Text style={styles.samuraiHeaderText}>{onboardingData.rule || '（未入力）'}</Text>
             </>
           )}
         </View>
       )}
 
-      {/* 夜の振り返り */}
       <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>夜の振り返り</Text>
-        <Text style={styles.goalSub}>
-          今日一日を３つの質問で振り返るでござる。
-        </Text>
+        <Text style={styles.goalSub}>今日一日を３つの質問で振り返るでござる。</Text>
 
         <Text style={styles.questionText}>1. 今日、一番誇れる行動はなんだ？</Text>
-        <TextInput
-          style={styles.bigInput}
-          value={proudInput}
-          onChangeText={setProudInput}
-          multiline
-        />
+        <TextInput style={styles.bigInput} value={proudInput} onChangeText={setProudInput} multiline />
 
         <Text style={styles.questionText}>2. 気づいたこと・学んだことは？</Text>
-        <TextInput
-          style={styles.bigInput}
-          value={lessonInput}
-          onChangeText={setLessonInput}
-          multiline
-        />
+        <TextInput style={styles.bigInput} value={lessonInput} onChangeText={setLessonInput} multiline />
 
-        <Text style={styles.questionText}>
-          3. 明日ひとつだけ変えてみる行動は？
-        </Text>
-        <TextInput
-          style={styles.bigInput}
-          value={nextActionInput}
-          onChangeText={setNextActionInput}
-          multiline
-        />
+        <Text style={styles.questionText}>3. 明日ひとつだけ変えてみる行動は？</Text>
+        <TextInput style={styles.bigInput} value={nextActionInput} onChangeText={setNextActionInput} multiline />
 
         <Pressable style={styles.primaryButton} onPress={handleSaveNightReview}>
           <Text style={styles.primaryButtonText}>今日の振り返りを保存する</Text>
         </Pressable>
       </View>
 
-      {/* サムライRPGダッシュボード */}
       <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>サムライRPGダッシュボード</Text>
         <Text style={styles.goalSub}>連続ログ：{streakCount} 日でござる🔥</Text>
         <Text style={styles.goalSub}>
           サムライレベル：Lv.{samuraiLevel} / {MAX_LEVEL}{' '}
-          {samuraiLevel >= MAX_LEVEL
-            ? '（伝説の侍クリア！）'
-            : `（あと ${daysToClear} 日で伝説の侍）`}
+          {samuraiLevel >= MAX_LEVEL ? '（伝説の侍クリア！）' : `（あと ${daysToClear} 日で伝説の侍）`}
         </Text>
 
         <View style={styles.progressBar}>
-          <View
-            style={[
-              styles.progressFill,
-              { width: `${Math.round(levelProgress * 100)}%` },
-            ]}
-          />
+          <View style={[styles.progressFill, { width: `${Math.round(levelProgress * 100)}%` }]} />
         </View>
-        <Text style={styles.progressHint}>
-          3日続けるごとにレベルアップ。1ヶ月やり切れば伝説クリアでござる。
-        </Text>
+        <Text style={styles.progressHint}>3日続けるごとにレベルアップ。1ヶ月やり切れば伝説クリアでござる。</Text>
 
         <Text style={styles.goalSub}>
           総経験値：{totalXp} XP（ランク：{rank.label}
-          {rank.next > 0 ? ` / 次のランクまで ${rank.next} XP` : ' / MAX'}
-          )
+          {rank.next > 0 ? ` / 次のランクまで ${rank.next} XP` : ' / MAX'}）
         </Text>
 
         <SamuraiAvatar level={samuraiLevel} rankLabel={rank.label} />
 
-        {/* カレンダー */}
-        <Text style={[styles.goalTitle, { fontSize: 16, marginTop: 6 }]}>
-          サムライ日記カレンダー
-        </Text>
+        <Text style={[styles.goalTitle, { fontSize: 16, marginTop: 6 }]}>サムライ日記カレンダー</Text>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ marginTop: 8, marginBottom: 8 }}
-        >
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 8, marginBottom: 8 }}>
           {sortedDailyLogs.map(log => {
             const isActive = log.date === activeDate;
             return (
               <Pressable
                 key={log.date}
                 onPress={() => {
-                  if (settings.enableHaptics) {
-                    Haptics.selectionAsync().catch(() => {});
-                  }
+                  if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
                   setSelectedDate(log.date);
                 }}
                 style={[styles.dateChip, isActive && styles.dateChipActive]}
               >
-                <Text
-                  style={[
-                    styles.dateChipText,
-                    isActive && styles.dateChipTextActive,
-                  ]}
-                >
-                  {formatDateLabel(log.date)}
-                </Text>
+                <Text style={[styles.dateChipText, isActive && styles.dateChipTextActive]}>{formatDateLabel(log.date)}</Text>
               </Pressable>
             );
           })}
@@ -2104,16 +1594,12 @@ const res = await fetch(`${API_BASE}/transcribe`, {
             <Text style={styles.historyDate}>{activeLog.date}</Text>
 
             <Text style={styles.historyLabel}>◆ 目標</Text>
-            <Text style={styles.historyText}>
-              {activeLog.mission || '（未入力だぞ）'}
-            </Text>
+            <Text style={styles.historyText}>{activeLog.mission || '（未入力だぞ）'}</Text>
 
             <Text style={styles.historyLabel}>◆ サムライミッション</Text>
             <Text style={styles.historyText}>
               {activeLog.samuraiMission
-                ? `${activeLog.samuraiMission} ${
-                    activeLog.missionCompleted ? '（達成済み）' : '（未達成）'
-                  }`
+                ? `${activeLog.samuraiMission} ${activeLog.missionCompleted ? '（達成済み）' : '（未達成）'}`
                 : '（まだ受け取っていないぞ）'}
             </Text>
 
@@ -2124,25 +1610,9 @@ const res = await fetch(`${API_BASE}/transcribe`, {
               activeLog.routines.map(r => {
                 const done = activeLog.routineDone?.includes(r);
                 return (
-                  <Pressable
-                    key={r}
-                    style={styles.todoRow}
-                    onPress={() => toggleRoutineDone(activeLog.date, r)}
-                  >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        done && styles.checkboxChecked,
-                      ]}
-                    />
-                    <Text
-                      style={[
-                        styles.todoText,
-                        done && styles.todoTextDone,
-                      ]}
-                    >
-                      {r}
-                    </Text>
+                  <Pressable key={r} style={styles.todoRow} onPress={() => toggleRoutineDone(activeLog.date, r)}>
+                    <View style={[styles.checkbox, done && styles.checkboxChecked]} />
+                    <Text style={[styles.todoText, done && styles.todoTextDone]}>{r}</Text>
                   </Pressable>
                 );
               })
@@ -2153,65 +1623,188 @@ const res = await fetch(`${API_BASE}/transcribe`, {
               <Text style={styles.historyText}>（登録なしだ）</Text>
             ) : (
               activeLog.todos.map(todo => (
-                <Pressable
-                  key={todo.id}
-                  style={styles.todoRow}
-                  onPress={() => toggleTodoDone(activeLog.date, todo.id)}
-                >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      todo.done && styles.checkboxChecked,
-                    ]}
-                  />
-                  <Text
-                    style={[
-                      styles.todoText,
-                      todo.done && styles.todoTextDone,
-                    ]}
-                  >
-                    {todo.text}
-                  </Text>
+                <Pressable key={todo.id} style={styles.todoRow} onPress={() => toggleTodoDone(activeLog.date, todo.id)}>
+                  <View style={[styles.checkbox, todo.done && styles.checkboxChecked]} />
+                  <Text style={[styles.todoText, todo.done && styles.todoTextDone]}>{todo.text}</Text>
                 </Pressable>
               ))
             )}
+
+            {editingLogDate === activeLog.date ? (
+              <>
+                <Text style={styles.historyLabel}>◆ 今日一番誇れる行動（編集）</Text>
+                <TextInput
+                  style={styles.bigInput}
+                  multiline
+                  value={editProud}
+                  onChangeText={setEditProud}
+                  placeholder="今日一番誇れる行動を書いてくだされ。"
+                  placeholderTextColor="#666"
+                />
+
+                <Text style={styles.historyLabel}>◆ 気づき・学び（編集）</Text>
+                <TextInput
+                  style={styles.bigInput}
+                  multiline
+                  value={editLesson}
+                  onChangeText={setEditLesson}
+                  placeholder="気づき・学びを書いてくだされ。"
+                  placeholderTextColor="#666"
+                />
+
+                <Text style={styles.historyLabel}>◆ 明日変えてみる行動（編集）</Text>
+                <TextInput
+                  style={styles.bigInput}
+                  multiline
+                  value={editNextAction}
+                  onChangeText={setEditNextAction}
+                  placeholder="明日変えてみる行動を書いてくだされ。"
+                  placeholderTextColor="#666"
+                />
+
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={handleSaveEditedLog}>
+                    <Text style={styles.historyButtonText}>保存</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.historyButton, styles.historyDeleteButton]}
+                    onPress={() => {
+                      setEditingLogDate(null);
+                      setEditProud('');
+                      setEditLesson('');
+                      setEditNextAction('');
+                    }}
+                  >
+                    <Text style={styles.historyButtonText}>キャンセル</Text>
+                  </Pressable>
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.historyLabel}>◆ 今日一番誇れる行動</Text>
+                <Text style={styles.historyText}>{activeLog.review?.proud || '（未入力）'}</Text>
+
+                <Text style={styles.historyLabel}>◆ 気づき・学び</Text>
+                <Text style={styles.historyText}>{activeLog.review?.lesson || '（未入力）'}</Text>
+
+                <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
+                <Text style={styles.historyText}>{activeLog.review?.nextAction || '（未入力）'}</Text>
+
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
+                    <Text style={styles.historyButtonText}>編集</Text>
+                  </Pressable>
+                  <Pressable style={[styles.historyButton, styles.historyDeleteButton]} onPress={() => handleDeleteLog(activeLog.date)}>
+                    <Text style={styles.historyButtonText}>削除</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
           </View>
         ) : (
-          <Text style={styles.historyInfo}>まだ日記はないでござる。</Text>
+          <Text style={[styles.historyText, { marginTop: 8 }]}>まだサムライ日記はないでござる。</Text>
         )}
       </View>
     </ScrollView>
   );
 
+  const renderBrowserTab = () => {
+    const normalizedCurrent = currentUrl.replace(/^https?:\/\//, '').toLowerCase();
+    const isBlocked = blockedDomains.some(domain => normalizedCurrent.startsWith(domain));
+
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+        <View style={styles.goalCard}>
+          <Text style={styles.goalTitle}>サムライブラウザ</Text>
+          <Text style={styles.goalSub}>
+            禁欲・集中モード用のブラウザでござる。ここでだけネットをする、というマイルールもオススメ。
+          </Text>
+
+          <View style={styles.urlRow}>
+            <TextInput
+              style={styles.urlInput}
+              value={browserUrl}
+              onChangeText={setBrowserUrl}
+              autoCapitalize="none"
+              keyboardType="url"
+              placeholder="例）twitter.com / youtube.com"
+              placeholderTextColor="#666"
+            />
+            <Pressable style={styles.urlOpenButton} onPress={handleOpenBrowserUrl}>
+              <Text style={styles.urlOpenButtonText}>開く</Text>
+            </Pressable>
+          </View>
+
+          <Text style={styles.browserInfo}>ブロック対象：{blockedDomains.length ? blockedDomains.join(', ') : '（未設定）'}</Text>
+
+          <Text style={[styles.sectionTitle, { marginTop: 10 }]}>ブロックリスト</Text>
+          <Text style={styles.goalSub}>見たくないサイト（ドメイン）を登録しておくと、自動でブロックされる。</Text>
+
+          <View style={styles.urlRow}>
+            <TextInput
+              style={styles.urlInput}
+              value={blocklistInput}
+              onChangeText={setBlocklistInput}
+              autoCapitalize="none"
+              placeholder="例）twitter.com"
+              placeholderTextColor="#666"
+            />
+            <Pressable style={styles.urlOpenButton} onPress={handleAddBlockDomain}>
+              <Text style={styles.urlOpenButtonText}>追加</Text>
+            </Pressable>
+          </View>
+
+          {blockedDomains.length > 0 && (
+            <View style={{ marginTop: 8 }}>
+              {blockedDomains.map(domain => (
+                <View key={domain} style={styles.blockRow}>
+                  <Text style={styles.blockDomain}>{domain}</Text>
+                  <Pressable onPress={() => handleRemoveBlockDomain(domain)}>
+                    <Text style={styles.blockRemove}>解除</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
+        <View style={[styles.browserContainer, { height: 420 }]}>
+          {isBlocked ? (
+            <View style={styles.blockedCard}>
+              <Text style={styles.blockedTitle}>⚔️ そこは罠のサイトだぞ</Text>
+              <Text style={styles.blockedText}>
+                今アクセスしようとした場所は、お主が「封印」すると決めた領域だ。{'\n'}
+                ここで時間やエネルギーを溶かすより、サムライミッションか目標に一手を打とう。
+              </Text>
+
+              <Pressable style={styles.blockedButton} onPress={() => setTab('consult')}>
+                <Text style={styles.blockedButtonText}>今の気持ちを相談する</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <WebView source={{ uri: currentUrl }} style={{ flex: 1 }} />
+          )}
+        </View>
+      </ScrollView>
+    );
+  };
+
   const renderSettingsTab = () => (
-    <ScrollView
-      style={{ flex: 1 }}
-      contentContainerStyle={{ paddingBottom: 24 }}
-    >
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>設定</Text>
-        <Text style={styles.goalSub}>
-          サムライキングの声やバイブの強さを、自分好みにカスタムできるでござる。
-        </Text>
+        <Text style={styles.goalSub}>サムライキングの声やバイブの強さを、自分好みにカスタムできるでござる。</Text>
 
-        {/* サムライボイス設定 */}
         <Text style={styles.sectionTitle}>サムライボイス</Text>
         <View style={styles.settingsRow}>
           <View style={styles.settingsRowText}>
             <Text style={styles.settingsLabel}>自動で声を再生する</Text>
-            <Text style={styles.settingsHint}>
-              OFFにすると、テキストだけ静かに読むモードになるでござる。
-            </Text>
+            <Text style={styles.settingsHint}>OFFにすると、テキストだけ静かに読むモードになるでござる。</Text>
           </View>
-          <Switch
-            value={settings.autoVoice}
-            onValueChange={v => updateSettings({ autoVoice: v })}
-          />
+          <Switch value={settings.autoVoice} onValueChange={v => updateSettings({ autoVoice: v })} />
         </View>
 
-        <Text style={[styles.settingsLabel, { marginTop: 8 }]}>
-          読み上げスピード
-        </Text>
+        <Text style={[styles.settingsLabel, { marginTop: 8 }]}>読み上げスピード</Text>
         <View style={styles.segmentRow}>
           {[
             { key: 'slow', label: 'ゆっくり' },
@@ -2222,317 +1815,334 @@ const res = await fetch(`${API_BASE}/transcribe`, {
             return (
               <Pressable
                 key={opt.key}
-                style={[
-                  styles.segmentButton,
-                  active && styles.segmentButtonActive,
-                ]}
-                onPress={() =>
-                  updateSettings({
-                    readingSpeed: opt.key as AppSettings['readingSpeed'],
-                  })
-                }
+                style={[styles.segmentButton, active && styles.segmentButtonActive]}
+                onPress={() => updateSettings({ readingSpeed: opt.key as AppSettings['readingSpeed'] })}
               >
-                <Text
-                  style={[
-                    styles.segmentButtonText,
-                    active && styles.segmentButtonTextActive,
-                  ]}
-                >
-                  {opt.label}
-                </Text>
+                <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>{opt.label}</Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* 振動・効果音 */}
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-          振動・効果音
-        </Text>
-
+        <Text style={styles.sectionTitle}>フィードバック</Text>
         <View style={styles.settingsRow}>
           <View style={styles.settingsRowText}>
-            <Text style={styles.settingsLabel}>ボタン操作でバイブする</Text>
-            <Text style={styles.settingsHint}>
-              OFFにすると、スマホの振動なしで静かに操作できるでござる。
-            </Text>
+            <Text style={styles.settingsLabel}>バイブ（Haptics）</Text>
+            <Text style={styles.settingsHint}>ボタン操作のときに、手応えを少しだけ返すでござる。</Text>
           </View>
-          <Switch
-            value={settings.enableHaptics}
-            onValueChange={v => updateSettings({ enableHaptics: v })}
-          />
+          <Switch value={settings.enableHaptics} onValueChange={v => updateSettings({ enableHaptics: v })} />
         </View>
-
         <View style={styles.settingsRow}>
           <View style={styles.settingsRowText}>
-            <Text style={styles.settingsLabel}>太鼓・マイクの効果音</Text>
-            <Text style={styles.settingsHint}>
-              OFFにすると、効果音なしのステルスモードになるでござる。
-            </Text>
+            <Text style={styles.settingsLabel}>効果音</Text>
+            <Text style={styles.settingsHint}>ボタンを押したときの太鼓の音などをON/OFFできる。</Text>
           </View>
-          <Switch
-            value={settings.enableSfx}
-            onValueChange={v => updateSettings({ enableSfx: v })}
-          />
+          <Switch value={settings.enableSfx} onValueChange={v => updateSettings({ enableSfx: v })} />
         </View>
 
-        {/* サムライの厳しさ */}
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-          サムライの厳しさ（口調レベル）
-        </Text>
-        <Text style={styles.settingsHint}>
-          今のメンタルに合わせて、どれくらいズバッと言ってほしいか選べるでござる。
-        </Text>
-
+        <Text style={styles.sectionTitle}>サムライキングの厳しさ</Text>
         <View style={styles.segmentRow}>
           {[
-            { key: 'soft', label: '優しめ' },
+            { key: 'soft', label: 'ゆるめ' },
             { key: 'normal', label: 'ふつう' },
-            { key: 'hard', label: 'ちょい厳しめ' },
+            { key: 'hard', label: '鬼コーチ' },
           ].map(opt => {
             const active = settings.strictness === opt.key;
             return (
               <Pressable
                 key={opt.key}
-                style={[
-                  styles.segmentButton,
-                  active && styles.segmentButtonActive,
-                ]}
-                onPress={() =>
-                  updateSettings({
-                    strictness: opt.key as AppSettings['strictness'],
-                  })
-                }
+                style={[styles.segmentButton, active && styles.segmentButtonActive]}
+                onPress={() => updateSettings({ strictness: opt.key as AppSettings['strictness'] })}
               >
-                <Text
-                  style={[
-                    styles.segmentButtonText,
-                    active && styles.segmentButtonTextActive,
-                  ]}
-                >
-                  {opt.label}
-                </Text>
+                <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>{opt.label}</Text>
               </Pressable>
             );
           })}
         </View>
 
-        {/* 通知（あとで実装） */}
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-          通知リマインド（準備中）
-        </Text>
-        <Text style={styles.settingsHint}>
-          朝ミッション・夜の振り返りのプッシュ通知は、今後のアップデートで実装予定でござる。
-        </Text>
+        <Text style={styles.sectionTitle}>サムライタイム（1日の使用時間制限）</Text>
+        <Text style={styles.settingsHint}>このアプリを1日に何分まで使うかを決めるでござる。0分なら無制限。</Text>
 
-        {/* データ管理 */}
-        <Text style={[styles.sectionTitle, { marginTop: 12 }]}>
-          データ管理
-        </Text>
-        <Text style={styles.settingsHint}>
-          誤爆したときや、一度リセットしたいとき用だ。押す前によく考えるでござる。
-        </Text>
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>1日の上限（分）</Text>
+            <Text style={styles.settingsHint}>例）30なら、今日トータル30分までだけ使える。</Text>
+          </View>
+          <TextInput
+            style={styles.timeInput}
+            keyboardType="number-pad"
+            value={String(samuraiTime.dailyMinutes ?? 0)}
+            onChangeText={updateSamuraiDailyMinutes}
+          />
+        </View>
 
-        {/* 相談ログ（履歴タブ用）を全部削除 */}
-        <Pressable style={styles.dangerButton} onPress={handleClearHistory}>
-          <Text style={styles.dangerButtonText}>
-            相談履歴（ログ）をすべて削除
+        {isTimeLimited && (
+          <Text style={styles.settingsHint}>
+            今日の使用時間：{usedMinutes} 分 / 上限 {samuraiTime.dailyMinutes} 分{'\n'}
+            残り：{remainingMinutes} 分
           </Text>
+        )}
+
+        <Text style={styles.sectionTitle}>その他</Text>
+        <Pressable style={styles.secondaryButton} onPress={() => setShowPrivacy(true)}>
+          <Text style={styles.secondaryButtonText}>プライバシーポリシーを見る</Text>
         </Pressable>
 
-        {/* チャット画面だけリセット */}
-        <Pressable
-          style={[styles.dangerButton, { marginTop: 6 }]}
-          onPress={handleClearChatMessages}
-        >
-          <Text style={styles.dangerButtonText}>
-            チャット画面の会話をリセット
-          </Text>
-        </Pressable>
-
-        {/* 今日の目標・日記だけリセット */}
-        <Pressable
-          style={[styles.dangerButton, { marginTop: 6 }]}
-          onPress={handleResetTodayLog}
-        >
-          <Text style={styles.dangerButtonText}>
-            今日の目標・日記をリセット
-          </Text>
-        </Pressable>
+        {/* APIキー (温存UI) */}
+        <Text style={[styles.sectionTitle, { marginTop: 14 }]}>開発用（APIキー）</Text>
+        <Text style={styles.settingsHint}>今は未使用。将来ユーザー入力方式に戻すならここを使う。</Text>
+        <View style={styles.urlRow}>
+          <TextInput
+            style={styles.urlInput}
+            value={apiKeyInput}
+            onChangeText={setApiKeyInput}
+            autoCapitalize="none"
+            placeholder="sk-..."
+            placeholderTextColor="#666"
+          />
+          <Pressable style={styles.urlOpenButton} onPress={handleSaveApiKey} disabled={isSavingApiKey}>
+            <Text style={styles.urlOpenButtonText}>{isSavingApiKey ? '保存中…' : '保存'}</Text>
+          </Pressable>
+        </View>
+        {apiKey ? <Text style={styles.browserInfo}>保存済み</Text> : <Text style={styles.browserInfo}>未保存</Text>}
       </View>
     </ScrollView>
   );
 
-  // ===== オンボーディング画面 =====
+  const renderOnboarding = () => (
+    <View style={styles.onboardingContainer}>
+      <Text style={styles.appTitle}>BUSHIDO LOG</Text>
+      <Text style={styles.onboardingLead}>まずは「どんなサムライとして生きるか」を決めるところから始めよう。</Text>
 
+      <Text style={styles.onboardingLabel}>1. どんなサムライとして生きたい？</Text>
+      <TextInput
+        style={styles.onboardingInput}
+        value={obIdentity}
+        onChangeText={setObIdentity}
+        multiline
+        placeholder="例）家族に優しく、世界で戦うサムライアーティスト"
+        placeholderTextColor="#6b7280"
+      />
+
+      <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
+      <TextInput
+        style={styles.onboardingInput}
+        value={obQuit}
+        onChangeText={setObQuit}
+        multiline
+        placeholder="例）ダラダラSNS、夜更かし"
+        placeholderTextColor="#6b7280"
+      />
+
+      <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
+      <TextInput
+        style={styles.onboardingInput}
+        value={obRule}
+        onChangeText={setObRule}
+        multiline
+        placeholder="例）毎日1つは未来のための行動をする"
+        placeholderTextColor="#6b7280"
+      />
+
+      <Pressable style={styles.primaryButton} onPress={handleSaveOnboarding}>
+        <Text style={styles.primaryButtonText}>サムライ宣言を保存して始める</Text>
+      </Pressable>
+    </View>
+  );
+
+  const renderTimeOver = () => (
+    <View style={styles.timeOverContainer}>
+      <View style={styles.timeOverCard}>
+        <Text style={styles.timeOverTitle}>本日のサムライタイム終了</Text>
+        <Text style={styles.timeOverText}>
+          今日の「BUSHIDO LOG」を使える時間は使い切ったでござる。{'\n'}
+          ここから先は、現実世界でサムライミッションを遂行する時間だ。
+        </Text>
+        <Text style={[styles.timeOverText, { marginTop: 6 }]}>※ 明日になると、時間は自動でリセットされる。</Text>
+
+        <Pressable style={[styles.primaryButton, { marginTop: 12 }]} onPress={() => setTab('settings')}>
+          <Text style={styles.primaryButtonText}>サムライタイムの設定を見直す</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
+  // =========================
+  // Loading
+  // =========================
   if (isLoadingOnboarding) {
     return (
-      <View style={styles.onboardingContainer}>
-        <Text style={styles.onboardingTitle}>ロード中でござる…</Text>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#16a34a" />
+        <Text style={styles.loadingText}>サムライキングを呼び出し中…</Text>
       </View>
     );
   }
 
-  if (isOnboarding) {
-    return (
-      <KeyboardAvoidingView
-        style={styles.onboardingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
+  return (
+    <>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View style={styles.onboardingInner}>
-            <Text style={styles.onboardingTitle}>サムライ宣言を作るでござる</Text>
+          <View style={styles.container}>
+            <View style={styles.header}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.appTitle}>BUSHIDO LOG</Text>
+                {isTimeLimited && (
+                  <View style={styles.timeBadge}>
+                    <Text style={styles.timeBadgeText}>残り：{remainingMinutes !== null ? `${remainingMinutes}分` : '∞'}</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.headerSub}>性エネルギーを創造エネルギーに変えるサムライ習慣アプリ</Text>
+            </View>
 
-            <Text style={styles.onboardingLabel}>1. どんなサムライで生きたい？</Text>
-            <TextInput
-              style={styles.onboardingInput}
-              value={obIdentity}
-              onChangeText={setObIdentity}
-              placeholder="例）家族と仲間を守る優しいサムライ"
-              placeholderTextColor="#666"
-              multiline
-            />
+            {isOnboarding ? (
+              renderOnboarding()
+            ) : (
+              <>
+                <View style={styles.tabRow}>
+                  {renderTabButton('consult', '相談')}
+                  {renderTabButton('goal', '目標')}
+                  {renderTabButton('review', '振り返り')}
+                  {renderTabButton('browser', 'ブラウザ')}
+                  {renderTabButton('settings', '設定')}
+                </View>
 
-            <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
-            <TextInput
-              style={styles.onboardingInput}
-              value={obQuit}
-              onChangeText={setObQuit}
-              placeholder="例）スマホだらだら見・ポルノ・酒の飲み過ぎ"
-              placeholderTextColor="#666"
-              multiline
-            />
-
-            <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
-            <TextInput
-              style={styles.onboardingInput}
-              value={obRule}
-              onChangeText={setObRule}
-              placeholder="例）毎日1つだけ自分を褒められる行動をする"
-              placeholderTextColor="#666"
-              multiline
-            />
-
-            <Pressable style={styles.onboardingButton} onPress={handleSaveOnboarding}>
-              <Text style={styles.onboardingButtonText}>サムライ宣言を保存する</Text>
-            </Pressable>
-
-            <Pressable
-              style={styles.onboardingSkip}
-              onPress={() => {
-                setIsOnboarding(false);
-              }}
-            >
-              <Text style={styles.onboardingSkipText}>あとで決める（今はスキップ）</Text>
-            </Pressable>
+                <View style={{ flex: 1 }}>
+                  {isTimeOver && tab !== 'settings' ? (
+                    renderTimeOver()
+                  ) : (
+                    <>
+                      {tab === 'consult' && renderConsultTab()}
+                      {tab === 'goal' && renderGoalTab()}
+                      {tab === 'review' && renderReviewTab()}
+                      {tab === 'browser' && renderBrowserTab()}
+                      {tab === 'settings' && renderSettingsTab()}
+                    </>
+                  )}
+                </View>
+              </>
+            )}
           </View>
         </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
-    );
-  }
 
-  // ===== メイン画面 =====
-
-  return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <View style={{ flex: 1 }}>
-          <View style={styles.tabRow}>
-            {renderTabButton('consult', '相談')}
-            {renderTabButton('goal', '今日の目標')}
-            {renderTabButton('review', '振り返り')}
-            {renderTabButton('settings', '設定')}
-          </View>
-
-          <View style={{ flex: 1 }}>
-            {tab === 'consult'
-              ? renderConsultTab()
-              : tab === 'goal'
-              ? renderGoalTab()
-              : tab === 'review'
-              ? renderReviewTab()
-              : renderSettingsTab()}
+      <Modal visible={showPrivacy} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>プライバシーポリシー</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <Text style={styles.modalText}>{PRIVACY_POLICY_TEXT}</Text>
+            </ScrollView>
+            <Pressable style={[styles.primaryButton, { marginTop: 12 }]} onPress={() => setShowPrivacy(false)}>
+              <Text style={styles.primaryButtonText}>閉じる</Text>
+            </Pressable>
           </View>
         </View>
-      </TouchableWithoutFeedback>
-    </KeyboardAvoidingView>
+      </Modal>
+    </>
   );
 }
 
-// =====================================================
-// スタイル
-// =====================================================
+// =========================
+// Styles (complete)
+// =========================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050810',
+    backgroundColor: '#020617',
     paddingTop: 40,
     paddingHorizontal: 12,
+  },
+  header: {
+    marginBottom: 8,
+  },
+  appTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#f97316',
+  },
+  headerSub: {
+    fontSize: 12,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+  timeBadge: {
+    marginLeft: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#f97316',
+  },
+  timeBadgeText: {
+    fontSize: 11,
+    color: '#f97316',
+    fontWeight: '600',
   },
   tabRow: {
     flexDirection: 'row',
     marginBottom: 8,
+    borderRadius: 999,
+    backgroundColor: '#0f172a',
+    padding: 2,
   },
   tabButton: {
     flex: 1,
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#555',
-    marginHorizontal: 4,
     alignItems: 'center',
   },
   tabButtonActive: {
-    backgroundColor: '#ffb300',
-    borderColor: '#ffb300',
+    backgroundColor: '#f97316',
   },
   tabButtonText: {
-    color: '#aaa',
+    fontSize: 12,
+    color: '#9ca3af',
     fontWeight: '600',
-    fontSize: 13,
   },
   tabButtonTextActive: {
-    color: '#000',
+    color: '#0f172a',
   },
+
   urgeButton: {
-    paddingVertical: 12,
-    borderRadius: 999,
-    backgroundColor: '#e53935',
+    backgroundColor: '#f97316',
+    paddingVertical: 10,
+    borderRadius: 12,
     alignItems: 'center',
     marginBottom: 4,
   },
   urgeText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 16,
+    color: '#0f172a',
+    fontWeight: '800',
   },
   caption: {
-    color: '#ccc',
-    fontSize: 12,
+    fontSize: 11,
+    color: '#9ca3af',
     marginBottom: 8,
   },
   summonBox: {
-    padding: 12,
     borderRadius: 12,
-    backgroundColor: '#111827',
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 12,
+    backgroundColor: '#020617',
   },
   summonTitle: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#e5e7eb',
+    fontWeight: '700',
     marginBottom: 4,
   },
   summonText: {
-    color: '#ccc',
     fontSize: 12,
-    lineHeight: 18,
+    color: '#9ca3af',
   },
+
   modeRow: {
     flexDirection: 'row',
+    marginTop: 12,
     marginBottom: 4,
   },
   modeButton: {
@@ -2540,209 +2150,169 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#444',
-    marginHorizontal: 2,
+    borderColor: '#1e293b',
     alignItems: 'center',
+    marginRight: 4,
   },
   modeButtonActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: '#0f172a',
   },
   modeButtonText: {
-    color: '#aaa',
     fontSize: 12,
-    fontWeight: '600',
+    color: '#9ca3af',
   },
   modeButtonTextActive: {
-    color: '#fff',
+    color: '#e5e7eb',
+    fontWeight: '700',
   },
+
   chatBox: {
-    flex: 1,
-    borderRadius: 14,
+    marginTop: 8,
+    borderRadius: 16,
     backgroundColor: '#020617',
-    padding: 8,
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1e293b',
+    padding: 8,
   },
   chatTitle: {
     color: '#e5e7eb',
     fontWeight: '700',
-    fontSize: 14,
-    marginBottom: 6,
+    marginBottom: 4,
   },
   messages: {
-    flex: 1,
-    maxHeight: 260,
+    maxHeight: 360,
+    marginBottom: 6,
   },
   bubble: {
+    maxWidth: '80%',
     padding: 8,
     borderRadius: 10,
     marginBottom: 6,
   },
   userBubble: {
+    backgroundColor: '#0f172a',
     alignSelf: 'flex-end',
-    backgroundColor: '#1f2937',
   },
   kingBubble: {
+    backgroundColor: '#f97316',
     alignSelf: 'flex-start',
-    backgroundColor: '#111827',
   },
   bubbleLabel: {
     fontSize: 10,
-    color: '#9ca3af',
+    fontWeight: '700',
     marginBottom: 2,
+    color: '#020617',
   },
   bubbleText: {
-    color: '#e5e7eb',
     fontSize: 13,
-    lineHeight: 18,
+    color: '#020617',
   },
   inputRow: {
     flexDirection: 'row',
-    alignItems: 'flexend',
-    marginTop: 6,
-  },
-  micButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#4b5563',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
-  },
-  micButtonActive: {
-    backgroundColor: '#ef4444',
-    borderColor: '#ef4444',
-  },
-  micIcon: {
-    color: '#e5e7eb',
-    fontSize: 16,
+    alignItems: 'flex-end',
   },
   input: {
     flex: 1,
     minHeight: 36,
-    maxHeight: 100,
+    maxHeight: 80,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 10,
-    backgroundColor: '#020617',
-    borderWidth: 1,
-    borderColor: '#4b5563',
-    color: '#e5e7eb',
     fontSize: 13,
+    color: '#e5e7eb',
+    marginRight: 4,
   },
   sendButton: {
-    marginLeft: 4,
+    backgroundColor: '#f97316',
+    borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   sendText: {
-    color: '#022c22',
+    color: '#0f172a',
     fontWeight: '700',
-    fontSize: 13,
-  },
-  historyInfo: {
-    color: '#9ca3af',
     fontSize: 12,
-    lineHeight: 18,
+  },
+  privacyNote: {
+    fontSize: 10,
+    color: '#6b7280',
+    marginTop: 4,
+  },
+
+  secondaryButton: {
+    marginTop: 6,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    fontSize: 11,
+    color: '#e5e7eb',
+  },
+
+  historyInfo: {
+    fontSize: 12,
+    color: '#9ca3af',
     marginTop: 4,
   },
   historyEntry: {
-    padding: 8,
     borderRadius: 10,
-    backgroundColor: '#020617',
     borderWidth: 1,
     borderColor: '#1f2937',
-    marginBottom: 8,
+    padding: 8,
+    marginBottom: 6,
+    backgroundColor: '#020617',
   },
   historyDate: {
-    color: '#9ca3af',
     fontSize: 11,
-    marginBottom: 4,
+    color: '#9ca3af',
+    marginBottom: 2,
   },
   historyLabel: {
-    color: '#fbbf24',
     fontSize: 11,
+    color: '#e5e7eb',
     marginTop: 4,
+    fontWeight: '700',
   },
   historyText: {
-    color: '#e5e7eb',
     fontSize: 12,
-    lineHeight: 18,
+    color: '#d1d5db',
   },
+
   goalCard: {
-    marginTop: 8,
-    padding: 12,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: '#020617',
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: '#1e293b',
+    padding: 12,
+    marginTop: 8,
   },
   goalTitle: {
-    color: '#f9fafb',
-    fontWeight: '700',
     fontSize: 16,
+    color: '#e5e7eb',
+    fontWeight: '700',
     marginBottom: 4,
   },
   goalSub: {
-    color: '#9ca3af',
     fontSize: 12,
-    marginBottom: 8,
-  },
-  samuraiMissionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  samuraiMissionTitle: {
-    color: '#fbbf24',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  samuraiMissionXp: {
-    color: '#a5b4fc',
-    fontSize: 11,
-  },
-  samuraiMissionBox: {
-    marginTop: 4,
-    padding: 8,
-    borderRadius: 10,
-    backgroundColor: '#111827',
-  },
-  samuraiMissionText: {
-    color: '#e5e7eb',
-    fontSize: 13,
+    color: '#9ca3af',
     marginBottom: 6,
-  },
-  samuraiMissionButton: {
-    marginTop: 4,
-    paddingVertical: 8,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
-    alignItems: 'center',
-  },
-  samuraiMissionButtonText: {
-    color: '#022c22',
-    fontWeight: '700',
-    fontSize: 13,
   },
   bigInput: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#020617',
-    color: '#e5e7eb',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    borderColor: '#334155',
+    padding: 10,
     fontSize: 13,
-    minHeight: 60,
+    color: '#e5e7eb',
+    minHeight: 56,
+    marginTop: 4,
     marginBottom: 8,
   },
   chipRow: {
@@ -2751,103 +2321,105 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   routineChip: {
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: '#334155',
     marginRight: 4,
     marginBottom: 4,
   },
   routineChipActive: {
-    backgroundColor: '#0ea5e9',
-    borderColor: '#0ea5e9',
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
   },
   routineChipText: {
-    color: '#e5e7eb',
     fontSize: 11,
+    color: '#9ca3af',
   },
   routineChipTextActive: {
-    color: '#02131d',
-    fontWeight: '600',
+    color: '#0f172a',
+    fontWeight: '700',
   },
   todoInput: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#020617',
-    color: '#e5e7eb',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    borderColor: '#334155',
+    padding: 8,
     fontSize: 13,
-    minHeight: 60,
+    color: '#e5e7eb',
+    minHeight: 48,
   },
+
   primaryButton: {
-    marginTop: 12,
+    marginTop: 10,
     paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#3b82f6',
+    borderRadius: 12,
+    backgroundColor: '#22c55e',
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#e5e7eb',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  questionText: {
-    color: '#e5e7eb',
+    color: '#022c22',
+    fontWeight: '800',
     fontSize: 13,
-    marginTop: 6,
-    marginBottom: 4,
   },
-  progressBar: {
-    height: 8,
-    borderRadius: 999,
-    backgroundColor: '#111827',
-    overflow: 'hidden',
+
+  questionText: {
+    fontSize: 13,
+    color: '#e5e7eb',
     marginTop: 8,
+  },
+
+  progressBar: {
+    width: '100%',
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#0f172a',
+    overflow: 'hidden',
+    marginTop: 6,
   },
   progressFill: {
     height: '100%',
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#f97316',
   },
   progressHint: {
-    color: '#9ca3af',
     fontSize: 11,
+    color: '#9ca3af',
     marginTop: 4,
   },
+
   dateChip: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: '#374151',
     marginRight: 4,
   },
   dateChipActive: {
-    backgroundColor: '#2563eb',
-    borderColor: '#2563eb',
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
   },
   dateChipText: {
-    color: '#9ca3af',
     fontSize: 11,
+    color: '#9ca3af',
   },
   dateChipTextActive: {
-    color: '#e5e7eb',
-    fontWeight: '600',
+    color: '#0f172a',
+    fontWeight: '700',
   },
+
   todoRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
   },
   checkbox: {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: '#6b7280',
     marginRight: 6,
   },
   checkboxChecked: {
@@ -2855,140 +2427,126 @@ const styles = StyleSheet.create({
     borderColor: '#22c55e',
   },
   todoText: {
+    fontSize: 12,
     color: '#e5e7eb',
-    fontSize: 13,
   },
   todoTextDone: {
-    color: '#6b7280',
+    color: '#9ca3af',
     textDecorationLine: 'line-through',
   },
-  sectionTitle: {
-    color: '#e5e7eb',
-    fontWeight: '700',
-    fontSize: 14,
-    marginTop: 10,
-    marginBottom: 4,
-  },
-  settingsRow: {
+
+  historyButtonsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
+    marginTop: 8,
   },
-  settingsRowText: {
+  historyButton: {
     flex: 1,
-    paddingRight: 8,
-  },
-  settingsLabel: {
-    color: '#e5e7eb',
-    fontSize: 13,
-  },
-  settingsHint: {
-    color: '#9ca3af',
-    fontSize: 11,
-    marginTop: 2,
-  },
-  segmentRow: {
-    flexDirection: 'row',
-    marginTop: 6,
-  },
-  segmentButton: {
-    flex: 1,
-    paddingVertical: 6,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#4b5563',
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#1f2937',
     alignItems: 'center',
     marginRight: 4,
   },
-  segmentButtonActive: {
-    backgroundColor: '#0ea5e9',
-    borderColor: '#0ea5e9',
+  historyDeleteButton: {
+    backgroundColor: '#7f1d1d',
+    marginLeft: 4,
+    marginRight: 0,
   },
-  segmentButtonText: {
-    color: '#9ca3af',
+  historyButtonText: {
     fontSize: 12,
-  },
-  segmentButtonTextActive: {
-    color: '#02131d',
-    fontWeight: '700',
-  },
-  dangerButton: {
-    marginTop: 8,
-    paddingVertical: 8,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: '#ef4444',
-    alignItems: 'center',
-  },
-  dangerButtonText: {
-    color: '#fecaca',
-    fontWeight: '600',
-    fontSize: 13,
-  },
-  onboardingContainer: {
-    flex: 1,
-    backgroundColor: '#050810',
-    paddingTop: 60,
-    paddingHorizontal: 16,
-  },
-  onboardingInner: {
-    flex: 1,
-  },
-  onboardingTitle: {
-    color: '#fbbf24',
-    fontWeight: '700',
-    fontSize: 18,
-    marginBottom: 12,
-  },
-  onboardingLabel: {
     color: '#e5e7eb',
-    fontSize: 13,
-    marginTop: 8,
-    marginBottom: 4,
+    fontWeight: '600',
   },
-  onboardingInput: {
+
+  avatarCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 10,
+    marginTop: 8,
+  },
+  avatarCircle: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#0f172a',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+  avatarEmoji: {
+    fontSize: 28,
+  },
+  avatarInfo: {
+    flex: 1,
+  },
+  avatarTitle: {
+    fontSize: 14,
+    color: '#e5e7eb',
+    fontWeight: '700',
+  },
+  avatarRank: {
+    fontSize: 12,
+    color: '#f97316',
+    marginTop: 2,
+  },
+  avatarDesc: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+
+  samuraiMissionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  samuraiMissionTitle: {
+    fontSize: 14,
+    color: '#e5e7eb',
+    fontWeight: '700',
+  },
+  samuraiMissionXp: {
+    fontSize: 11,
+    color: '#facc15',
+    fontWeight: '600',
+  },
+  samuraiMissionBox: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#374151',
-    backgroundColor: '#020617',
-    color: '#e5e7eb',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    fontSize: 13,
-    minHeight: 60,
+    borderColor: '#334155',
+    padding: 10,
+    marginTop: 4,
   },
-  onboardingButton: {
-    marginTop: 16,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#22c55e',
+  samuraiMissionText: {
+    fontSize: 13,
+    color: '#e5e7eb',
+    marginBottom: 8,
+  },
+  samuraiMissionButton: {
+    marginTop: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#16a34a',
     alignItems: 'center',
   },
-  onboardingButtonText: {
+  samuraiMissionButtonText: {
+    fontSize: 12,
     color: '#022c22',
     fontWeight: '700',
-    fontSize: 14,
   },
-  onboardingSkip: {
-    marginTop: 12,
-    alignItems: 'center',
-  },
-  onboardingSkipText: {
-    color: '#9ca3af',
-    fontSize: 12,
-    textDecorationLine: 'underline',
-  },
+
   samuraiHeaderTopRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
   },
   samuraiHeaderTitle: {
-    color: '#fbbf24',
+    fontSize: 16,
+    color: '#e5e7eb',
     fontWeight: '700',
-    fontSize: 15,
   },
   samuraiEditButton: {
     paddingHorizontal: 8,
@@ -2998,58 +2556,271 @@ const styles = StyleSheet.create({
     borderColor: '#4b5563',
   },
   samuraiEditText: {
-    color: '#e5e7eb',
     fontSize: 11,
+    color: '#e5e7eb',
+  },
+
+  onboardingLabel: {
+    fontSize: 12,
+    color: '#e5e7eb',
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  onboardingInput: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 8,
+    fontSize: 13,
+    color: '#e5e7eb',
+    minHeight: 48,
+  },
+  onboardingButton: {
+    marginTop: 8,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#22c55e',
+    alignItems: 'center',
+  },
+  onboardingButtonText: {
+    fontSize: 13,
+    color: '#022c22',
+    fontWeight: '700',
   },
   samuraiHeaderLabel: {
+    fontSize: 12,
     color: '#9ca3af',
-    fontSize: 11,
-    marginTop: 4,
+    marginTop: 6,
   },
   samuraiHeaderText: {
+    fontSize: 13,
     color: '#e5e7eb',
-    fontSize: 12,
-    lineHeight: 18,
+    marginTop: 2,
   },
-  avatarCard: {
+
+  urlRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
+  },
+  urlInput: {
+    flex: 1,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    fontSize: 13,
+    color: '#e5e7eb',
+    marginRight: 4,
+  },
+  urlOpenButton: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f97316',
+    alignItems: 'center',
+  },
+  urlOpenButtonText: {
+    fontSize: 12,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  browserInfo: {
+    fontSize: 11,
+    color: '#9ca3af',
+    marginTop: 4,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    color: '#e5e7eb',
+    fontWeight: '700',
     marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: '#020617',
+  },
+
+  blockRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  blockDomain: {
+    fontSize: 12,
+    color: '#e5e7eb',
+  },
+  blockRemove: {
+    fontSize: 11,
+    color: '#f97316',
+  },
+
+  browserContainer: {
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: '#1f2937',
+    marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: '#020617',
   },
-  avatarCircle: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#111827',
-    marginRight: 10,
-  },
-  avatarEmoji: {
-    fontSize: 30,
-  },
-  avatarInfo: {
+
+  blockedCard: {
     flex: 1,
+    padding: 16,
+    justifyContent: 'center',
   },
-  avatarTitle: {
-    color: '#f9fafb',
+  blockedTitle: {
+    fontSize: 16,
+    color: '#e5e7eb',
     fontWeight: '700',
-    fontSize: 14,
-    marginBottom: 2,
+    marginBottom: 8,
   },
-  avatarRank: {
-    color: '#a5b4fc',
-    fontSize: 12,
-    marginBottom: 2,
+  blockedText: {
+    fontSize: 13,
+    color: '#d1d5db',
   },
-  avatarDesc: {
-    color: '#9ca3af',
+  blockedButton: {
+    marginTop: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#f97316',
+    alignItems: 'center',
+  },
+  blockedButtonText: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+
+  settingsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  settingsRowText: {
+    flex: 1,
+    marginRight: 8,
+  },
+  settingsLabel: {
+    fontSize: 13,
+    color: '#e5e7eb',
+    fontWeight: '600',
+  },
+  settingsHint: {
     fontSize: 11,
-    lineHeight: 16,
+    color: '#9ca3af',
+    marginTop: 2,
+  },
+
+  segmentRow: {
+    flexDirection: 'row',
+    marginTop: 6,
+  },
+  segmentButton: {
+    flex: 1,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#374151',
+    paddingVertical: 6,
+    alignItems: 'center',
+    marginRight: 4,
+  },
+  segmentButtonActive: {
+    backgroundColor: '#f97316',
+    borderColor: '#f97316',
+  },
+  segmentButtonText: {
+    fontSize: 12,
+    color: '#9ca3af',
+  },
+  segmentButtonTextActive: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+
+  timeInput: {
+    width: 60,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#334155',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    fontSize: 13,
+    color: '#e5e7eb',
+    textAlign: 'center',
+  },
+
+  onboardingContainer: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 12,
+  },
+  onboardingLead: {
+    fontSize: 13,
+    color: '#d1d5db',
+    marginTop: 4,
+    marginBottom: 8,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#020617',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#e5e7eb',
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxHeight: '80%',
+    backgroundColor: '#020617',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#334155',
+    padding: 14,
+  },
+  modalTitle: {
+    fontSize: 16,
+    color: '#e5e7eb',
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  modalText: {
+    fontSize: 12,
+    color: '#d1d5db',
+  },
+
+  timeOverContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeOverCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#4b5563',
+    padding: 16,
+    backgroundColor: '#020617',
+    width: '100%',
+  },
+  timeOverTitle: {
+    fontSize: 16,
+    color: '#e5e7eb',
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  timeOverText: {
+    fontSize: 13,
+    color: '#d1d5db',
   },
 });

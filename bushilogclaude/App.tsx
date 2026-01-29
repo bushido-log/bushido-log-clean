@@ -18,6 +18,7 @@ import {
   Switch,
   Text,
   TextInput,
+  Image,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -404,12 +405,76 @@ export default function App() {
   };
   const messagesRef = useRef<ScrollView | null>(null);
 
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser'>('consult');
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus'>('consult');
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
   const [typingText, setTypingText] = useState('');
+  
+  // 感謝機能
+  const [gratitudeList, setGratitudeList] = useState<string[]>([]);
+  const [gratitudeInput, setGratitudeInput] = useState('');
+  const [showGratitudeComplete, setShowGratitudeComplete] = useState(false);
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [quizIndex, setQuizIndex] = useState(0);
+  
+  // 集中機能
+  const [focusPurpose, setFocusPurpose] = useState('');
+  const [focusUrl, setFocusUrl] = useState('https://www.google.com');
+  const [showFocusEntry, setShowFocusEntry] = useState(true);
+  const [focusStartTime, setFocusStartTime] = useState<Date | null>(null);
+  const [focusMinutesLeft, setFocusMinutesLeft] = useState(25);
+  const [focusSecondsLeft, setFocusSecondsLeft] = useState(0);
+  const [focusMode, setFocusMode] = useState<'work' | 'break'>('work');
+  const [focusTimerRunning, setFocusTimerRunning] = useState(false);
+  const [focusSessions, setFocusSessions] = useState(0);
+  const [blockedSites, setBlockedSites] = useState<string[]>(['twitter.com', 'x.com', 'instagram.com', 'tiktok.com', 'facebook.com', 'youtube.com']);
+  const [newBlockedSite, setNewBlockedSite] = useState('');
+  const [focusType, setFocusType] = useState<'select' | 'net' | 'study'>('select');
+  const [focusDuration, setFocusDuration] = useState(25);
+  const [ngWords, setNgWords] = useState<string[]>(['エロ', 'アダルト', 'porn', 'sex', 'ギャンブル', 'カジノ', 'パチンコ']);
+  const [newNgWord, setNewNgWord] = useState('');
+  const [ngLevel, setNgLevel] = useState<3 | 5 | 10>(5);
+  const [showNgQuiz, setShowNgQuiz] = useState(false);
+  const [ngQuizRemaining, setNgQuizRemaining] = useState(0);
+  const [pendingUrl, setPendingUrl] = useState('');
+  const [currentNgQ, setCurrentNgQ] = useState({ q: '', a: '' });
+  const [ngAnswer, setNgAnswer] = useState('');
+  const [focusQuestionAnswer, setFocusQuestionAnswer] = useState('');
+  const [showFocusQuestion, setShowFocusQuestion] = useState(false);
+  const [currentFocusQ, setCurrentFocusQ] = useState({ q: '', a: '' });
+
+  // 英語の問題（摩擦を生む）
+  const focusQuestions = [
+    { q: 'What is the opposite of "success"?', a: 'failure' },
+    { q: 'What is the past tense of "go"?', a: 'went' },
+    { q: 'What is the capital of Japan?', a: 'tokyo' },
+    { q: 'How do you say "時間" in English?', a: 'time' },
+    { q: 'What is 7 x 8?', a: '56' },
+    { q: 'What is the opposite of "hot"?', a: 'cold' },
+    { q: 'How many days in a week?', a: '7' },
+    { q: 'What color is the sky?', a: 'blue' },
+    { q: 'What is the plural of "child"?', a: 'children' },
+    { q: 'What comes after Wednesday?', a: 'thursday' },
+  ];
+  const [quizAnswer, setQuizAnswer] = useState('');
+  const [quizResult, setQuizResult] = useState<'correct' | 'wrong' | null>(null);
+  const [quizScore, setQuizScore] = useState(0);
+
+  // 自己啓発クイズデータ
+  const quizData = [
+    { q: '「継続は___なり」', a: '力', hint: '続けることで得られるもの' },
+    { q: '「思考は___化する」', a: '現実', hint: '考えたことがなるもの' },
+    { q: '「行動なき___に価値なし」', a: '知識', hint: '学んだだけでは意味がないもの' },
+    { q: '「今日できることを___に延ばすな」', a: '明日', hint: '今日の次の日' },
+    { q: '「失敗は___の母」', a: '成功', hint: '失敗から生まれるもの' },
+    { q: '「千里の道も___から」', a: '一歩', hint: '最初の小さな行動' },
+    { q: '「時は___なり」', a: '金', hint: 'お金と同じくらい大切' },
+    { q: '「七転び___起き」', a: '八', hint: '7+1' },
+    { q: '「早起きは三文の___」', a: '徳', hint: '良いこと' },
+    { q: '「塵も積もれば___となる」', a: '山', hint: '高いもの' },
+  ];
 
   // onboarding
   const [isOnboarding, setIsOnboarding] = useState(true);
@@ -1271,9 +1336,19 @@ export default function App() {
 
   const renderStartScreen = () => (
     <View style={styles.startScreen}>
-      <Text style={styles.startTitle}>BUSHIDO LOG</Text>
-      <Text style={styles.startQuote}>{randomQuote}</Text>
-      <Text style={styles.startSubtitle}>今日はどこから斬る？</Text>
+      <Pressable
+        style={styles.settingsIconButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          setTab('settings');
+          setShowStartScreen(false);
+        }}
+      >
+        <Text style={styles.settingsIconText}>⚙️</Text>
+      </Pressable>
+      <Text style={styles.dojoTitle}>道場</Text>
+      <Image source={require('./assets/icon.png')} style={styles.dojoIcon} />
+      <Text style={styles.startSubtitle}>今日は何をする？</Text>
       
       <Pressable
         style={styles.startButton}
@@ -1283,7 +1358,18 @@ export default function App() {
           setShowStartScreen(false);
         }}
       >
-        <Text style={styles.startButtonText}>🗡️ 相談へ（サムライキングを呼び出す）</Text>
+        <Text style={styles.startButtonText}>相談する</Text>
+      </Pressable>
+      
+      <Pressable
+        style={styles.startButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setTab('gratitude');
+          setShowStartScreen(false);
+        }}
+      >
+        <Text style={styles.startButtonText}>感謝を書く</Text>
       </Pressable>
       
       <Pressable
@@ -1294,18 +1380,29 @@ export default function App() {
           setShowStartScreen(false);
         }}
       >
-        <Text style={styles.startButtonText}>🎯 目標へ</Text>
+        <Text style={styles.startButtonText}>日記を書く</Text>
       </Pressable>
       
       <Pressable
         style={styles.startButton}
         onPress={() => {
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-          setTab('review');
+          setTab('focus');
           setShowStartScreen(false);
+          setShowFocusEntry(true);
+          setFocusType('select');
         }}
       >
-        <Text style={styles.startButtonText}>📖 振り返りへ</Text>
+        <Text style={styles.startButtonText}>集中する</Text>
+      </Pressable>
+      
+      <Pressable
+        style={[styles.startButton, styles.startButtonDisabled]}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+        }}
+      >
+        <Text style={[styles.startButtonText, styles.startButtonTextDisabled]}>明日に備える（準備中）</Text>
       </Pressable>
     </View>
   );
@@ -1934,6 +2031,551 @@ export default function App() {
     </Modal>
   );
 
+  // クイズ処理
+  const handleQuizSubmit = () => {
+    const current = quizData[quizIndex];
+    if (quizAnswer.trim() === current.a) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setQuizResult('correct');
+      setQuizScore(quizScore + 1);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setQuizResult('wrong');
+    }
+  };
+
+  const handleNextQuiz = () => {
+    setQuizAnswer('');
+    setQuizResult(null);
+    if (quizIndex < quizData.length - 1) {
+      setQuizIndex(quizIndex + 1);
+    } else {
+      setShowQuiz(false);
+      setQuizIndex(0);
+      showSaveSuccess('クイズ完了！' + quizScore + '/' + quizData.length + '問正解');
+    }
+  };
+
+  // 集中タイマー
+  useEffect(() => {
+    if (!focusTimerRunning) return;
+    
+    const timer = setInterval(() => {
+      setFocusSecondsLeft(prev => {
+        if (prev === 0) {
+          if (focusMinutesLeft === 0) {
+            // タイマー終了
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            if (focusMode === 'work') {
+              setFocusSessions(s => s + 1);
+              setFocusMode('break');
+              setFocusMinutesLeft(5); // 5分休憩
+              Alert.alert('集中完了！', '5分間の休憩に入る。', [{ text: '了解' }]);
+            } else {
+              setFocusMode('work');
+              setFocusMinutesLeft(25); // 25分集中
+              Alert.alert('休憩終了', '再び集中せよ。', [{ text: '了解' }]);
+            }
+            return 0;
+          }
+          setFocusMinutesLeft(m => m - 1);
+          return 59;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [focusTimerRunning, focusMinutesLeft, focusMode]);
+
+  // 集中タイマー
+  useEffect(() => {
+    if (!focusTimerRunning) return;
+    
+    const timer = setInterval(() => {
+      setFocusSecondsLeft(prev => {
+        if (prev === 0) {
+          if (focusMinutesLeft === 0) {
+            clearInterval(timer);
+            setFocusTimerRunning(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            const messages = [
+              'よくやった。武士の集中力だ。',
+              '見事。この調子で進め。',
+              '集中完了。次の戦いに備えよ。',
+              '時間を制した者が、己を制す。',
+            ];
+            Alert.alert('集中完了', messages[Math.floor(Math.random() * messages.length)], [
+              { text: '道場に戻る', onPress: () => {
+                setShowStartScreen(true);
+                setShowFocusEntry(true);
+                setFocusType('select');
+              }}
+            ]);
+            return 0;
+          }
+          setFocusMinutesLeft(m => m - 1);
+          return 59;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, [focusTimerRunning, focusMinutesLeft]);
+
+  // 集中タブ
+  const isUrlBlocked = (url: string) => {
+    return blockedSites.some(site => url.toLowerCase().includes(site.toLowerCase()));
+  };
+
+  const containsNgWord = (url: string) => {
+    const decoded = decodeURIComponent(url).toLowerCase();
+    return ngWords.some(word => decoded.includes(word.toLowerCase()));
+  };
+
+  const startNgQuiz = (url: string) => {
+    setPendingUrl(url);
+    setNgQuizRemaining(ngLevel);
+    const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
+    setCurrentNgQ(randomQ);
+    setNgAnswer('');
+    setShowNgQuiz(true);
+  };
+
+  const handleNgQuizAnswer = () => {
+    if (ngAnswer.trim().toLowerCase() === currentNgQ.a.toLowerCase()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      const remaining = ngQuizRemaining - 1;
+      setNgQuizRemaining(remaining);
+      
+      if (remaining === 0) {
+        setShowNgQuiz(false);
+        setFocusUrl(pendingUrl);
+        setPendingUrl('');
+        showSaveSuccess('通過を許可する。');
+      } else {
+        const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
+        setCurrentNgQ(randomQ);
+        setNgAnswer('');
+      }
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('不正解', '本当に必要な検索か考えよ。');
+      const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
+      setCurrentNgQ(randomQ);
+      setNgAnswer('');
+    }
+  };
+
+  const handleStartFocus = () => {
+    if (!focusPurpose.trim()) {
+      Alert.alert('目的が必要', '何のために開くのか、目的を入力せよ。');
+      return;
+    }
+    // ランダムな問題を選択
+    const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
+    setCurrentFocusQ(randomQ);
+    setFocusQuestionAnswer('');
+    setShowFocusQuestion(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  };
+
+  const handleFocusQuestionSubmit = () => {
+    if (focusQuestionAnswer.trim().toLowerCase() === currentFocusQ.a.toLowerCase()) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowFocusQuestion(false);
+      setShowFocusEntry(false);
+      setFocusStartTime(new Date());
+      setFocusTimerRunning(true);
+      setFocusMinutesLeft(25);
+      setFocusSecondsLeft(0);
+      setFocusMode('work');
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      Alert.alert('不正解', '答えが違う。集中する覚悟はあるか？');
+      // 新しい問題に変更
+      const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
+      setCurrentFocusQ(randomQ);
+      setFocusQuestionAnswer('');
+    }
+  };
+
+  const renderFocusTab = () => (
+    <View style={{ flex: 1 }}>
+      {/* モード選択画面 */}
+      {focusType === 'select' && (
+        <View style={styles.goalCard}>
+          <Text style={styles.goalTitle}>集中</Text>
+          <Text style={styles.focusQuestion}>何に集中する？</Text>
+          
+          <Pressable
+            style={styles.focusTypeButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setFocusType('net');
+              setShowFocusEntry(true);
+            }}
+          >
+            <Text style={styles.focusTypeEmoji}>🌐</Text>
+            <Text style={styles.focusTypeButtonText}>ネットを使う</Text>
+            <Text style={styles.focusTypeButtonSub}>封印サイト・NGワード監視付き</Text>
+          </Pressable>
+          
+          <Pressable
+            style={styles.focusTypeButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+              setFocusType('study');
+              setShowFocusEntry(true);
+            }}
+          >
+            <Text style={styles.focusTypeEmoji}>📚</Text>
+            <Text style={styles.focusTypeButtonText}>勉強する</Text>
+            <Text style={styles.focusTypeButtonSub}>タイマーで集中管理</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* 勉強モード設定 */}
+      {focusType === 'study' && showFocusEntry && (
+        <View style={styles.goalCard}>
+          <Text style={styles.goalTitle}>勉強タイマー</Text>
+          <Text style={styles.focusQuestion}>集中せよ。</Text>
+          
+          <View style={styles.timerSettingSection}>
+            <Text style={styles.timerSettingLabel}>集中時間</Text>
+            <View style={styles.timerButtons}>
+              {[15, 25, 45, 60].map(min => (
+                <Pressable
+                  key={min}
+                  style={[styles.timerButton, focusDuration === min && styles.timerButtonActive]}
+                  onPress={() => setFocusDuration(min)}
+                >
+                  <Text style={[styles.timerButtonText, focusDuration === min && styles.timerButtonTextActive]}>{min}分</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          
+          <Pressable
+            style={styles.primaryButton}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              setShowFocusEntry(false);
+              setFocusTimerRunning(true);
+              setFocusMinutesLeft(focusDuration);
+              setFocusSecondsLeft(0);
+            }}
+          >
+            <Text style={styles.primaryButtonText}>開始</Text>
+          </Pressable>
+          
+          <Pressable style={{ marginTop: 16 }} onPress={() => setFocusType('select')}>
+            <Text style={{ color: '#666', textAlign: 'center' }}>戻る</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* 勉強モード実行中 */}
+      {focusType === 'study' && !showFocusEntry && (
+        <View style={styles.studyTimerScreen}>
+          <Text style={styles.studyTimerLabel}>集中中</Text>
+          <Text style={styles.studyTimerDisplay}>
+            {String(focusMinutesLeft).padStart(2, '0')}:{String(focusSecondsLeft).padStart(2, '0')}
+          </Text>
+          <View style={styles.studyTimerControls}>
+            <Pressable
+              style={styles.studyControlButton}
+              onPress={() => setFocusTimerRunning(!focusTimerRunning)}
+            >
+              <Text style={styles.studyControlText}>{focusTimerRunning ? '一時停止' : '再開'}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.studyControlButton, { backgroundColor: '#333' }]}
+              onPress={() => {
+                Alert.alert('終了する？', '集中を終了しますか？', [
+                  { text: 'キャンセル', style: 'cancel' },
+                  { text: '終了', style: 'destructive', onPress: () => {
+                    setFocusTimerRunning(false);
+                    setShowFocusEntry(true);
+                    setFocusType('select');
+                    setShowStartScreen(true);
+                  }}
+                ]);
+              }}
+            >
+              <Text style={styles.studyControlText}>終了</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+
+      {/* ネットモード設定 */}
+      {focusType === 'net' && showFocusEntry && (
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+          <View style={styles.goalCard}>
+            <Text style={styles.goalTitle}>ネット</Text>
+            <Text style={styles.focusQuestion}>必要な検索だけせよ。</Text>
+            <Text style={styles.goalSub}>封印サイト→ブロック / NGワード→問題{ngLevel}問</Text>
+            
+            <View style={styles.timerSettingSection}>
+              <Text style={styles.timerSettingLabel}>制限時間</Text>
+              <View style={styles.timerButtons}>
+                {[15, 25, 45, 60].map(min => (
+                  <Pressable
+                    key={min}
+                    style={[styles.timerButton, focusDuration === min && styles.timerButtonActive]}
+                    onPress={() => setFocusDuration(min)}
+                  >
+                    <Text style={[styles.timerButtonText, focusDuration === min && styles.timerButtonTextActive]}>{min}分</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            <View style={styles.timerSettingSection}>
+              <Text style={styles.timerSettingLabel}>NGワード問題数</Text>
+              <View style={styles.timerButtons}>
+                {[3, 5, 10].map(num => (
+                  <Pressable
+                    key={num}
+                    style={[styles.timerButton, ngLevel === num && styles.timerButtonActive]}
+                    onPress={() => setNgLevel(num as 3 | 5 | 10)}
+                  >
+                    <Text style={[styles.timerButtonText, ngLevel === num && styles.timerButtonTextActive]}>{num}問</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+            
+            <Pressable
+              style={styles.primaryButton}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                setShowFocusEntry(false);
+                setFocusTimerRunning(true);
+                setFocusMinutesLeft(focusDuration);
+                setFocusSecondsLeft(0);
+                setFocusUrl('https://www.google.com');
+              }}
+            >
+              <Text style={styles.primaryButtonText}>ブラウザを開く</Text>
+            </Pressable>
+            
+            <Pressable style={{ marginTop: 16 }} onPress={() => setFocusType('select')}>
+              <Text style={{ color: '#666', textAlign: 'center' }}>戻る</Text>
+            </Pressable>
+            
+            {/* 封印サイト管理 */}
+            <View style={styles.blockedSitesSection}>
+              <Text style={styles.blockedSitesTitle}>🚫 封印サイト（完全ブロック）</Text>
+              {blockedSites.map((site, index) => (
+                <View key={index} style={styles.blockedSiteItem}>
+                  <Text style={styles.blockedSiteText}>{site}</Text>
+                  <Pressable onPress={() => setBlockedSites(blockedSites.filter((_, i) => i !== index))}>
+                    <Text style={styles.removeSiteText}>解除</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addSiteRow}>
+                <TextInput
+                  style={styles.addSiteInput}
+                  value={newBlockedSite}
+                  onChangeText={setNewBlockedSite}
+                  placeholder="サイトを追加..."
+                  placeholderTextColor="#6b7280"
+                />
+                <Pressable style={styles.addSiteButton} onPress={() => {
+                  if (newBlockedSite.trim()) {
+                    setBlockedSites([...blockedSites, newBlockedSite.trim()]);
+                    setNewBlockedSite('');
+                  }
+                }}>
+                  <Text style={styles.addSiteButtonText}>封印</Text>
+                </Pressable>
+              </View>
+            </View>
+
+            {/* NGワード管理 */}
+            <View style={styles.blockedSitesSection}>
+              <Text style={styles.blockedSitesTitle}>⚠️ NGワード（問題で通過）</Text>
+              {ngWords.map((word, index) => (
+                <View key={index} style={styles.blockedSiteItem}>
+                  <Text style={styles.blockedSiteText}>{word}</Text>
+                  <Pressable onPress={() => setNgWords(ngWords.filter((_, i) => i !== index))}>
+                    <Text style={styles.removeSiteText}>削除</Text>
+                  </Pressable>
+                </View>
+              ))}
+              <View style={styles.addSiteRow}>
+                <TextInput
+                  style={styles.addSiteInput}
+                  value={newNgWord}
+                  onChangeText={setNewNgWord}
+                  placeholder="NGワードを追加..."
+                  placeholderTextColor="#6b7280"
+                />
+                <Pressable style={styles.addSiteButton} onPress={() => {
+                  if (newNgWord.trim()) {
+                    setNgWords([...ngWords, newNgWord.trim()]);
+                    setNewNgWord('');
+                  }
+                }}>
+                  <Text style={styles.addSiteButtonText}>追加</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* ネットモード実行中（ブラウザ） */}
+      {focusType === 'net' && !showFocusEntry && (
+        <View style={{ flex: 1 }}>
+          <View style={styles.focusTopBar}>
+            <Pressable onPress={() => {
+              Alert.alert('終了する？', 'ネット利用を終了しますか？', [
+                { text: 'キャンセル', style: 'cancel' },
+                { text: '終了', style: 'destructive', onPress: () => {
+                  setFocusTimerRunning(false);
+                  setShowFocusEntry(true);
+                  setFocusType('select');
+                  setShowStartScreen(true);
+                }}
+              ]);
+            }}>
+              <Text style={styles.focusEndText}>終了</Text>
+            </Pressable>
+            <View style={styles.focusTimerBox}>
+              <Text style={styles.focusTimerText}>
+                {String(focusMinutesLeft).padStart(2, '0')}:{String(focusSecondsLeft).padStart(2, '0')}
+              </Text>
+            </View>
+            <Pressable onPress={() => setFocusTimerRunning(!focusTimerRunning)}>
+              <Text style={styles.focusTimerControl}>{focusTimerRunning ? '⏸' : '▶️'}</Text>
+            </Pressable>
+          </View>
+          <WebView
+            source={{ uri: focusUrl }}
+            style={{ flex: 1 }}
+            onShouldStartLoadWithRequest={(request) => {
+              if (isUrlBlocked(request.url)) {
+                Alert.alert('封印されたサイト', 'このサイトは開けない。');
+                return false;
+              }
+              if (containsNgWord(request.url)) {
+                startNgQuiz(request.url);
+                return false;
+              }
+              return true;
+            }}
+          />
+        </View>
+      )}
+
+      {/* NGワード問題モーダル */}
+      <Modal visible={showNgQuiz} animationType="slide" transparent>
+        <View style={styles.quizOverlay}>
+          <View style={styles.quizCard}>
+            <Text style={styles.ngQuizTitle}>⚠️ NGワード検出</Text>
+            <Text style={styles.ngQuizSub}>この先に行きたいなら問題に答えよ</Text>
+            <Text style={styles.ngQuizRemaining}>残り {ngQuizRemaining} 問</Text>
+            
+            <View style={styles.focusQBox}>
+              <Text style={styles.focusQText}>{currentNgQ.q}</Text>
+            </View>
+            
+            <TextInput
+              style={styles.quizInput}
+              value={ngAnswer}
+              onChangeText={setNgAnswer}
+              placeholder="Answer..."
+              placeholderTextColor="#666"
+              autoCapitalize="none"
+              autoFocus
+            />
+            
+            <Pressable style={styles.quizSubmitButton} onPress={handleNgQuizAnswer}>
+              <Text style={styles.quizSubmitText}>回答</Text>
+            </Pressable>
+            
+            <Pressable onPress={() => { setShowNgQuiz(false); setPendingUrl(''); }}>
+              <Text style={styles.quizCloseText}>やめる（検索を中止）</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
+    </View>
+  );
+
+  // 感謝タブ
+  const handleAddGratitude = () => {
+    if (!gratitudeInput.trim()) return;
+    if (gratitudeList.length >= 10) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const newList = [...gratitudeList, gratitudeInput.trim()];
+    setGratitudeList(newList);
+    setGratitudeInput('');
+    if (newList.length === 10) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowGratitudeComplete(true);
+    }
+  };
+
+  const renderGratitudeTab = () => (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      <View style={styles.goalCard}>
+        <Text style={styles.goalTitle}>感謝</Text>
+        <Text style={styles.goalSub}>今日は感謝を10個書けるか？</Text>
+        
+        <Text style={styles.gratitudeProgress}>{gratitudeList.length} / 10</Text>
+        
+        {gratitudeList.length < 10 ? (
+          <>
+            <TextInput
+              style={styles.gratitudeInput}
+              value={gratitudeInput}
+              onChangeText={setGratitudeInput}
+              placeholder="感謝を1つ書く..."
+              placeholderTextColor="#6b7280"
+              onSubmitEditing={handleAddGratitude}
+              returnKeyType="done"
+            />
+            <Pressable style={styles.primaryButton} onPress={handleAddGratitude}>
+              <Text style={styles.primaryButtonText}>追加</Text>
+            </Pressable>
+          </>
+        ) : (
+          <View style={styles.gratitudeCompleteBox}>
+            <Text style={styles.gratitudeCompleteText}>よくやった。今日はもう勝っている。</Text>
+            {isPro ? (
+              <Pressable
+                style={styles.quizButton}
+                onPress={() => setShowQuiz(true)}
+              >
+                <Text style={styles.quizButtonText}>学びのクイズに挑戦</Text>
+              </Pressable>
+            ) : (
+              <Text style={styles.proOnlyText}>Proで学びクイズ解放</Text>
+            )}
+          </View>
+        )}
+        
+        {gratitudeList.length > 0 && (
+          <View style={styles.gratitudeListContainer}>
+            {gratitudeList.map((item, index) => (
+              <View key={index} style={styles.gratitudeItem}>
+                <Text style={styles.gratitudeItemNumber}>{index + 1}.</Text>
+                <Text style={styles.gratitudeItemText}>{item}</Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+    </ScrollView>
+  );
+
   const renderSettingsTab = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
       <View style={styles.goalCard}>
@@ -2135,28 +2777,29 @@ export default function App() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <View style={styles.container}>
             <View style={styles.header}>
-              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <Text style={styles.appTitle}>BUSHIDO LOG</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                <Pressable
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    setShowStartScreen(true);
+                  }}
+                  style={styles.homeButton}
+                >
+                  <Text style={styles.homeButtonText}>道場に戻る</Text>
+                </Pressable>
+                <Image source={require('./assets/icon.png')} style={styles.headerIcon} />
                 {isTimeLimited && (
                   <View style={styles.timeBadge}>
                     <Text style={styles.timeBadgeText}>残り：{remainingMinutes !== null ? `${remainingMinutes}分` : '∞'}</Text>
                   </View>
                 )}
               </View>
-              <Text style={styles.headerSub}>性エネルギーを創造エネルギーに変えるサムライ習慣アプリ</Text>
             </View>
 
             {isOnboarding ? (
               renderOnboarding()
             ) : (
               <>
-                <View style={styles.tabRow}>
-                  {renderTabButton('consult', '相談')}
-                  {renderTabButton('goal', '目標')}
-                  {renderTabButton('review', '振り返り')}
-                  {renderTabButton('browser', 'ブラウザ')}
-                  {renderTabButton('settings', '設定')}
-                </View>
 
                 <View style={{ flex: 1 }}>
                   {isTimeOver && tab !== 'settings' ? (
@@ -2167,6 +2810,8 @@ export default function App() {
                       {tab === 'goal' && renderGoalTab()}
                       {tab === 'review' && renderReviewTab()}
                       {tab === 'browser' && renderBrowserTab()}
+                      {tab === 'focus' && renderFocusTab()}
+                      {tab === 'gratitude' && renderGratitudeTab()}
                       {tab === 'settings' && renderSettingsTab()}
                     </>
                   )}
@@ -2191,6 +2836,46 @@ export default function App() {
       </Modal>
       {renderSaveToast()}
       {renderPaywall()}
+      
+      {/* クイズモーダル */}
+      <Modal visible={showQuiz} animationType="slide" transparent>
+        <View style={styles.quizOverlay}>
+          <View style={styles.quizCard}>
+            <Text style={styles.quizProgress}>{quizIndex + 1} / {quizData.length}</Text>
+            <Text style={styles.quizQuestion}>{quizData[quizIndex].q}</Text>
+            
+            {quizResult === null ? (
+              <>
+                <TextInput
+                  style={styles.quizInput}
+                  value={quizAnswer}
+                  onChangeText={setQuizAnswer}
+                  placeholder="答えを入力"
+                  placeholderTextColor="#666"
+                  autoFocus
+                />
+                <Text style={styles.quizHint}>ヒント: {quizData[quizIndex].hint}</Text>
+                <Pressable style={styles.quizSubmitButton} onPress={handleQuizSubmit}>
+                  <Text style={styles.quizSubmitText}>回答</Text>
+                </Pressable>
+              </>
+            ) : (
+              <>
+                <Text style={[styles.quizResultText, quizResult === 'correct' ? styles.quizCorrect : styles.quizWrong]}>
+                  {quizResult === 'correct' ? '正解！' : '不正解... 答え: ' + quizData[quizIndex].a}
+                </Text>
+                <Pressable style={styles.quizNextButton} onPress={handleNextQuiz}>
+                  <Text style={styles.quizNextText}>{quizIndex < quizData.length - 1 ? '次の問題' : '終了'}</Text>
+                </Pressable>
+              </>
+            )}
+            
+            <Pressable onPress={() => { setShowQuiz(false); setQuizIndex(0); setQuizResult(null); }}>
+              <Text style={styles.quizCloseText}>閉じる</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -3125,5 +3810,539 @@ const styles = StyleSheet.create({
   restoreButtonText: {
     color: '#888',
     fontSize: 13,
+  },
+  // 無効ボタンスタイル
+  startButtonDisabled: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  startButtonTextDisabled: {
+    color: '#555',
+  },
+  // 感謝スタイル
+  gratitudeProgress: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#D4AF37',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  gratitudeInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    color: '#FFF',
+    fontSize: 16,
+    marginBottom: 12,
+  },
+  gratitudeCompleteBox: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    marginVertical: 16,
+  },
+  gratitudeCompleteText: {
+    color: '#D4AF37',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  gratitudeListContainer: {
+    marginTop: 16,
+  },
+  gratitudeItem: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  gratitudeItemNumber: {
+    color: '#D4AF37',
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginRight: 8,
+    width: 24,
+  },
+  gratitudeItemText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+    flex: 1,
+  },
+  quizButton: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+  },
+  quizButtonText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  proOnlyText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  // クイズスタイル
+  quizOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  quizCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    alignItems: 'center',
+  },
+  quizProgress: {
+    color: '#D4AF37',
+    fontSize: 14,
+    marginBottom: 16,
+  },
+  quizQuestion: {
+    color: '#FFF',
+    fontSize: 24,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  quizInput: {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    padding: 16,
+    color: '#FFF',
+    fontSize: 18,
+    textAlign: 'center',
+    width: '100%',
+    marginBottom: 12,
+  },
+  quizHint: {
+    color: '#666',
+    fontSize: 12,
+    marginBottom: 16,
+  },
+  quizSubmitButton: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    marginBottom: 16,
+  },
+  quizSubmitText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quizResultText: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  quizCorrect: {
+    color: '#2DD4BF',
+  },
+  quizWrong: {
+    color: '#ef4444',
+  },
+  quizNextButton: {
+    backgroundColor: '#2DD4BF',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    marginBottom: 16,
+  },
+  quizNextText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  quizCloseText: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 8,
+  },
+  // ホームボタン
+  homeButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  homeButtonText: {
+    fontSize: 12,
+    color: '#D4AF37',
+    fontWeight: '600',
+  },
+  // ヘッダーアイコン
+  headerIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+  },
+  // 道場タイトル
+  dojoTitle: {
+    fontSize: 18,
+    color: '#D4AF37',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  settingsIconButton: {
+    position: 'absolute',
+    top: 60,
+    right: 24,
+    width: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  settingsIconText: {
+    fontSize: 24,
+  },
+  // 集中機能スタイル
+  focusQuestion: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#D4AF37',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  focusInput: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+    padding: 16,
+    color: '#FFF',
+    fontSize: 16,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    marginBottom: 16,
+  },
+  focusPurposeBar: {
+    backgroundColor: '#1a1a1a',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#D4AF37',
+  },
+  focusPurposeLabel: {
+    color: '#D4AF37',
+    fontSize: 14,
+  },
+  blockedSitesSection: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+  },
+  blockedSitesTitle: {
+    color: '#D4AF37',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 12,
+  },
+  blockedSiteItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  blockedSiteText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+  },
+  removeSiteText: {
+    color: '#ef4444',
+    fontSize: 12,
+  },
+  addSiteRow: {
+    flexDirection: 'row',
+    marginTop: 12,
+  },
+  addSiteInput: {
+    flex: 1,
+    backgroundColor: '#000',
+    borderRadius: 8,
+    padding: 10,
+    color: '#FFF',
+    fontSize: 14,
+    marginRight: 8,
+  },
+  addSiteButton: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 8,
+    paddingHorizontal: 16,
+    justifyContent: 'center',
+  },
+  addSiteButtonText: {
+    color: '#000',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  focusQBox: {
+    backgroundColor: '#000',
+    borderRadius: 12,
+    padding: 20,
+    marginVertical: 16,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  focusQText: {
+    color: '#FFF',
+    fontSize: 18,
+    textAlign: 'center',
+    fontWeight: '500',
+  },
+  // 集中モード選択
+  focusTypeButton: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    padding: 20,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    alignItems: 'center',
+  },
+  focusTypeEmoji: {
+    fontSize: 40,
+    marginBottom: 8,
+  },
+  focusTypeButtonText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  focusTypeButtonSub: {
+    color: '#888',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  // 勉強タイマー画面
+  studyTimerScreen: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#000',
+  },
+  studyTimerLabel: {
+    color: '#D4AF37',
+    fontSize: 18,
+    marginBottom: 16,
+  },
+  studyTimerDisplay: {
+    color: '#FFF',
+    fontSize: 80,
+    fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
+  },
+  studyTimerControls: {
+    flexDirection: 'row',
+    marginTop: 40,
+    gap: 16,
+  },
+  studyControlButton: {
+    backgroundColor: '#D4AF37',
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    borderRadius: 12,
+  },
+  studyControlText: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  // タイマー設定
+  timerSettingSection: {
+    marginBottom: 16,
+  },
+  timerSettingLabel: {
+    color: '#D4AF37',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  timerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timerButton: {
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  timerButtonActive: {
+    backgroundColor: '#D4AF37',
+    borderColor: '#D4AF37',
+  },
+  timerButtonText: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  timerButtonTextActive: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  // ネットモードトップバー
+  focusTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a1a1a',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  focusEndText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  focusTimerBox: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  focusTimerText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: 'bold',
+    fontVariant: ['tabular-nums'],
+  },
+  focusTimerControl: {
+    fontSize: 24,
+  },
+  // NGクイズ
+  ngQuizTitle: {
+    color: '#D4AF37',
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  ngQuizSub: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  ngQuizRemaining: {
+    color: '#ef4444',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 16,
+  },
+  focusTopBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a1a1a',
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333',
+  },
+  focusTimerBox: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  focusTimerBreak: {
+    backgroundColor: '#2DD4BF',
+  },
+  focusTimerText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  focusTimerControl: {
+    fontSize: 24,
+  },
+  focusSessionsBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#0a0a0a',
+    padding: 8,
+    paddingHorizontal: 12,
+  },
+  focusSessionsText: {
+    color: '#D4AF37',
+    fontSize: 12,
+  },
+  focusEndText: {
+    color: '#ef4444',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  timerSettingSection: {
+    marginBottom: 16,
+  },
+  timerSettingLabel: {
+    color: '#D4AF37',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  timerButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  timerButton: {
+    backgroundColor: '#1a1a1a',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  timerButtonActive: {
+    backgroundColor: '#D4AF37',
+    borderColor: '#D4AF37',
+  },
+  timerButtonText: {
+    color: '#888',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  timerButtonTextActive: {
+    color: '#000',
+    fontWeight: 'bold',
+  },
+  focusHistorySection: {
+    marginTop: 24,
+    padding: 16,
+    backgroundColor: '#1a1a1a',
+    borderRadius: 12,
+  },
+  focusHistoryTitle: {
+    color: '#D4AF37',
+    fontSize: 14,
+    marginBottom: 8,
+  },
+  focusHistoryItem: {
+    color: '#9ca3af',
+    fontSize: 13,
+    paddingVertical: 6,
+  },
+  dojoIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 16,
+    marginBottom: 16,
   },
 });

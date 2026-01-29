@@ -199,7 +199,7 @@ app.get('/', (_req, res) => {
 });
 
 // ========== ① /samurai-chat : チャット ==========
-app.post('/samurai-chat', async (req, res) => {
+app.post("/samurai-chat", async (req, res) => {
   const { text, sessionId, strictNote } = req.body || {};
   console.log('[samurai-chat] request body:', req.body);
 

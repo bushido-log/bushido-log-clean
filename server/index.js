@@ -7,7 +7,7 @@ app.use(express.json());
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-app.post("/api/chat", async (req, res) => {
+app.post("/samurai-chat", async (req, res) => {
   const { messages, text } = req.body || {};
 
   // textだけ来たとき用に messages を作る

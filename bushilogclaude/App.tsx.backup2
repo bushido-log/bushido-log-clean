@@ -18,18 +18,18 @@ import {
   Switch,
   Text,
   TextInput,
-  TouchableWithoutFeedback,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import { initializePurchases, checkProStatus, purchasePro, restorePurchases, getMonthlyPrice } from './src/services/purchaseService';
 
 // =========================
 // Config / Constants
 // =========================
 
-const API_BASE = 'http://192.168.100.236:3001';
+const API_BASE = "https://bushido-log-server.onrender.com";
 const SAMURAI_TTS_URL = `${API_BASE}/tts`;
-const SAMURAI_CHAT_URL = `${API_BASE}/api/chat`;
+const SAMURAI_CHAT_URL = `${API_BASE}/samurai-chat`;
 const SAMURAI_MISSION_URL = `${API_BASE}/mission`;
 
 const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
@@ -42,9 +42,9 @@ const DAILY_LOGS_KEY = 'BUSHIDO_DAILY_LOGS_V1';
 const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
 const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
 const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
-const API_KEY_STORAGE_KEY = 'BUSHIDO_OPENAI_API_KEY_V1'; // (今は未使用だけど温存)
 const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
+const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
 
 const MAX_LEVEL = 10;
 const DAYS_PER_LEVEL = 3;
@@ -61,6 +61,33 @@ const DEFAULT_ROUTINES = [
   'ジャーナルを書く',
   '自然に触れる（太陽・海・風）',
 ];
+
+const IDENTITY_PRESETS = [
+  "禁欲を達成して自信をつけたい",
+  "集中力を高めて仕事で成果を出したい",
+  "健康的な生活習慣を身につけたい",
+  "自分に厳しく、強いメンタルを持ちたい",
+];
+
+const QUIT_PRESETS = [
+  "ポルノ・自慰行為",
+  "SNSのダラダラ見",
+  "夜更かし・不規則な睡眠",
+  "ジャンクフード・暴飲暴食",
+];
+
+const RULE_PRESETS = [
+  "毎朝5分の瞑想をする",
+  "1日1回は運動する",
+  "寝る前にスマホを見ない",
+  "毎日感謝を3つ書く",
+];
+
+const DEFAULT_ONBOARDING = {
+  identity: "自分に厳しく、強いメンタルを持ちたい",
+  quit: "ポルノ・自慰行為",
+  rule: "毎朝5分の瞑想をする",
+};
 
 const urgeMessage = 'その欲望、一刀両断！サムライキング参上。';
 
@@ -305,7 +332,7 @@ async function callSamuraiKing(message: string): Promise<string> {
   }
 
   const data = await res.json();
-  return data.reply;
+return data.reply || data.text || data.message || '（返答が空だったでござる）';
 }
 
 async function callSamuraiMissionGPT(): Promise<string> {
@@ -390,11 +417,6 @@ export default function App() {
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  // api key (kept)
-  const [apiKey, setApiKey] = useState('');
-  const [apiKeyInput, setApiKeyInput] = useState('');
-  const [isSavingApiKey, setIsSavingApiKey] = useState(false);
-
   // chat
   const [isSummoned, setIsSummoned] = useState(false);
   const [mode, setMode] = useState<'chat' | 'history'>('chat');
@@ -412,6 +434,12 @@ export default function App() {
   // daily logs
   const [dailyLogs, setDailyLogs] = useState<DailyLog[]>([]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
+  // 課金関連
+  const [isPro, setIsPro] = useState(false);
+  const [samuraiKingUses, setSamuraiKingUses] = useState(0);
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [proPrice, setProPrice] = useState('680円/月');
 
   // edit existing review
   const [editingLogDate, setEditingLogDate] = useState<string | null>(null);
@@ -473,6 +501,20 @@ export default function App() {
     })();
   }, []);
 
+
+  // 課金初期化
+  useEffect(() => {
+    (async () => {
+      await initializePurchases();
+      const pro = await checkProStatus();
+      setIsPro(pro);
+      const price = await getMonthlyPrice();
+      setProPrice(price);
+      const usesJson = await AsyncStorage.getItem(SAMURAI_KING_USES_KEY);
+      const uses = usesJson ? parseInt(usesJson, 10) : 0;
+      setSamuraiKingUses(uses);
+    })();
+  }, []);
   // =========================
   // Keyboard watcher
   // =========================
@@ -564,20 +606,6 @@ export default function App() {
         }
       } catch (e) {
         console.error('Failed to load settings', e);
-      }
-    })();
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(API_KEY_STORAGE_KEY);
-        if (saved) {
-          setApiKey(saved);
-          setApiKeyInput(saved);
-        }
-      } catch (e) {
-        console.error('Failed to load API key', e);
       }
     })();
   }, []);
@@ -775,13 +803,13 @@ export default function App() {
   // =========================
   // Chat actions
   // =========================
-  const handleUrgePress = async () => {
+  const handleUrgePress = async () => {    // 課金チェック: Proでない場合、2回目以降はPaywall表示    if (!isPro && samuraiKingUses >= 1) {      setShowPaywall(true);      return;    }
     setIsSummoned(true);
     await tap('medium');
     speakSamurai(urgeMessage);
   };
 
-  const handleSend = async () => {
+  const handleSend = async () => {    // 課金チェック: Proでない場合、2回目以降はPaywall表示    if (!isPro && samuraiKingUses >= 1) {      setShowPaywall(true);      return;    }
     if (!input.trim() || isSending) return;
 
     await tap('select');
@@ -808,7 +836,7 @@ export default function App() {
         createdAt: new Date().toISOString(),
       };
       setMessages(prev => [...prev, kingMsg]);
-      speakSamurai(replyText);
+      speakSamurai(replyText);      // 使用回数をカウントアップ      if (!isPro) {        const newUses = samuraiKingUses + 1;        setSamuraiKingUses(newUses);        AsyncStorage.setItem(SAMURAI_KING_USES_KEY, String(newUses));      }
 
       const entry: HistoryEntry = {
         id: `${Date.now()}`,
@@ -1024,24 +1052,6 @@ export default function App() {
   };
 
   // =========================
-  // API key save (kept)
-  // =========================
-  const handleSaveApiKey = async () => {
-    await tap('light');
-
-    const key = apiKeyInput.trim();
-    setIsSavingApiKey(true);
-    try {
-      await AsyncStorage.setItem(API_KEY_STORAGE_KEY, key);
-      setApiKey(key);
-    } catch (e) {
-      console.error('Failed to save API key', e);
-    } finally {
-      setIsSavingApiKey(false);
-    }
-  };
-
-  // =========================
   // Blocklist actions
   // =========================
   const handleAddBlockDomain = async () => {
@@ -1243,7 +1253,14 @@ export default function App() {
     const historyToShow = history.length > 50 ? history.slice(history.length - 50) : history;
 
     return (
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView 
+        style={{ flex: 1 }} 
+        contentContainerStyle={{ paddingBottom: 24 }} 
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={true}
+        bounces={true}
+      >
         <Pressable style={styles.urgeButton} onPress={handleUrgePress}>
           <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
         </Pressable>
@@ -1279,11 +1296,12 @@ export default function App() {
 
                   <ScrollView
                     ref={messagesRef}
-                    style={styles.messages}
-                    contentContainerStyle={{ paddingBottom: 8, flexGrow: 1 }}
+                    style={[styles.messages, { maxHeight: 320 }]}
+                    contentContainerStyle={{ paddingBottom: 16 }}
                     keyboardShouldPersistTaps="handled"
-                    nestedScrollEnabled
-                    showsVerticalScrollIndicator={false}
+                    nestedScrollEnabled={true}
+                    showsVerticalScrollIndicator={true}
+                    bounces={true}
                     onContentSizeChange={() => messagesRef.current?.scrollToEnd({ animated: true })}
                   >
                     {messages.map(m => (
@@ -1795,6 +1813,33 @@ export default function App() {
         <Text style={styles.goalTitle}>設定</Text>
         <Text style={styles.goalSub}>サムライキングの声やバイブの強さを、自分好みにカスタムできるでござる。</Text>
 
+        {/* Pro状態 */}
+        <Text style={styles.sectionTitle}>プラン</Text>
+        <View style={styles.settingsRow}>
+          <View style={styles.settingsRowText}>
+            <Text style={styles.settingsLabel}>{isPro ? "Pro会員" : "無料プラン"}</Text>
+            <Text style={styles.settingsHint}>{isPro ? "サムライキング相談が無制限" : "相談" + samuraiKingUses + "/1回使用済み"}</Text>
+          </View>
+          {!isPro && (
+            <Pressable style={styles.onboardingButton} onPress={() => setShowPaywall(true)}>
+              <Text style={styles.onboardingButtonText}>Proにする</Text>
+            </Pressable>
+          )}
+        </View>
+        {!isPro && (
+          <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={async () => {
+            const success = await restorePurchases();
+            if (success) {
+              setIsPro(true);
+              Alert.alert("復元完了", "Pro機能が復元されました");
+            } else {
+              Alert.alert("復元失敗", "購入履歴が見つかりませんでした");
+            }
+          }}>
+            <Text style={styles.secondaryButtonText}>購入を復元</Text>
+          </Pressable>
+        )}
+
         <Text style={styles.sectionTitle}>サムライボイス</Text>
         <View style={styles.settingsRow}>
           <View style={styles.settingsRowText}>
@@ -1887,68 +1932,82 @@ export default function App() {
         <Pressable style={styles.secondaryButton} onPress={() => setShowPrivacy(true)}>
           <Text style={styles.secondaryButtonText}>プライバシーポリシーを見る</Text>
         </Pressable>
-
-        {/* APIキー (温存UI) */}
-        <Text style={[styles.sectionTitle, { marginTop: 14 }]}>開発用（APIキー）</Text>
-        <Text style={styles.settingsHint}>今は未使用。将来ユーザー入力方式に戻すならここを使う。</Text>
-        <View style={styles.urlRow}>
-          <TextInput
-            style={styles.urlInput}
-            value={apiKeyInput}
-            onChangeText={setApiKeyInput}
-            autoCapitalize="none"
-            placeholder="sk-..."
-            placeholderTextColor="#666"
-          />
-          <Pressable style={styles.urlOpenButton} onPress={handleSaveApiKey} disabled={isSavingApiKey}>
-            <Text style={styles.urlOpenButtonText}>{isSavingApiKey ? '保存中…' : '保存'}</Text>
-          </Pressable>
-        </View>
-        {apiKey ? <Text style={styles.browserInfo}>保存済み</Text> : <Text style={styles.browserInfo}>未保存</Text>}
       </View>
     </ScrollView>
   );
 
+
   const renderOnboarding = () => (
-    <View style={styles.onboardingContainer}>
-      <Text style={styles.appTitle}>BUSHIDO LOG</Text>
-      <Text style={styles.onboardingLead}>まずは「どんなサムライとして生きるか」を決めるところから始めよう。</Text>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={styles.onboardingContainer}>
+        <Text style={styles.appTitle}>BUSHIDO LOG</Text>
+        <Text style={styles.onboardingLead}>
+          サムライとしての道を選ぼう。{'\n'}タップで選ぶだけ。
+        </Text>
 
-      <Text style={styles.onboardingLabel}>1. どんなサムライとして生きたい？</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obIdentity}
-        onChangeText={setObIdentity}
-        multiline
-        placeholder="例）家族に優しく、世界で戦うサムライアーティスト"
-        placeholderTextColor="#6b7280"
-      />
+        <Text style={styles.onboardingLabel}>1. どんな自分になりたい？</Text>
+        <View style={styles.chipRow}>
+          {IDENTITY_PRESETS.map((preset) => (
+            <Pressable
+              key={preset}
+              style={[styles.routineChip, obIdentity === preset && styles.routineChipActive]}
+              onPress={() => setObIdentity(preset)}
+            >
+              <Text style={[styles.routineChipText, obIdentity === preset && styles.routineChipTextActive]}>
+                {preset}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obQuit}
-        onChangeText={setObQuit}
-        multiline
-        placeholder="例）ダラダラSNS、夜更かし"
-        placeholderTextColor="#6b7280"
-      />
+        <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
+        <View style={styles.chipRow}>
+          {QUIT_PRESETS.map((preset) => (
+            <Pressable
+              key={preset}
+              style={[styles.routineChip, obQuit === preset && styles.routineChipActive]}
+              onPress={() => setObQuit(preset)}
+            >
+              <Text style={[styles.routineChipText, obQuit === preset && styles.routineChipTextActive]}>
+                {preset}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obRule}
-        onChangeText={setObRule}
-        multiline
-        placeholder="例）毎日1つは未来のための行動をする"
-        placeholderTextColor="#6b7280"
-      />
+        <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
+        <View style={styles.chipRow}>
+          {RULE_PRESETS.map((preset) => (
+            <Pressable
+              key={preset}
+              style={[styles.routineChip, obRule === preset && styles.routineChipActive]}
+              onPress={() => setObRule(preset)}
+            >
+              <Text style={[styles.routineChipText, obRule === preset && styles.routineChipTextActive]}>
+                {preset}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <Pressable style={styles.primaryButton} onPress={handleSaveOnboarding}>
-        <Text style={styles.primaryButtonText}>サムライ宣言を保存して始める</Text>
-      </Pressable>
-    </View>
+        <Pressable style={styles.primaryButton} onPress={handleSaveOnboarding}>
+          <Text style={styles.primaryButtonText}>サムライ宣言を保存して始める</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={async () => {
+            setObIdentity(DEFAULT_ONBOARDING.identity);
+            setObQuit(DEFAULT_ONBOARDING.quit);
+            setObRule(DEFAULT_ONBOARDING.rule);
+          }}
+        >
+          <Text style={styles.secondaryButtonText}>あとで設定する</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
   );
+
 
   const renderTimeOver = () => (
     <View style={styles.timeOverContainer}>
@@ -1982,7 +2041,6 @@ export default function App() {
   return (
     <>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
           <View style={styles.container}>
             <View style={styles.header}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
@@ -2024,9 +2082,43 @@ export default function App() {
               </>
             )}
           </View>
-        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
+
+      {/* Paywall Modal */}
+      <Modal visible={showPaywall} animationType="fade" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>この先はPro</Text>
+            <Text style={styles.modalText}>決断を続けたい人のために。</Text>
+            <Text style={[styles.modalText, { marginTop: 8, fontSize: 16, fontWeight: "700", color: "#e5a93a" }]}>{proPrice}</Text>
+            <Pressable style={[styles.primaryButton, { marginTop: 16 }]} onPress={async () => {
+              const success = await purchasePro();
+              if (success) {
+                setIsPro(true);
+                setShowPaywall(false);
+              }
+            }}>
+              <Text style={styles.primaryButtonText}>Proにする</Text>
+            </Pressable>
+            <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={async () => {
+              const success = await restorePurchases();
+              if (success) {
+                setIsPro(true);
+                setShowPaywall(false);
+                Alert.alert("復元完了", "Pro機能が復元されました");
+              } else {
+                Alert.alert("復元失敗", "購入履歴が見つかりませんでした");
+              }
+            }}>
+              <Text style={styles.secondaryButtonText}>購入を復元</Text>
+            </Pressable>
+            <Pressable style={{ marginTop: 16, alignItems: "center" }} onPress={() => setShowPaywall(false)}>
+              <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 12 }}>今はやめる</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={showPrivacy} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalCard}>
@@ -2051,7 +2143,7 @@ export default function App() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#050508',
     paddingTop: 40,
     paddingHorizontal: 12,
   },
@@ -2061,11 +2153,11 @@ const styles = StyleSheet.create({
   appTitle: {
     fontSize: 22,
     fontWeight: '900',
-    color: '#f97316',
+    color: '#e5a93a',
   },
   headerSub: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
   },
   timeBadge: {
@@ -2073,20 +2165,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 999,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(229,169,58,0.15)',
     borderWidth: 1,
-    borderColor: '#f97316',
+    borderColor: 'rgba(229,169,58,0.4)',
   },
   timeBadgeText: {
     fontSize: 11,
-    color: '#f97316',
+    color: '#e5a93a',
     fontWeight: '600',
   },
   tabRow: {
     flexDirection: 'row',
     marginBottom: 8,
     borderRadius: 999,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(255,255,255,0.05)',
     padding: 2,
   },
   tabButton: {
@@ -2096,48 +2188,50 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabButtonActive: {
-    backgroundColor: '#f97316',
+    backgroundColor: 'rgba(229,169,58,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(229,169,58,0.4)',
   },
   tabButtonText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
   },
   tabButtonTextActive: {
-    color: '#0f172a',
+    color: '#e5a93a',
   },
 
   urgeButton: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#e5a93a',
     paddingVertical: 10,
     borderRadius: 12,
     alignItems: 'center',
     marginBottom: 4,
   },
   urgeText: {
-    color: '#0f172a',
+    color: '#0a0a0a',
     fontWeight: '800',
   },
   caption: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.45)',
     marginBottom: 8,
   },
   summonBox: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 12,
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.6)',
   },
   summonTitle: {
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 4,
   },
   summonText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
   },
 
   modeRow: {
@@ -2150,62 +2244,70 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: 'rgba(255,255,255,0.1)',
     alignItems: 'center',
     marginRight: 4,
   },
   modeButtonActive: {
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   modeButtonText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
   },
   modeButtonTextActive: {
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
   },
 
   chatBox: {
+    flex: 1,
+    minHeight: 0,
+
     marginTop: 8,
     borderRadius: 16,
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.5)',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 8,
   },
   chatTitle: {
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 4,
   },
   messages: {
-    maxHeight: 360,
+    flex: 1,
     marginBottom: 6,
   },
   bubble: {
-    maxWidth: '80%',
-    padding: 8,
-    borderRadius: 10,
+    maxWidth: '88%',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 18,
     marginBottom: 6,
   },
   userBubble: {
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignSelf: 'flex-end',
   },
   kingBubble: {
-    backgroundColor: '#f97316',
+    backgroundColor: 'rgba(229,169,58,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(229,169,58,0.5)',
     alignSelf: 'flex-start',
   },
   bubbleLabel: {
     fontSize: 10,
     fontWeight: '700',
     marginBottom: 2,
-    color: '#020617',
+    color: 'rgba(255,255,255,0.7)',
   },
   bubbleText: {
-    fontSize: 13,
-    color: '#020617',
+    fontSize: 16,
+    lineHeight: 26,
+    color: '#ffffff',
   },
   inputRow: {
     flexDirection: 'row',
@@ -2217,15 +2319,16 @@ const styles = StyleSheet.create({
     maxHeight: 80,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 8,
     paddingVertical: 6,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     marginRight: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   sendButton: {
-    backgroundColor: '#f97316',
+    backgroundColor: '#e5a93a',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 8,
@@ -2233,13 +2336,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   sendText: {
-    color: '#0f172a',
+    color: '#0a0a0a',
     fontWeight: '700',
     fontSize: 12,
   },
   privacyNote: {
     fontSize: 10,
-    color: '#6b7280',
+    color: 'rgba(255,255,255,0.35)',
     marginTop: 4,
   },
 
@@ -2248,72 +2351,73 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: 'rgba(255,255,255,0.15)',
     alignItems: 'center',
   },
   secondaryButtonText: {
     fontSize: 11,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.7)',
   },
 
   historyInfo: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 4,
   },
   historyEntry: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 8,
     marginBottom: 6,
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.5)',
   },
   historyDate: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.45)',
     marginBottom: 2,
   },
   historyLabel: {
     fontSize: 11,
-    color: '#e5e7eb',
+    color: '#e5a93a',
     marginTop: 4,
     fontWeight: '700',
   },
   historyText: {
     fontSize: 12,
-    color: '#d1d5db',
+    color: 'rgba(255,255,255,0.75)',
   },
 
   goalCard: {
     borderRadius: 16,
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.5)',
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: 'rgba(255,255,255,0.08)',
     padding: 12,
     marginTop: 8,
   },
   goalTitle: {
     fontSize: 16,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 4,
   },
   goalSub: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     marginBottom: 6,
   },
   bigInput: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 10,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     minHeight: 56,
     marginTop: 4,
     marginBottom: 8,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   chipRow: {
     flexDirection: 'row',
@@ -2325,48 +2429,49 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.15)',
     marginRight: 4,
     marginBottom: 4,
   },
   routineChipActive: {
-    backgroundColor: '#f97316',
-    borderColor: '#f97316',
+    backgroundColor: 'rgba(229,169,58,0.2)',
+    borderColor: 'rgba(229,169,58,0.5)',
   },
   routineChipText: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
   },
   routineChipTextActive: {
-    color: '#0f172a',
+    color: '#e5a93a',
     fontWeight: '700',
   },
   todoInput: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 8,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     minHeight: 48,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
 
   primaryButton: {
     marginTop: 10,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2dd4bf',
     alignItems: 'center',
   },
   primaryButtonText: {
-    color: '#022c22',
+    color: '#0a0a0a',
     fontWeight: '800',
     fontSize: 13,
   },
 
   questionText: {
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     marginTop: 8,
   },
 
@@ -2374,17 +2479,17 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 10,
     borderRadius: 999,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     overflow: 'hidden',
     marginTop: 6,
   },
   progressFill: {
     height: '100%',
-    backgroundColor: '#f97316',
+    backgroundColor: '#e5a93a',
   },
   progressHint: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.45)',
     marginTop: 4,
   },
 
@@ -2393,19 +2498,19 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: 'rgba(255,255,255,0.15)',
     marginRight: 4,
   },
   dateChipActive: {
-    backgroundColor: '#f97316',
-    borderColor: '#f97316',
+    backgroundColor: 'rgba(229,169,58,0.2)',
+    borderColor: 'rgba(229,169,58,0.5)',
   },
   dateChipText: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
   },
   dateChipTextActive: {
-    color: '#0f172a',
+    color: '#e5a93a',
     fontWeight: '700',
   },
 
@@ -2419,19 +2524,19 @@ const styles = StyleSheet.create({
     height: 16,
     borderRadius: 4,
     borderWidth: 1,
-    borderColor: '#6b7280',
+    borderColor: 'rgba(255,255,255,0.3)',
     marginRight: 6,
   },
   checkboxChecked: {
-    backgroundColor: '#22c55e',
-    borderColor: '#22c55e',
+    backgroundColor: '#2dd4bf',
+    borderColor: '#2dd4bf',
   },
   todoText: {
     fontSize: 12,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.8)',
   },
   todoTextDone: {
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.4)',
     textDecorationLine: 'line-through',
   },
 
@@ -2443,18 +2548,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#1f2937',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     marginRight: 4,
   },
   historyDeleteButton: {
-    backgroundColor: '#7f1d1d',
+    backgroundColor: 'rgba(127,29,29,0.6)',
     marginLeft: 4,
     marginRight: 0,
   },
   historyButtonText: {
     fontSize: 12,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.8)',
     fontWeight: '600',
   },
 
@@ -2463,15 +2568,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 10,
     marginTop: 8,
+    backgroundColor: 'rgba(15,15,25,0.5)',
   },
   avatarCircle: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(255,255,255,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -2484,17 +2590,17 @@ const styles = StyleSheet.create({
   },
   avatarTitle: {
     fontSize: 14,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
   },
   avatarRank: {
     fontSize: 12,
-    color: '#f97316',
+    color: '#e5a93a',
     marginTop: 2,
   },
   avatarDesc: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
   },
 
@@ -2505,36 +2611,37 @@ const styles = StyleSheet.create({
   },
   samuraiMissionTitle: {
     fontSize: 14,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
   },
   samuraiMissionXp: {
     fontSize: 11,
-    color: '#facc15',
+    color: '#fbbf24',
     fontWeight: '600',
   },
   samuraiMissionBox: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(45,212,191,0.3)',
     padding: 10,
     marginTop: 4,
+    backgroundColor: 'rgba(45,212,191,0.08)',
   },
   samuraiMissionText: {
     fontSize: 13,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.85)',
     marginBottom: 8,
   },
   samuraiMissionButton: {
     marginTop: 6,
     paddingVertical: 8,
     borderRadius: 10,
-    backgroundColor: '#16a34a',
+    backgroundColor: '#2dd4bf',
     alignItems: 'center',
   },
   samuraiMissionButtonText: {
     fontSize: 12,
-    color: '#022c22',
+    color: '#0a0a0a',
     fontWeight: '700',
   },
 
@@ -2545,7 +2652,7 @@ const styles = StyleSheet.create({
   },
   samuraiHeaderTitle: {
     fontSize: 16,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
   },
   samuraiEditButton: {
@@ -2553,48 +2660,49 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   samuraiEditText: {
     fontSize: 11,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.7)',
   },
 
   onboardingLabel: {
     fontSize: 12,
-    color: '#e5e7eb',
+    color: '#ffffff',
     marginTop: 8,
     marginBottom: 2,
   },
   onboardingInput: {
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 8,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     minHeight: 48,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   onboardingButton: {
     marginTop: 8,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#22c55e',
+    backgroundColor: '#2dd4bf',
     alignItems: 'center',
   },
   onboardingButtonText: {
     fontSize: 13,
-    color: '#022c22',
+    color: '#0a0a0a',
     fontWeight: '700',
   },
   samuraiHeaderLabel: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 6,
   },
   samuraiHeaderText: {
     fontSize: 13,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.85)',
     marginTop: 2,
   },
 
@@ -2607,33 +2715,34 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 8,
     paddingVertical: 6,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     marginRight: 4,
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
   urlOpenButton: {
     paddingHorizontal: 10,
     paddingVertical: 8,
     borderRadius: 8,
-    backgroundColor: '#f97316',
+    backgroundColor: '#e5a93a',
     alignItems: 'center',
   },
   urlOpenButtonText: {
     fontSize: 12,
-    color: '#0f172a',
+    color: '#0a0a0a',
     fontWeight: '700',
   },
   browserInfo: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.45)',
     marginTop: 4,
   },
   sectionTitle: {
     fontSize: 14,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginTop: 10,
   },
@@ -2646,20 +2755,20 @@ const styles = StyleSheet.create({
   },
   blockDomain: {
     fontSize: 12,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.8)',
   },
   blockRemove: {
     fontSize: 11,
-    color: '#f97316',
+    color: '#e5a93a',
   },
 
   browserContainer: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1f2937',
+    borderColor: 'rgba(255,255,255,0.08)',
     marginTop: 8,
     overflow: 'hidden',
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.5)',
   },
 
   blockedCard: {
@@ -2669,24 +2778,24 @@ const styles = StyleSheet.create({
   },
   blockedTitle: {
     fontSize: 16,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 8,
   },
   blockedText: {
     fontSize: 13,
-    color: '#d1d5db',
+    color: 'rgba(255,255,255,0.7)',
   },
   blockedButton: {
     marginTop: 12,
     paddingVertical: 10,
     borderRadius: 10,
-    backgroundColor: '#f97316',
+    backgroundColor: '#e5a93a',
     alignItems: 'center',
   },
   blockedButtonText: {
     fontSize: 13,
-    color: '#0f172a',
+    color: '#0a0a0a',
     fontWeight: '700',
   },
 
@@ -2702,12 +2811,12 @@ const styles = StyleSheet.create({
   },
   settingsLabel: {
     fontSize: 13,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.85)',
     fontWeight: '600',
   },
   settingsHint: {
     fontSize: 11,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.45)',
     marginTop: 2,
   },
 
@@ -2719,21 +2828,21 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: '#374151',
+    borderColor: 'rgba(255,255,255,0.15)',
     paddingVertical: 6,
     alignItems: 'center',
     marginRight: 4,
   },
   segmentButtonActive: {
-    backgroundColor: '#f97316',
-    borderColor: '#f97316',
+    backgroundColor: 'rgba(229,169,58,0.2)',
+    borderColor: 'rgba(229,169,58,0.5)',
   },
   segmentButtonText: {
     fontSize: 12,
-    color: '#9ca3af',
+    color: 'rgba(255,255,255,0.5)',
   },
   segmentButtonTextActive: {
-    color: '#0f172a',
+    color: '#e5a93a',
     fontWeight: '700',
   },
 
@@ -2741,12 +2850,13 @@ const styles = StyleSheet.create({
     width: 60,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     paddingHorizontal: 6,
     paddingVertical: 4,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: '#ffffff',
     textAlign: 'center',
+    backgroundColor: 'rgba(255,255,255,0.05)',
   },
 
   onboardingContainer: {
@@ -2756,26 +2866,26 @@ const styles = StyleSheet.create({
   },
   onboardingLead: {
     fontSize: 13,
-    color: '#d1d5db',
+    color: 'rgba(255,255,255,0.7)',
     marginTop: 4,
     marginBottom: 8,
   },
 
   loadingContainer: {
     flex: 1,
-    backgroundColor: '#020617',
+    backgroundColor: '#050508',
     justifyContent: 'center',
     alignItems: 'center',
   },
   loadingText: {
     marginTop: 8,
     fontSize: 13,
-    color: '#e5e7eb',
+    color: 'rgba(255,255,255,0.7)',
   },
 
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
+    backgroundColor: 'rgba(0,0,0,0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 16,
@@ -2783,21 +2893,21 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxHeight: '80%',
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.95)',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 14,
   },
   modalTitle: {
     fontSize: 16,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 6,
   },
   modalText: {
     fontSize: 12,
-    color: '#d1d5db',
+    color: 'rgba(255,255,255,0.7)',
   },
 
   timeOverContainer: {
@@ -2808,19 +2918,19 @@ const styles = StyleSheet.create({
   timeOverCard: {
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#4b5563',
+    borderColor: 'rgba(255,255,255,0.1)',
     padding: 16,
-    backgroundColor: '#020617',
+    backgroundColor: 'rgba(15,15,25,0.9)',
     width: '100%',
   },
   timeOverTitle: {
     fontSize: 16,
-    color: '#e5e7eb',
+    color: '#ffffff',
     fontWeight: '700',
     marginBottom: 8,
   },
   timeOverText: {
     fontSize: 13,
-    color: '#d1d5db',
+    color: 'rgba(255,255,255,0.7)',
   },
 });

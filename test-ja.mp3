@@ -1,0 +1,25 @@
+HTTP/2 404 
+date: Sat, 03 Jan 2026 22:47:50 GMT
+content-type: text/html; charset=utf-8
+cf-ray: 9b860a4a1fc23305-KIN
+access-control-allow-origin: *
+content-security-policy: default-src 'none'
+rndr-id: 187b26fc-699c-42dc
+vary: Accept-Encoding
+x-content-type-options: nosniff
+x-powered-by: Express
+x-render-origin-server: Render
+cf-cache-status: DYNAMIC
+server: cloudflare
+alt-svc: h3=":443"; ma=86400
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Error</title>
+</head>
+<body>
+<pre>Cannot POST /api/tts</pre>
+</body>
+</html>

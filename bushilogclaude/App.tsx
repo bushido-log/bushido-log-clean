@@ -4,10 +4,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Audio } from 'expo-av';
 import * as Haptics from 'expo-haptics';
+import * as ImagePicker from 'expo-image-picker';
+import * as Speech from 'expo-speech';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
@@ -405,7 +408,7 @@ export default function App() {
   };
   const messagesRef = useRef<ScrollView | null>(null);
 
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus'>('consult');
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm'>('consult');
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
@@ -432,6 +435,158 @@ export default function App() {
   const [blockedSites, setBlockedSites] = useState<string[]>(['twitter.com', 'x.com', 'instagram.com', 'tiktok.com', 'facebook.com', 'youtube.com']);
   const [newBlockedSite, setNewBlockedSite] = useState('');
   const [focusType, setFocusType] = useState<'select' | 'net' | 'study'>('select');
+  
+  // アラーム機能
+  const [showDojoGate, setShowDojoGate] = useState(true);
+  const gateOpacity = useRef(new Animated.Value(0)).current;
+  const gateScale = useRef(new Animated.Value(0.9)).current;
+  
+  useEffect(() => {
+    if (showDojoGate) {
+      Animated.parallel([
+        Animated.timing(gateOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        Animated.spring(gateScale, { toValue: 1, friction: 8, useNativeDriver: true }),
+      ]).start();
+    }
+  }, []);
+  const [alarmHour, setAlarmHour] = useState(7);
+  const [alarmMinute, setAlarmMinute] = useState(0);
+  const [alarmSet, setAlarmSet] = useState(false);
+  const [alarmMission, setAlarmMission] = useState<'冷蔵庫' | '洗面台' | '玄関'>('洗面台');
+  const [alarmRinging, setAlarmRinging] = useState(false);
+  const [alarmLevel, setAlarmLevel] = useState(1);
+  const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  
+  const alarmMessages = {
+    1: [
+      '素晴らしい朝だ。今日という日は二度と来ない。',
+      '今日はお前の人生で最高の日になる。',
+      '新しい朝だ。昨日の自分を超えるチャンスだ。',
+      '今日はお前にしかできない何かがある。',
+    ],
+    2: [
+      '今日という贈り物を受け取れ。',
+      '今日を最高の一日にしよう。',
+      '布団から出れば、素晴らしい世界が待っている。',
+      'お前には無限の可能性がある。',
+    ],
+    3: [
+      'さあ、そろそろ起きる時間だ。',
+      '今日という日が待っているぞ。',
+      'あと少しの勇気だ。立ち上がれ。',
+      'お前ならできる。さあ、起きよう。',
+    ],
+    4: [
+      'おい。そろそろ起きろ。',
+      'いつまで寝ている？',
+      '甘えるな。起きろ。',
+      'もう時間だ。',
+    ],
+    5: [
+      'おい！そろそろ起きろ！', 
+      '何をしている！起きろ！',
+      '立て！今すぐ！',
+      'いつまで甘えている！',
+    ],
+    6: [
+      '起きろ！', 
+      '行動！', 
+      '立て！', 
+      'いい加減起きろ！',
+      '最高の日にしろ！',
+      '誰かが生きたかった今日だぞ！',
+      'お前ならできる！',
+      '今日を無駄にするな！',
+      'さあ立て！',
+    ],
+  };
+  
+  const alarmStartTimeRef = useRef<number>(0);
+  
+  const scheduleNextShout = () => {
+    const elapsedSec = (Date.now() - alarmStartTimeRef.current) / 1000;
+    let level = 1;
+    let interval = 12000;
+    
+    if (elapsedSec > 180) {
+      level = 6; interval = 2500;  // 3分以上：くるってくる
+    } else if (elapsedSec > 150) {
+      level = 6; interval = 4000;
+    } else if (elapsedSec > 120) {
+      level = 5; interval = 6000;
+    } else if (elapsedSec > 90) {
+      level = 4; interval = 8000;
+    } else if (elapsedSec > 60) {
+      level = 3; interval = 10000;
+    } else if (elapsedSec > 30) {
+      level = 2; interval = 12000;
+    }
+    
+    const displayLevel = level <= 3 ? 1 : Math.min(level - 2, 4);
+    setAlarmLevel(displayLevel);
+    
+    const msgs = alarmMessages[level as 1|2|3|4|5|6];
+    const msg = msgs[Math.floor(Math.random() * msgs.length)];
+    
+    let fullMsg = msg;
+    if (level <= 3) {
+      fullMsg += ' ' + alarmMission + 'を撮影して最高の一日を始めよう。';
+    } else if (level === 4) {
+      fullMsg += ' ' + alarmMission + 'を撮れ。';
+    } else if (level === 5) {
+      fullMsg += ' 今すぐ' + alarmMission + '撮影しろ！';
+    } else {
+      fullMsg += ' ' + alarmMission + '撮れ！！今すぐ！！';
+    }
+    
+    speakSamurai(fullMsg);
+    if (level >= 5) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    } else {
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    
+    alarmIntervalRef.current = setTimeout(scheduleNextShout, interval);
+  };
+  
+  const startAlarmShout = () => {
+    setAlarmRinging(true);
+    setAlarmLevel(1);
+    alarmStartTimeRef.current = Date.now();
+    
+    speakSamurai('おはよう！今日という日は、お前の人生で最も素晴らしい日になる。さあ、' + alarmMission + 'を撮影して、最高の一日を始めよう！');
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    
+    alarmIntervalRef.current = setTimeout(scheduleNextShout, 12000);
+  };
+  
+  const stopAlarm = () => {
+    if (alarmIntervalRef.current) {
+      clearTimeout(alarmIntervalRef.current);
+      alarmIntervalRef.current = null;
+    }
+    setAlarmRinging(false);
+    setAlarmSet(false);
+    speakSamurai('よくやった。今日も己に勝て。武士道とは毎朝の勝利から始まる。');
+  };
+  
+  const takeMissionPhoto = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('カメラ許可が必要', 'アラームを止めるにはカメラを許可してください');
+      return;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.5,
+    });
+    
+    if (!result.canceled) {
+      stopAlarm();
+      setShowStartScreen(true);
+    }
+  };
   const [focusDuration, setFocusDuration] = useState(25);
   const [ngWords, setNgWords] = useState<string[]>(['エロ', 'アダルト', 'porn', 'sex', 'ギャンブル', 'カジノ', 'パチンコ']);
   const [newNgWord, setNewNgWord] = useState('');
@@ -1336,6 +1491,22 @@ export default function App() {
 
   const renderStartScreen = () => (
     <View style={styles.startScreen}>
+      {/* 道場入口 */}
+      {showDojoGate && (
+        <Pressable 
+          style={styles.dojoGateOverlay}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            setShowDojoGate(false);
+          }}
+        >
+          <Animated.View style={{ opacity: gateOpacity, transform: [{ scale: gateScale }], alignItems: 'center' }}>
+            <Text style={styles.dojoGateTitle}>武士道</Text>
+            <Text style={styles.dojoGateSubtitle}>— 道場に入る —</Text>
+          </Animated.View>
+        </Pressable>
+      )}
+      
       <Pressable
         style={styles.settingsIconButton}
         onPress={() => {
@@ -1346,9 +1517,8 @@ export default function App() {
       >
         <Text style={styles.settingsIconText}>⚙️</Text>
       </Pressable>
-      <Text style={styles.dojoTitle}>道場</Text>
       <Image source={require('./assets/icon.png')} style={styles.dojoIcon} />
-      <Text style={styles.startSubtitle}>今日は何をする？</Text>
+      <Text style={styles.dojoTitle}>道場</Text>
       
       <Pressable
         style={styles.startButton}
@@ -1380,7 +1550,18 @@ export default function App() {
           setShowStartScreen(false);
         }}
       >
-        <Text style={styles.startButtonText}>日記を書く</Text>
+        <Text style={styles.startButtonText}>今日の目標</Text>
+      </Pressable>
+      
+      <Pressable
+        style={styles.startButton}
+        onPress={() => {
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setTab('review');
+          setShowStartScreen(false);
+        }}
+      >
+        <Text style={styles.startButtonText}>振り返り</Text>
       </Pressable>
       
       <Pressable
@@ -1397,12 +1578,14 @@ export default function App() {
       </Pressable>
       
       <Pressable
-        style={[styles.startButton, styles.startButtonDisabled]}
+        style={styles.startButton}
         onPress={() => {
-          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+          setTab('alarm');
+          setShowStartScreen(false);
         }}
       >
-        <Text style={[styles.startButtonText, styles.startButtonTextDisabled]}>明日に備える（準備中）</Text>
+        <Text style={styles.startButtonText}>明日に備える</Text>
       </Pressable>
     </View>
   );
@@ -2201,6 +2384,114 @@ export default function App() {
     }
   };
 
+  const renderAlarmTab = () => {
+    // アラーム発動中の画面
+    if (alarmRinging) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#1a0000', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: '#ef4444', fontSize: 36, fontWeight: 'bold', marginBottom: 20 }}>
+            {alarmLevel >= 3 ? '起きろ！！！' : '起きろ。'}
+          </Text>
+          <Text style={{ color: '#fff', fontSize: 20, marginBottom: 30, textAlign: 'center' }}>
+            📸 {alarmMission}を撮影せよ
+          </Text>
+          <Text style={{ color: '#ef4444', fontSize: 16, marginBottom: 30 }}>
+            怒りレベル: {'🔥'.repeat(alarmLevel)}
+          </Text>
+          <Pressable
+            style={{ backgroundColor: '#ef4444', paddingVertical: 20, paddingHorizontal: 40, borderRadius: 12 }}
+            onPress={takeMissionPhoto}
+          >
+            <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>📷 撮影してアラームを止める</Text>
+          </Pressable>
+        </View>
+      );
+    }
+    
+    return (
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 40 }}>
+      <View style={styles.goalCard}>
+        <Text style={styles.goalTitle}>🌅 SAMURAI KING ALARM</Text>
+        <Text style={styles.goalSub}>カメラで撮影しないと止まらない。逃げ場なし。</Text>
+        
+        <Text style={[styles.goalSub, { marginTop: 20, fontWeight: 'bold' }]}>⏰ 起床時間</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
+          <View style={{ alignItems: 'center' }}>
+            <Pressable onPress={() => setAlarmHour(h => (h + 1) % 24)} style={{ padding: 10 }}>
+              <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
+            </Pressable>
+            <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmHour).padStart(2, '0')}</Text>
+            <Pressable onPress={() => setAlarmHour(h => (h - 1 + 24) % 24)} style={{ padding: 10 }}>
+              <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
+            </Pressable>
+          </View>
+          <Text style={{ color: '#fff', fontSize: 48, marginHorizontal: 8 }}>:</Text>
+          <View style={{ alignItems: 'center' }}>
+            <Pressable onPress={() => setAlarmMinute(m => (m + 15) % 60)} style={{ padding: 10 }}>
+              <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
+            </Pressable>
+            <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmMinute).padStart(2, '0')}</Text>
+            <Pressable onPress={() => setAlarmMinute(m => (m - 15 + 60) % 60)} style={{ padding: 10 }}>
+              <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
+            </Pressable>
+          </View>
+        </View>
+        
+        <Text style={[styles.goalSub, { marginTop: 20, fontWeight: 'bold' }]}>📸 撮影ミッション</Text>
+        <Text style={styles.goalSub}>この場所を撮影しないとアラームが止まらない</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 12 }}>
+          {(['冷蔵庫', '洗面台', '玄関'] as const).map(m => (
+            <Pressable
+              key={m}
+              onPress={() => setAlarmMission(m)}
+              style={{
+                backgroundColor: alarmMission === m ? '#2DD4BF' : '#374151',
+                paddingVertical: 12,
+                paddingHorizontal: 20,
+                borderRadius: 8,
+                marginHorizontal: 4,
+              }}
+            >
+              <Text style={{ color: alarmMission === m ? '#000' : '#fff', fontWeight: 'bold' }}>{m}</Text>
+            </Pressable>
+          ))}
+        </View>
+        
+        <Pressable
+          style={[styles.primaryButton, { marginTop: 24, backgroundColor: alarmSet ? '#ef4444' : '#2DD4BF' }]}
+          onPress={() => {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setAlarmSet(!alarmSet);
+            if (!alarmSet) {
+              Alert.alert('アラーム設定完了', 
+                alarmHour + ':' + String(alarmMinute).padStart(2, '0') + ' に起床せよ。\n撮影場所：' + alarmMission + '\n\n※実際のアラーム機能は次のアップデートで追加予定');
+            }
+          }}
+        >
+          <Text style={styles.primaryButtonText}>{alarmSet ? 'アラーム解除' : 'アラームを設定'}</Text>
+        </Pressable>
+        
+        {alarmSet && (
+          <Text style={{ color: '#2DD4BF', textAlign: 'center', marginTop: 12 }}>
+            ⏰ {alarmHour}:{String(alarmMinute).padStart(2, '0')} にセット済み
+          </Text>
+        )}
+        
+        {/* テスト用ボタン */}
+        <Pressable
+          style={[styles.secondaryButton, { marginTop: 20 }]}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            startAlarmShout();
+          }}
+        >
+          <Text style={styles.secondaryButtonText}>🔔 テスト：アラームを鳴らす</Text>
+        </Pressable>
+      </View>
+    </ScrollView>
+  );
+  };
+
   const renderFocusTab = () => (
     <View style={{ flex: 1 }}>
       {/* モード選択画面 */}
@@ -2811,6 +3102,7 @@ export default function App() {
                       {tab === 'review' && renderReviewTab()}
                       {tab === 'browser' && renderBrowserTab()}
                       {tab === 'focus' && renderFocusTab()}
+                      {tab === 'alarm' && renderAlarmTab()}
                       {tab === 'gratitude' && renderGratitudeTab()}
                       {tab === 'settings' && renderSettingsTab()}
                     </>

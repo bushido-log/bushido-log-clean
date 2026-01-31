@@ -37,14 +37,7 @@ const SAMURAI_TTS_URL = `${API_BASE}/tts`;
 const SAMURAI_CHAT_URL = `${API_BASE}/samurai-chat`;
 const SAMURAI_MISSION_URL = `${API_BASE}/mission`;
 
-// 音ファイル
-const STARTUP_SOUND = require('./sounds/startup.mp3');
-const TAP_SOUND = require('./sounds/tap.mp3');
-const CONFIRM_SOUND = require('./sounds/confirm.mp3');
-const RITUAL_SOUND = require('./sounds/ritual.mp3');
-const CHECK_SOUND = require('./sounds/check.mp3');
-const CORRECT_SOUND = require('./sounds/correct.mp3');
-const WRONG_SOUND = require('./sounds/wrong.mp3');
+const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
 
 const SESSION_KEY = 'samurai_session_id';
 
@@ -306,32 +299,7 @@ async function playSound(source: any) {
 }
 
 async function playPressSound() {
-  await playSound(STARTUP_SOUND);
-}
-
-// 各種サウンド再生
-async function playTapSound() {
-  await playSound(TAP_SOUND);
-}
-
-async function playConfirmSound() {
-  await playSound(CONFIRM_SOUND);
-}
-
-async function playRitualSound() {
-  await playSound(RITUAL_SOUND);
-}
-
-async function playCheckSound() {
-  await playSound(CHECK_SOUND);
-}
-
-async function playCorrectSound() {
-  await playSound(CORRECT_SOUND);
-}
-
-async function playWrongSound() {
-  await playSound(WRONG_SOUND);
+  await playSound(PRESS_SOUND);
 }
 
 // =========================
@@ -443,7 +411,6 @@ export default function App() {
   };
 
   const showSaveSuccess = (message: string = '一太刀入魂。保存した。') => {
-    playConfirmSound();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaveToastMessage(message);
     setShowSaveToast(true);
@@ -777,7 +744,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const { sound } = await Audio.Sound.createAsync(STARTUP_SOUND);
+        const { sound } = await Audio.Sound.createAsync(PRESS_SOUND);
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate((status: any) => {
           if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
@@ -1070,7 +1037,7 @@ export default function App() {
       if (type === 'select') Haptics.selectionAsync().catch(() => {});
       if (type === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
     }
-    if (settings.enableSfx) await playTapSound();
+    if (settings.enableSfx) await playPressSound();
   };
 
   // =========================
@@ -1084,7 +1051,6 @@ export default function App() {
 
   // 欲望可視化: 画像選択
   const pickYokubouImage = async () => {
-    playTapSound();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -1100,7 +1066,6 @@ export default function App() {
 
   // 欲望可視化: カメラ撮影
   const takeYokubouPhoto = async () => {
-    playTapSound();
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('カメラの許可が必要です', 'カメラを使うには設定から許可してください。');
@@ -1121,7 +1086,6 @@ export default function App() {
   // 欲望可視化: AI送信
   const handleYokubouSubmit = async () => {
     if (!yokubouImage || !yokubouReason.trim()) return;
-    playTapSound();
     setIsLoadingYokubou(true);
     try {
       // 欲望可視化専用のプロンプト
@@ -1156,7 +1120,6 @@ export default function App() {
   // 欲望可視化: 保存
   const handleYokubouSave = async () => {
     if (!yokubouImage || !yokubouAiReply) return;
-    playTapSound();
     const entry: HistoryEntry = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
@@ -1175,7 +1138,6 @@ export default function App() {
 
   // 欲望可視化: リセット
   const resetYokubou = () => {
-    playTapSound();
     setYokubouImage(null);
     setYokubouReason('');
     setYokubouAiReply('');
@@ -1336,7 +1298,6 @@ export default function App() {
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
-    playCheckSound();
     await tap('select');
 
     const newLogs = dailyLogs.map(log => {
@@ -1352,7 +1313,6 @@ export default function App() {
   };
 
   const toggleRoutineDone = async (date: string, label: string) => {
-    playCheckSound();
     await tap('select');
 
     const newLogs = dailyLogs.map(log => {
@@ -1560,7 +1520,6 @@ export default function App() {
   // Calendar edit actions
   // =========================
   const handleEditLogFromCalendar = (log: DailyLog) => {
-    playTapSound();
     setEditingLogDate(log.date);
     setEditProud(log.review?.proud ?? '');
     setEditLesson(log.review?.lesson ?? '');
@@ -1606,7 +1565,6 @@ export default function App() {
   // Routine chip toggle
   // =========================
   const handleToggleRoutineChip = (label: string) => {
-    playTapSound();
     if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
     const lines = routineText.split('\n').map(l => l.trim()).filter(Boolean);
     const exists = lines.includes(label);
@@ -1659,7 +1617,6 @@ export default function App() {
         <Pressable 
           style={styles.dojoGateOverlay}
           onPress={() => {
-            playConfirmSound();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setShowDojoGate(false);
           }}
@@ -1674,7 +1631,6 @@ export default function App() {
       <Pressable
         style={styles.settingsIconButton}
         onPress={() => {
-          playTapSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           setTab('settings');
           setShowStartScreen(false);
@@ -1688,7 +1644,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('consult');
           setShowStartScreen(false);
@@ -1700,7 +1655,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('gratitude');
           setShowStartScreen(false);
@@ -1712,7 +1666,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('goal');
           setShowStartScreen(false);
@@ -1724,7 +1677,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('review');
           setShowStartScreen(false);
@@ -1736,7 +1688,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('focus');
           setShowStartScreen(false);
@@ -1750,7 +1701,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('alarm');
           setShowStartScreen(false);
@@ -1774,7 +1724,6 @@ export default function App() {
   const renderTabButton = (value: typeof tab, label: string) => (
     <Pressable
       onPress={() => {
-        playTapSound();
         if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
         setTab(value);
       }}
@@ -1809,13 +1758,13 @@ export default function App() {
         <View style={styles.consultModeRow}>
           <Pressable
             style={[styles.consultModeButton, consultMode === 'text' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('text'); }}
+            onPress={() => setConsultMode('text')}
           >
             <Text style={[styles.consultModeText, consultMode === 'text' && styles.consultModeTextActive]}>テキスト相談</Text>
           </Pressable>
           <Pressable
             style={[styles.consultModeButton, consultMode === 'visualize' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('visualize'); }}
+            onPress={() => setConsultMode('visualize')}
           >
             <Text style={[styles.consultModeText, consultMode === 'visualize' && styles.consultModeTextActive]}>欲望可視化</Text>
           </Pressable>
@@ -2300,20 +2249,22 @@ export default function App() {
                   placeholderTextColor="#666"
                 />
 
-                <Pressable style={styles.appleMainButton} onPress={handleSaveEditedLog}>
-                  <Text style={styles.appleMainButtonText}>変更を保存</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.appleCancelLink}
-                  onPress={() => {
-                    setEditingLogDate(null);
-                    setEditProud('');
-                    setEditLesson('');
-                    setEditNextAction('');
-                  }}
-                >
-                  <Text style={styles.appleCancelLinkText}>キャンセル</Text>
-                </Pressable>
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={handleSaveEditedLog}>
+                    <Text style={styles.historyButtonText}>保存</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.historyButton, styles.historyDeleteButton]}
+                    onPress={() => {
+                      setEditingLogDate(null);
+                      setEditProud('');
+                      setEditLesson('');
+                      setEditNextAction('');
+                    }}
+                  >
+                    <Text style={styles.historyButtonText}>キャンセル</Text>
+                  </Pressable>
+                </View>
               </>
             ) : activeLog.date === getTodayStr() ? (
               <>
@@ -2347,12 +2298,14 @@ export default function App() {
                   placeholderTextColor="#666"
                 />
 
-                <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
-                  <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
-                </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
-                  <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
-                </Pressable>
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.saveReviewButton} onPress={handleSaveNightReview}>
+                    <Text style={styles.saveReviewButtonText}>💾 保存</Text>
+                  </Pressable>
+                  <Pressable style={[styles.historyButton, styles.historyDeleteButton]} onPress={() => handleDeleteLog(activeLog.date)}>
+                    <Text style={styles.historyButtonText}>削除</Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <>
@@ -2365,12 +2318,14 @@ export default function App() {
                 <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
                 <Text style={styles.historyText}>{activeLog.review?.nextAction || '（未入力）'}</Text>
 
-                <Pressable style={styles.appleEditButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
-                  <Text style={styles.appleEditButtonText}>編集する</Text>
-                </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
-                  <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
-                </Pressable>
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
+                    <Text style={styles.historyButtonText}>編集</Text>
+                  </Pressable>
+                  <Pressable style={[styles.historyButton, styles.historyDeleteButton]} onPress={() => handleDeleteLog(activeLog.date)}>
+                    <Text style={styles.historyButtonText}>削除</Text>
+                  </Pressable>
+                </View>
               </>
             )}
           </View>
@@ -2409,8 +2364,8 @@ export default function App() {
               placeholderTextColor="#666"
             />
 
-            <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
-              <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
+            <Pressable style={[styles.saveReviewButton, { flex: 0 }]} onPress={handleSaveNightReview}>
+              <Text style={styles.saveReviewButtonText}>💾 今日の振り返りを保存</Text>
             </Pressable>
           </View>
         )}
@@ -2531,7 +2486,7 @@ export default function App() {
           >
             <Text style={styles.paywallRestoreText}>購入を復元</Text>
           </Pressable>
-          <Pressable onPress={() => { playTapSound(); setShowPaywall(false); }}>
+          <Pressable onPress={() => setShowPaywall(false)}>
             <Text style={styles.paywallCloseText}>今はやめる</Text>
           </Pressable>
         </View>
@@ -2543,12 +2498,10 @@ export default function App() {
   const handleQuizSubmit = () => {
     const current = quizData[quizIndex];
     if (quizAnswer.trim() === current.a) {
-      playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setQuizResult('correct');
       setQuizScore(quizScore + 1);
     } else {
-      playWrongSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setQuizResult('wrong');
     }
@@ -2683,7 +2636,6 @@ export default function App() {
       Alert.alert('目的が必要', '何のために開くのか、目的を入力せよ。');
       return;
     }
-    playTapSound();
     // ランダムな問題を選択
     const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
     setCurrentFocusQ(randomQ);
@@ -2694,7 +2646,6 @@ export default function App() {
 
   const handleFocusQuestionSubmit = () => {
     if (focusQuestionAnswer.trim().toLowerCase() === currentFocusQ.a.toLowerCase()) {
-      playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowFocusQuestion(false);
       setShowFocusEntry(false);
@@ -2746,21 +2697,21 @@ export default function App() {
         <Text style={[styles.goalSub, { marginTop: 20, fontWeight: 'bold' }]}>⏰ 起床時間</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
           <View style={{ alignItems: 'center' }}>
-            <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h + 1) % 24); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmHour(h => (h + 1) % 24)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
             </Pressable>
             <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmHour).padStart(2, '0')}</Text>
-            <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h - 1 + 24) % 24); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmHour(h => (h - 1 + 24) % 24)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
             </Pressable>
           </View>
           <Text style={{ color: '#fff', fontSize: 48, marginHorizontal: 8 }}>:</Text>
           <View style={{ alignItems: 'center' }}>
-            <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m + 15) % 60); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmMinute(m => (m + 15) % 60)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
             </Pressable>
             <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmMinute).padStart(2, '0')}</Text>
-            <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m - 15 + 60) % 60); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmMinute(m => (m - 15 + 60) % 60)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
             </Pressable>
           </View>
@@ -2772,7 +2723,7 @@ export default function App() {
           {(['冷蔵庫', '洗面台', '玄関'] as const).map(m => (
             <Pressable
               key={m}
-              onPress={() => { playTapSound(); setAlarmMission(m); }}
+              onPress={() => setAlarmMission(m)}
               style={{
                 backgroundColor: alarmMission === m ? '#2DD4BF' : '#374151',
                 paddingVertical: 12,
@@ -2789,7 +2740,6 @@ export default function App() {
         <Pressable
           style={[styles.primaryButton, { marginTop: 24, backgroundColor: alarmSet ? '#ef4444' : '#2DD4BF' }]}
           onPress={() => {
-            playTapSound();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setAlarmSet(!alarmSet);
             if (!alarmSet) {
@@ -3133,9 +3083,6 @@ export default function App() {
   // 感謝タブ
   // 10個達成時にAIが感謝リストを見て感想を生成
   const generateGratitudeComment = async (list: string[]) => {
-    // 10個達成の特別演出
-    playRitualSound();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsLoadingGratitudeComment(true);
     try {
       const gratitudeText = list.join('、');
@@ -3188,7 +3135,6 @@ export default function App() {
 
   // 1日1善: 画像選択
   const pickGoodDeedImage = async () => {
-    playTapSound();
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
@@ -3202,7 +3148,6 @@ export default function App() {
 
   // 1日1善: カメラ撮影
   const takeGoodDeedPhoto = async () => {
-    playTapSound();
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
       Alert.alert('カメラの許可が必要です');
@@ -3326,7 +3271,7 @@ export default function App() {
             {isPro ? (
               <Pressable
                 style={styles.quizButton}
-                onPress={() => { playTapSound(); setShowQuiz(true); }}
+                onPress={() => setShowQuiz(true)}
               >
                 <Text style={styles.quizButtonText}>学びのクイズに挑戦</Text>
               </Pressable>
@@ -3628,7 +3573,6 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <Pressable
                   onPress={() => {
-                    playConfirmSound();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowStartScreen(true);
                   }}
@@ -3720,7 +3664,7 @@ export default function App() {
               </>
             )}
             
-            <Pressable onPress={() => { playTapSound(); setShowQuiz(false); setQuizIndex(0); setQuizResult(null); }}>
+            <Pressable onPress={() => { setShowQuiz(false); setQuizIndex(0); setQuizResult(null); }}>
               <Text style={styles.quizCloseText}>閉じる</Text>
             </Pressable>
           </View>
@@ -5538,48 +5482,5 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 14,
     fontWeight: 'bold',
-  },
-  // Apple風ボタンスタイル
-  appleMainButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  appleMainButtonText: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  appleEditButton: {
-    backgroundColor: '#2c2c2e',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  appleEditButtonText: {
-    color: '#007AFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  appleDeleteLink: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  appleDeleteLinkText: {
-    color: '#FF3B30',
-    fontSize: 15,
-  },
-  appleCancelLink: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  appleCancelLinkText: {
-    color: '#007AFF',
-    fontSize: 15,
   },
 });

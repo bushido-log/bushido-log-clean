@@ -37,14 +37,7 @@ const SAMURAI_TTS_URL = `${API_BASE}/tts`;
 const SAMURAI_CHAT_URL = `${API_BASE}/samurai-chat`;
 const SAMURAI_MISSION_URL = `${API_BASE}/mission`;
 
-// 音ファイル
-const STARTUP_SOUND = require('./sounds/startup.mp3');
-const TAP_SOUND = require('./sounds/tap.mp3');
-const CONFIRM_SOUND = require('./sounds/confirm.mp3');
-const RITUAL_SOUND = require('./sounds/ritual.mp3');
-const CHECK_SOUND = require('./sounds/check.mp3');
-const CORRECT_SOUND = require('./sounds/correct.mp3');
-const WRONG_SOUND = require('./sounds/wrong.mp3');
+const PRESS_SOUND = require('./sounds/taiko-hit.mp3');
 
 const SESSION_KEY = 'samurai_session_id';
 
@@ -161,15 +154,6 @@ type HistoryEntry = {
   issue: string;
   reflection: string;
   reply: string;
-  imageUri?: string;
-};
-
-type GoodDeedEntry = {
-  id: string;
-  date: string;
-  text: string;
-  imageUri?: string;
-  tag?: string;
 };
 
 type NightReview = {
@@ -193,7 +177,6 @@ type DailyLog = {
   samuraiMission?: string;
   missionCompleted?: boolean;
   routineDone?: string[];
-  goodDeeds?: string[];
 };
 
 type OnboardingData = {
@@ -306,32 +289,7 @@ async function playSound(source: any) {
 }
 
 async function playPressSound() {
-  await playSound(STARTUP_SOUND);
-}
-
-// 各種サウンド再生
-async function playTapSound() {
-  await playSound(TAP_SOUND);
-}
-
-async function playConfirmSound() {
-  await playSound(CONFIRM_SOUND);
-}
-
-async function playRitualSound() {
-  await playSound(RITUAL_SOUND);
-}
-
-async function playCheckSound() {
-  await playSound(CHECK_SOUND);
-}
-
-async function playCorrectSound() {
-  await playSound(CORRECT_SOUND);
-}
-
-async function playWrongSound() {
-  await playSound(WRONG_SOUND);
+  await playSound(PRESS_SOUND);
 }
 
 // =========================
@@ -443,7 +401,6 @@ export default function App() {
   };
 
   const showSaveSuccess = (message: string = '一太刀入魂。保存した。') => {
-    playConfirmSound();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaveToastMessage(message);
     setShowSaveToast(true);
@@ -464,13 +421,6 @@ export default function App() {
   const [showGratitudeComplete, setShowGratitudeComplete] = useState(false);
   const [gratitudeAiComment, setGratitudeAiComment] = useState('');
   const [isLoadingGratitudeComment, setIsLoadingGratitudeComment] = useState(false);
-  // 1日1善
-  const [goodDeedList, setGoodDeedList] = useState<GoodDeedEntry[]>([]);
-  const [goodDeedText, setGoodDeedText] = useState('');
-  const [goodDeedImage, setGoodDeedImage] = useState<string | null>(null);
-  const [goodDeedTag, setGoodDeedTag] = useState('');
-  const GOOD_DEED_KEY = 'BUSHIDO_GOOD_DEED_V1';
-  const GOOD_DEED_TAGS = ['掃除', '寄付', '家族', '仕事', '学び', '健康', '他者'];
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizIndex, setQuizIndex] = useState(0);
   
@@ -777,7 +727,7 @@ export default function App() {
   useEffect(() => {
     (async () => {
       try {
-        const { sound } = await Audio.Sound.createAsync(STARTUP_SOUND);
+        const { sound } = await Audio.Sound.createAsync(PRESS_SOUND);
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate((status: any) => {
           if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
@@ -864,7 +814,7 @@ export default function App() {
           if (!Number.isNaN(num)) setTotalXp(num);
         }
       } catch (e) {
-        console.error('Failed to load XP', e);
+        consoleror('Failed to load XP', e);
       }
     })();
   }, []);
@@ -1023,166 +973,7 @@ export default function App() {
     try {
       await AsyncStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
     } catch (e) {
-      console.error('Failed to save daily logs', e);
-    }
-  };
-
-  const upsertLogForDate = async (date: string, updater: (prev: DailyLog | undefined) => DailyLog) => {
-    const prev = dailyLogs.find(l => l.date === date);
-    const updated = updater(prev);
-    const others = dailyLogs.filter(l => l.date !== date);
-    const newLogs = [...others, updated].sort((a, b) => a.date.localeCompare(b.date));
-    setDailyLogs(newLogs);
-    await saveDailyLogsToStorage(newLogs);
-  };
-
-  const upsertTodayLog = async (updater: (prev: DailyLog | undefined) => DailyLog) => {
-    return upsertLogForDate(getTodayStr(), updater);
-  };
-
-  // =========================
-  // TTS (server audio)
-  // =========================
-  const speakSamurai = async (text: string) => {
-    if (!text || !settings.autoVoice) return;
-
-    const url = `${SAMURAI_TTS_URL}?text=${encodeURIComponent(text)}`;
-    try {
-      const { sound } = await Audio.Sound.createAsync({ uri: url });
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status: any) => {
-        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
-      });
-    } catch (e) {
-      console.log('[TTS] error', e);
-    }
-  };
-
-  // =========================
-  // Haptics/SFX wrappers
-  // =========================
-  const tap = async (type: 'light' | 'medium' | 'select' | 'success' = 'select') => {
-    if (!settings.enableHaptics && !settings.enableSfx) return;
-
-    if (settings.enableHaptics) {
-      if (type === 'light') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
-      if (type === 'medium') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {});
-      if (type === 'select') Haptics.selectionAsync().catch(() => {});
-      if (type === 'success') Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    }
-    if (settings.enableSfx) await playTapSound();
-  };
-
-  // =========================
-  // Chat actions
-  // =========================
-  const handleUrgePress = async () => {
-    setIsSummoned(true);
-    await tap('medium');
-    speakSamurai(urgeMessage);
-  };
-
-  // 欲望可視化: 画像選択
-  const pickYokubouImage = async () => {
-    playTapSound();
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setYokubouImage(result.assets[0].uri);
-      setYokubouAiReply('');
-      setYokubouSaved(false);
-    }
-  };
-
-  // 欲望可視化: カメラ撮影
-  const takeYokubouPhoto = async () => {
-    playTapSound();
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('カメラの許可が必要です', 'カメラを使うには設定から許可してください。');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setYokubouImage(result.assets[0].uri);
-      setYokubouAiReply('');
-      setYokubouSaved(false);
-    }
-  };
-
-  // 欲望可視化: AI送信
-  const handleYokubouSubmit = async () => {
-    if (!yokubouImage || !yokubouReason.trim()) return;
-    playTapSound();
-    setIsLoadingYokubou(true);
-    try {
-      // 欲望可視化専用のプロンプト
-      const yokubouPrompt = `ユーザーが「今やりたいこと」の写真を撮り、その理由を書きました。
-
-ユーザーの理由：「${yokubouReason}」
-
-あなたはサムライキングとして、ユーザーの言葉を深く理解した上で返答してください。
-- ユーザーが書いた内容に具体的に触れること
-- 説教や否定ではなく、気づきを与える一言
-- 最大2〜3文で短く
-- 最後は考えさせる問いかけで締める
-- もし前向きな行動（勉強、運動、仕事など）なら応援する`;
-
-      const res = await fetch(SAMURAI_CHAT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          text: yokubouPrompt,
-        }),
-      });
-      const data = await res.json();
-      const reply = data.reply || 'その行動、本当に今のお前に必要か？';
-      setYokubouAiReply(reply);
-      if (settings.autoVoice) speakSamurai(reply);
-    } catch {
-      setYokubouAiReply('立ち止まれ。呼吸しろ。今じゃない。');
-    }
-    setIsLoadingYokubou(false);
-  };
-
-  // 欲望可視化: 保存
-  const handleYokubouSave = async () => {
-    if (!yokubouImage || !yokubouAiReply) return;
-    playTapSound();
-    const entry: HistoryEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      issue: '[欲望可視化] ' + yokubouReason,
-      reflection: '',
-      reply: yokubouAiReply,
-      imageUri: yokubouImage,
-    };
-    const newHistory = [...history, entry];
-    setHistory(newHistory);
-    await AsyncStorage.setItem(HISTORY_KEY, JSON.stringify(newHistory));
-    setYokubouSaved(true);
-    showSaveSuccess('止まれ。呼吸しろ。');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  // 欲望可視化: リセット
-  const resetYokubou = () => {
-    playTapSound();
-    setYokubouImage(null);
-    setYokubouReason('');
-    setYokubouAiReply('');
-    setYokubouSaved(false);
-  };
-
-  const handleSend = async () => {
+      console.erroconst handleSend = async () => {
     // 課金チェック: Proでない場合、2回目以降はPaywall表示
     if (!isPro && samuraiKingUses >= 1) {
       setShowPaywall(true);
@@ -1336,7 +1127,6 @@ export default function App() {
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
-    playCheckSound();
     await tap('select');
 
     const newLogs = dailyLogs.map(log => {
@@ -1352,7 +1142,6 @@ export default function App() {
   };
 
   const toggleRoutineDone = async (date: string, label: string) => {
-    playCheckSound();
     await tap('select');
 
     const newLogs = dailyLogs.map(log => {
@@ -1560,7 +1349,6 @@ export default function App() {
   // Calendar edit actions
   // =========================
   const handleEditLogFromCalendar = (log: DailyLog) => {
-    playTapSound();
     setEditingLogDate(log.date);
     setEditProud(log.review?.proud ?? '');
     setEditLesson(log.review?.lesson ?? '');
@@ -1606,7 +1394,6 @@ export default function App() {
   // Routine chip toggle
   // =========================
   const handleToggleRoutineChip = (label: string) => {
-    playTapSound();
     if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
     const lines = routineText.split('\n').map(l => l.trim()).filter(Boolean);
     const exists = lines.includes(label);
@@ -1659,7 +1446,6 @@ export default function App() {
         <Pressable 
           style={styles.dojoGateOverlay}
           onPress={() => {
-            playConfirmSound();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setShowDojoGate(false);
           }}
@@ -1674,7 +1460,6 @@ export default function App() {
       <Pressable
         style={styles.settingsIconButton}
         onPress={() => {
-          playTapSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
           setTab('settings');
           setShowStartScreen(false);
@@ -1688,7 +1473,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('consult');
           setShowStartScreen(false);
@@ -1700,7 +1484,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('gratitude');
           setShowStartScreen(false);
@@ -1712,7 +1495,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('goal');
           setShowStartScreen(false);
@@ -1724,7 +1506,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('review');
           setShowStartScreen(false);
@@ -1736,7 +1517,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('focus');
           setShowStartScreen(false);
@@ -1750,7 +1530,6 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('alarm');
           setShowStartScreen(false);
@@ -1774,7 +1553,6 @@ export default function App() {
   const renderTabButton = (value: typeof tab, label: string) => (
     <Pressable
       onPress={() => {
-        playTapSound();
         if (settings.enableHaptics) Haptics.selectionAsync().catch(() => {});
         setTab(value);
       }}
@@ -1805,90 +1583,7 @@ export default function App() {
         </Pressable>
         <Text style={styles.caption}>ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。</Text>
 
-        {/* 相談モード切り替え */}
-        <View style={styles.consultModeRow}>
-          <Pressable
-            style={[styles.consultModeButton, consultMode === 'text' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('text'); }}
-          >
-            <Text style={[styles.consultModeText, consultMode === 'text' && styles.consultModeTextActive]}>テキスト相談</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.consultModeButton, consultMode === 'visualize' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('visualize'); }}
-          >
-            <Text style={[styles.consultModeText, consultMode === 'visualize' && styles.consultModeTextActive]}>欲望可視化</Text>
-          </Pressable>
-        </View>
-
-        {consultMode === 'visualize' ? (
-          <View style={styles.yokubouBox}>
-            <Text style={styles.yokubouTitle}>📸 欲望を可視化せよ</Text>
-            <Text style={styles.yokubouSub}>今やりたいことの写真を撮り、なぜやりたいか書け。AIが核心を突く。</Text>
-
-            {yokubouImage ? (
-              <Pressable style={styles.yokubouImagePicker} onPress={pickYokubouImage}>
-                <Image source={{ uri: yokubouImage }} style={styles.yokubouImagePreview} />
-              </Pressable>
-            ) : (
-              <View style={styles.yokubouImagePicker}>
-                <Text style={styles.yokubouImagePlaceholder}>欲望の対象を撮影せよ</Text>
-              </View>
-            )}
-
-            <View style={styles.yokubouButtonRow}>
-              <Pressable style={styles.yokubouCameraButton} onPress={takeYokubouPhoto}>
-                <Text style={styles.yokubouCameraButtonText}>📷 撮影</Text>
-              </Pressable>
-              <Pressable style={styles.yokubouGalleryButton} onPress={pickYokubouImage}>
-                <Text style={styles.yokubouGalleryButtonText}>🖼 選択</Text>
-              </Pressable>
-            </View>
-
-            <TextInput
-              style={styles.yokubouInput}
-              value={yokubouReason}
-              onChangeText={setYokubouReason}
-              placeholder="なぜ今それをやりたい？正直に書け。"
-              placeholderTextColor="#666"
-              multiline
-            />
-
-            <Pressable
-              style={[styles.yokubouSubmitButton, (!yokubouImage || !yokubouReason.trim()) && { opacity: 0.5 }]}
-              onPress={handleYokubouSubmit}
-              disabled={!yokubouImage || !yokubouReason.trim() || isLoadingYokubou}
-            >
-              {isLoadingYokubou ? (
-                <ActivityIndicator color="#000" />
-              ) : (
-                <Text style={styles.yokubouSubmitText}>AIに問う</Text>
-              )}
-            </Pressable>
-
-            {yokubouAiReply !== '' && (
-              <View style={styles.yokubouReplyBox}>
-                <Text style={styles.yokubouReplyLabel}>サムライキング：</Text>
-                <Text style={styles.yokubouReplyText}>{yokubouAiReply}</Text>
-
-                {!yokubouSaved && (
-                  <Pressable style={styles.yokubouSaveButton} onPress={handleYokubouSave}>
-                    <Text style={styles.yokubouSaveText}>ログに保存</Text>
-                  </Pressable>
-                )}
-                {yokubouSaved && (
-                  <Text style={styles.yokubouSavedText}>✓ 保存済み</Text>
-                )}
-              </View>
-            )}
-
-            {(yokubouImage || yokubouReason || yokubouAiReply) && (
-              <Pressable style={styles.yokubouResetButton} onPress={resetYokubou}>
-                <Text style={styles.yokubouResetText}>リセット</Text>
-              </Pressable>
-            )}
-          </View>
-        ) : !isSummoned ? (
+        {!isSummoned ? (
           <View style={styles.summonBox}>
             <Text style={styles.summonTitle}>Samurai King is waiting…</Text>
             <Text style={styles.summonText}>
@@ -1989,10 +1684,6 @@ export default function App() {
                           return (
                             <View key={entry.id} style={styles.historyEntry}>
                               {dateLabel !== '' && <Text style={styles.historyDate}>{dateLabel}</Text>}
-
-                              {entry.imageUri && (
-                                <Image source={{ uri: entry.imageUri }} style={styles.historyImage} />
-                              )}
 
                               <Text style={styles.historyLabel}>◆ 相談：</Text>
                               <Text style={styles.historyText}>{entry.issue}</Text>
@@ -2177,6 +1868,24 @@ export default function App() {
       )}
 
       <View style={styles.goalCard}>
+        <Text style={styles.goalTitle}>夜の振り返り</Text>
+        <Text style={styles.goalSub}>今日一日を３つの質問で振り返るでござる。</Text>
+
+        <Text style={styles.questionText}>1. 今日、一番誇れる行動はなんだ？</Text>
+        <TextInput style={styles.bigInput} value={proudInput} onChangeText={setProudInput} multiline />
+
+        <Text style={styles.questionText}>2. 気づいたこと・学んだことは？</Text>
+        <TextInput style={styles.bigInput} value={lessonInput} onChangeText={setLessonInput} multiline />
+
+        <Text style={styles.questionText}>3. 明日ひとつだけ変えてみる行動は？</Text>
+        <TextInput style={styles.bigInput} value={nextActionInput} onChangeText={setNextActionInput} multiline />
+
+        <Pressable style={styles.primaryButton} onPress={handleSaveNightReview}>
+          <Text style={styles.primaryButtonText}>今日の振り返りを保存する</Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>サムライRPGダッシュボード</Text>
         <Text style={styles.goalSub}>連続ログ：{streakCount} 日でござる🔥</Text>
         <Text style={styles.goalSub}>
@@ -2257,17 +1966,6 @@ export default function App() {
               ))
             )}
 
-            <Text style={styles.historyLabel}>◆ 今日の善行</Text>
-            {!activeLog.goodDeeds || activeLog.goodDeeds.length === 0 ? (
-              <Text style={styles.historyText}>（記録なし）</Text>
-            ) : (
-              activeLog.goodDeeds.map((deed, idx) => (
-                <View key={idx} style={styles.goodDeedLogItem}>
-                  <Text style={styles.goodDeedLogText}>🌟 {deed}</Text>
-                </View>
-              ))
-            )}
-
             {editingLogDate === activeLog.date ? (
               <>
                 <Text style={styles.historyLabel}>◆ 今日一番誇れる行動（編集）</Text>
@@ -2300,59 +1998,22 @@ export default function App() {
                   placeholderTextColor="#666"
                 />
 
-                <Pressable style={styles.appleMainButton} onPress={handleSaveEditedLog}>
-                  <Text style={styles.appleMainButtonText}>変更を保存</Text>
-                </Pressable>
-                <Pressable
-                  style={styles.appleCancelLink}
-                  onPress={() => {
-                    setEditingLogDate(null);
-                    setEditProud('');
-                    setEditLesson('');
-                    setEditNextAction('');
-                  }}
-                >
-                  <Text style={styles.appleCancelLinkText}>キャンセル</Text>
-                </Pressable>
-              </>
-            ) : activeLog.date === getTodayStr() ? (
-              <>
-                <Text style={styles.historyLabel}>◆ 今日一番誇れる行動</Text>
-                <TextInput
-                  style={styles.bigInput}
-                  multiline
-                  value={proudInput}
-                  onChangeText={setProudInput}
-                  placeholder="今日一番誇れる行動は？"
-                  placeholderTextColor="#666"
-                />
-
-                <Text style={styles.historyLabel}>◆ 気づき・学び</Text>
-                <TextInput
-                  style={styles.bigInput}
-                  multiline
-                  value={lessonInput}
-                  onChangeText={setLessonInput}
-                  placeholder="気づいたこと・学んだことは？"
-                  placeholderTextColor="#666"
-                />
-
-                <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
-                <TextInput
-                  style={styles.bigInput}
-                  multiline
-                  value={nextActionInput}
-                  onChangeText={setNextActionInput}
-                  placeholder="明日ひとつだけ変えてみる行動は？"
-                  placeholderTextColor="#666"
-                />
-
-                <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
-                  <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
-                </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
-                  <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
-                </Pressable>
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={handleSaveEditedLog}>
+                    <Text style={styles.historyButtonText}>保存</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[styles.historyButton, styles.historyDeleteButton]}
+                    onPress={() => {
+                      setEditingLogDate(null);
+                      setEditProud('');
+                      setEditLesson('');
+                      setEditNextAction('');
+                    }}
+                  >
+                    <Text style={styles.historyButtonText}>キャンセル</Text>
+                  </Pressable>
+                </View>
               </>
             ) : (
               <>
@@ -2365,54 +2026,19 @@ export default function App() {
                 <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
                 <Text style={styles.historyText}>{activeLog.review?.nextAction || '（未入力）'}</Text>
 
-                <Pressable style={styles.appleEditButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
-                  <Text style={styles.appleEditButtonText}>編集する</Text>
-                </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
-                  <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
-                </Pressable>
+                <View style={styles.historyButtonsRow}>
+                  <Pressable style={styles.historyButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
+                    <Text style={styles.historyButtonText}>編集</Text>
+                  </Pressable>
+                  <Pressable style={[styles.historyButton, styles.historyDeleteButton]} onPress={() => handleDeleteLog(activeLog.date)}>
+                    <Text style={styles.historyButtonText}>削除</Text>
+                  </Pressable>
+                </View>
               </>
             )}
           </View>
         ) : (
-          <View style={{ marginTop: 8 }}>
-            <Text style={styles.historyDate}>{getTodayStr()}</Text>
-            <Text style={styles.goalSub}>今日の振り返りを書いてみよう</Text>
-
-            <Text style={styles.historyLabel}>◆ 今日一番誇れる行動</Text>
-            <TextInput
-              style={styles.bigInput}
-              multiline
-              value={proudInput}
-              onChangeText={setProudInput}
-              placeholder="今日一番誇れる行動は？"
-              placeholderTextColor="#666"
-            />
-
-            <Text style={styles.historyLabel}>◆ 気づき・学び</Text>
-            <TextInput
-              style={styles.bigInput}
-              multiline
-              value={lessonInput}
-              onChangeText={setLessonInput}
-              placeholder="気づいたこと・学んだことは？"
-              placeholderTextColor="#666"
-            />
-
-            <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
-            <TextInput
-              style={styles.bigInput}
-              multiline
-              value={nextActionInput}
-              onChangeText={setNextActionInput}
-              placeholder="明日ひとつだけ変えてみる行動は？"
-              placeholderTextColor="#666"
-            />
-
-            <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
-              <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
-            </Pressable>
-          </View>
+          <Text style={[styles.historyText, { marginTop: 8 }]}>まだサムライ日記はないでござる。</Text>
         )}
       </View>
     </ScrollView>
@@ -2531,7 +2157,7 @@ export default function App() {
           >
             <Text style={styles.paywallRestoreText}>購入を復元</Text>
           </Pressable>
-          <Pressable onPress={() => { playTapSound(); setShowPaywall(false); }}>
+          <Pressable onPress={() => setShowPaywall(false)}>
             <Text style={styles.paywallCloseText}>今はやめる</Text>
           </Pressable>
         </View>
@@ -2543,12 +2169,10 @@ export default function App() {
   const handleQuizSubmit = () => {
     const current = quizData[quizIndex];
     if (quizAnswer.trim() === current.a) {
-      playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setQuizResult('correct');
       setQuizScore(quizScore + 1);
     } else {
-      playWrongSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setQuizResult('wrong');
     }
@@ -2683,7 +2307,6 @@ export default function App() {
       Alert.alert('目的が必要', '何のために開くのか、目的を入力せよ。');
       return;
     }
-    playTapSound();
     // ランダムな問題を選択
     const randomQ = focusQuestions[Math.floor(Math.random() * focusQuestions.length)];
     setCurrentFocusQ(randomQ);
@@ -2694,7 +2317,6 @@ export default function App() {
 
   const handleFocusQuestionSubmit = () => {
     if (focusQuestionAnswer.trim().toLowerCase() === currentFocusQ.a.toLowerCase()) {
-      playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setShowFocusQuestion(false);
       setShowFocusEntry(false);
@@ -2746,21 +2368,21 @@ export default function App() {
         <Text style={[styles.goalSub, { marginTop: 20, fontWeight: 'bold' }]}>⏰ 起床時間</Text>
         <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 16 }}>
           <View style={{ alignItems: 'center' }}>
-            <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h + 1) % 24); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmHour(h => (h + 1) % 24)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
             </Pressable>
             <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmHour).padStart(2, '0')}</Text>
-            <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h - 1 + 24) % 24); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmHour(h => (h - 1 + 24) % 24)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
             </Pressable>
           </View>
           <Text style={{ color: '#fff', fontSize: 48, marginHorizontal: 8 }}>:</Text>
           <View style={{ alignItems: 'center' }}>
-            <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m + 15) % 60); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmMinute(m => (m + 15) % 60)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▲</Text>
             </Pressable>
             <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmMinute).padStart(2, '0')}</Text>
-            <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m - 15 + 60) % 60); }} style={{ padding: 10 }}>
+            <Pressable onPress={() => setAlarmMinute(m => (m - 15 + 60) % 60)} style={{ padding: 10 }}>
               <Text style={{ color: '#2DD4BF', fontSize: 24 }}>▼</Text>
             </Pressable>
           </View>
@@ -2772,7 +2394,7 @@ export default function App() {
           {(['冷蔵庫', '洗面台', '玄関'] as const).map(m => (
             <Pressable
               key={m}
-              onPress={() => { playTapSound(); setAlarmMission(m); }}
+              onPress={() => setAlarmMission(m)}
               style={{
                 backgroundColor: alarmMission === m ? '#2DD4BF' : '#374151',
                 paddingVertical: 12,
@@ -2789,7 +2411,6 @@ export default function App() {
         <Pressable
           style={[styles.primaryButton, { marginTop: 24, backgroundColor: alarmSet ? '#ef4444' : '#2DD4BF' }]}
           onPress={() => {
-            playTapSound();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             setAlarmSet(!alarmSet);
             if (!alarmSet) {
@@ -3133,9 +2754,6 @@ export default function App() {
   // 感謝タブ
   // 10個達成時にAIが感謝リストを見て感想を生成
   const generateGratitudeComment = async (list: string[]) => {
-    // 10個達成の特別演出
-    playRitualSound();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setIsLoadingGratitudeComment(true);
     try {
       const gratitudeText = list.join('、');
@@ -3169,106 +2787,6 @@ export default function App() {
     (text: string) => `感謝できる心、それが武士道だ。`,
     (text: string) => `その調子だ。続けよ。`,
   ];
-
-  // 1日1善: 読み込み
-  useEffect(() => {
-    (async () => {
-      try {
-        const saved = await AsyncStorage.getItem(GOOD_DEED_KEY);
-        if (saved) {
-          const list: GoodDeedEntry[] = JSON.parse(saved);
-          // 今日の分だけフィルタ
-          const today = getTodayStr();
-          const todayDeeds = list.filter(d => d.date.startsWith(today));
-          setGoodDeedList(todayDeeds);
-        }
-      } catch {}
-    })();
-  }, []);
-
-  // 1日1善: 画像選択
-  const pickGoodDeedImage = async () => {
-    playTapSound();
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setGoodDeedImage(result.assets[0].uri);
-    }
-  };
-
-  // 1日1善: カメラ撮影
-  const takeGoodDeedPhoto = async () => {
-    playTapSound();
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    if (!permission.granted) {
-      Alert.alert('カメラの許可が必要です');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.7,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setGoodDeedImage(result.assets[0].uri);
-    }
-  };
-
-  // 1日1善: 保存
-  const handleSaveGoodDeed = async () => {
-    if (!goodDeedText.trim()) return;
-    // 無料ユーザーは1日1件まで
-    if (!isPro && goodDeedList.length >= 1) {
-      showSaveSuccess('Proなら無制限に記録できる');
-      return;
-    }
-    const entry: GoodDeedEntry = {
-      id: Date.now().toString(),
-      date: new Date().toISOString(),
-      text: goodDeedText.trim(),
-      imageUri: goodDeedImage || undefined,
-      tag: goodDeedTag || undefined,
-    };
-    const newList = [...goodDeedList, entry];
-    setGoodDeedList(newList);
-    // 全履歴を保存
-    try {
-      const saved = await AsyncStorage.getItem(GOOD_DEED_KEY);
-      const allList: GoodDeedEntry[] = saved ? JSON.parse(saved) : [];
-      allList.push(entry);
-      await AsyncStorage.setItem(GOOD_DEED_KEY, JSON.stringify(allList));
-    } catch {}
-    setGoodDeedText('');
-    setGoodDeedImage(null);
-    setGoodDeedTag('');
-    showSaveSuccess('善行を記録した。続けよ。');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
-
-  // 善行を日記に追加
-  const addGoodDeedToDiary = async (deed: GoodDeedEntry) => {
-    const deedText = deed.tag ? `【${deed.tag}】${deed.text}` : deed.text;
-    await upsertTodayLog(prev => {
-      const currentDeeds = prev?.goodDeeds || [];
-      return {
-        date: getTodayStr(),
-        mission: prev?.mission || '',
-        routines: prev?.routines || [],
-        todos: prev?.todos || [],
-        samuraiMission: prev?.samuraiMission,
-        missionCompleted: prev?.missionCompleted,
-        routineDone: prev?.routineDone || [],
-        review: prev?.review,
-        goodDeeds: [...currentDeeds, deedText],
-      };
-    });
-    showSaveSuccess('日記に追加した。');
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-  };
 
   const handleAddGratitude = () => {
     if (!gratitudeInput.trim()) return;
@@ -3326,7 +2844,7 @@ export default function App() {
             {isPro ? (
               <Pressable
                 style={styles.quizButton}
-                onPress={() => { playTapSound(); setShowQuiz(true); }}
+                onPress={() => setShowQuiz(true)}
               >
                 <Text style={styles.quizButtonText}>学びのクイズに挑戦</Text>
               </Pressable>
@@ -3342,80 +2860,6 @@ export default function App() {
               <View key={index} style={styles.gratitudeItem}>
                 <Text style={styles.gratitudeItemNumber}>{index + 1}.</Text>
                 <Text style={styles.gratitudeItemText}>{item}</Text>
-              </View>
-            ))}
-          </View>
-        )}
-      </View>
-
-      {/* 1日1善セクション */}
-      <View style={styles.goalCard}>
-        <Text style={styles.goalTitle}>🌟 1日1善</Text>
-        <Text style={styles.goalSub}>今日やった良いことを記録せよ</Text>
-
-        {goodDeedImage ? (
-          <Pressable style={styles.goodDeedImagePreviewContainer} onPress={pickGoodDeedImage}>
-            <Image source={{ uri: goodDeedImage }} style={styles.goodDeedImagePreview} />
-          </Pressable>
-        ) : (
-          <View style={styles.goodDeedImageButtons}>
-            <Pressable style={styles.goodDeedCameraBtn} onPress={takeGoodDeedPhoto}>
-              <Text style={styles.goodDeedCameraBtnText}>📷 撮影</Text>
-            </Pressable>
-            <Pressable style={styles.goodDeedGalleryBtn} onPress={pickGoodDeedImage}>
-              <Text style={styles.goodDeedGalleryBtnText}>🖼 選択</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <TextInput
-          style={styles.goodDeedInput}
-          value={goodDeedText}
-          onChangeText={setGoodDeedText}
-          placeholder="今日やった良いことを書く..."
-          placeholderTextColor="#6b7280"
-          multiline
-        />
-
-        <View style={styles.goodDeedTagRow}>
-          {GOOD_DEED_TAGS.map(tag => (
-            <Pressable
-              key={tag}
-              style={[styles.goodDeedTagChip, goodDeedTag === tag && styles.goodDeedTagChipActive]}
-              onPress={() => setGoodDeedTag(goodDeedTag === tag ? '' : tag)}
-            >
-              <Text style={[styles.goodDeedTagText, goodDeedTag === tag && styles.goodDeedTagTextActive]}>{tag}</Text>
-            </Pressable>
-          ))}
-        </View>
-
-        <Pressable
-          style={[styles.primaryButton, !goodDeedText.trim() && { opacity: 0.5 }]}
-          onPress={handleSaveGoodDeed}
-          disabled={!goodDeedText.trim()}
-        >
-          <Text style={styles.primaryButtonText}>善行を記録</Text>
-        </Pressable>
-
-        {!isPro && goodDeedList.length >= 1 && (
-          <Text style={styles.proOnlyText}>Proなら無制限に記録できる</Text>
-        )}
-
-        {goodDeedList.length > 0 && (
-          <View style={styles.goodDeedListContainer}>
-            <Text style={styles.goodDeedListTitle}>今日の善行</Text>
-            {goodDeedList.map((deed) => (
-              <View key={deed.id} style={styles.goodDeedItem}>
-                {deed.imageUri && (
-                  <Image source={{ uri: deed.imageUri }} style={styles.goodDeedItemImage} />
-                )}
-                <View style={styles.goodDeedItemContent}>
-                  <Text style={styles.goodDeedItemText}>{deed.text}</Text>
-                  {deed.tag && <Text style={styles.goodDeedItemTag}>#{deed.tag}</Text>}
-                  <Pressable style={styles.addToDiaryButton} onPress={() => addGoodDeedToDiary(deed)}>
-                    <Text style={styles.addToDiaryButtonText}>📝 日記に追加</Text>
-                  </Pressable>
-                </View>
               </View>
             ))}
           </View>
@@ -3628,7 +3072,6 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <Pressable
                   onPress={() => {
-                    playConfirmSound();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowStartScreen(true);
                   }}
@@ -3720,7 +3163,7 @@ export default function App() {
               </>
             )}
             
-            <Pressable onPress={() => { playTapSound(); setShowQuiz(false); setQuizIndex(0); setQuizResult(null); }}>
+            <Pressable onPress={() => { setShowQuiz(false); setQuizIndex(0); setQuizResult(null); }}>
               <Text style={styles.quizCloseText}>閉じる</Text>
             </Pressable>
           </View>
@@ -5225,361 +4668,5 @@ const styles = StyleSheet.create({
     height: 80,
     borderRadius: 16,
     marginBottom: 16,
-  },
-  // 欲望可視化スタイル
-  consultModeRow: {
-    flexDirection: 'row',
-    marginBottom: 16,
-    gap: 8,
-  },
-  consultModeButton: {
-    flex: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#1a1a1a',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  consultModeButtonActive: {
-    backgroundColor: '#D4AF37',
-    borderColor: '#D4AF37',
-  },
-  consultModeText: {
-    color: '#9ca3af',
-    fontSize: 14,
-    textAlign: 'center',
-    fontWeight: '600',
-  },
-  consultModeTextActive: {
-    color: '#000',
-  },
-  yokubouBox: {
-    backgroundColor: '#1a1a1a',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  yokubouTitle: {
-    color: '#D4AF37',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 4,
-  },
-  yokubouSub: {
-    color: '#9ca3af',
-    fontSize: 13,
-    marginBottom: 16,
-  },
-  yokubouImagePicker: {
-    width: '100%',
-    height: 200,
-    backgroundColor: '#262626',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 2,
-    borderColor: '#333',
-    borderStyle: 'dashed',
-  },
-  yokubouImagePreview: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
-  },
-  yokubouImagePlaceholder: {
-    color: '#666',
-    fontSize: 14,
-  },
-  yokubouInput: {
-    backgroundColor: '#262626',
-    borderRadius: 8,
-    padding: 12,
-    color: '#FFF',
-    fontSize: 14,
-    minHeight: 80,
-    textAlignVertical: 'top',
-    marginBottom: 12,
-  },
-  yokubouSubmitButton: {
-    backgroundColor: '#D4AF37',
-    borderRadius: 8,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  yokubouSubmitText: {
-    color: '#000',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  yokubouReplyBox: {
-    backgroundColor: '#0d2818',
-    borderRadius: 8,
-    padding: 12,
-    marginTop: 16,
-    borderLeftWidth: 3,
-    borderLeftColor: '#2DD4BF',
-  },
-  yokubouReplyLabel: {
-    color: '#2DD4BF',
-    fontSize: 12,
-    marginBottom: 4,
-  },
-  yokubouReplyText: {
-    color: '#FFF',
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  yokubouSaveButton: {
-    backgroundColor: '#2DD4BF',
-    borderRadius: 6,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  yokubouSaveText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  yokubouSavedText: {
-    color: '#2DD4BF',
-    fontSize: 14,
-    textAlign: 'center',
-    marginTop: 12,
-  },
-  yokubouResetButton: {
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  yokubouResetText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  yokubouButtonRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  yokubouCameraButton: {
-    flex: 1,
-    backgroundColor: '#D4AF37',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  yokubouCameraButtonText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  yokubouGalleryButton: {
-    flex: 1,
-    backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  yokubouGalleryButtonText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  // 1日1善スタイル
-  goodDeedImageButtons: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  goodDeedCameraBtn: {
-    flex: 1,
-    backgroundColor: '#D4AF37',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  goodDeedCameraBtnText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  goodDeedGalleryBtn: {
-    flex: 1,
-    backgroundColor: '#333',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  goodDeedGalleryBtnText: {
-    color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  goodDeedImagePreviewContainer: {
-    marginBottom: 12,
-  },
-  goodDeedImagePreview: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-  },
-  goodDeedInput: {
-    backgroundColor: '#262626',
-    borderRadius: 8,
-    padding: 12,
-    color: '#FFF',
-    fontSize: 14,
-    minHeight: 60,
-    textAlignVertical: 'top',
-    marginBottom: 12,
-  },
-  goodDeedTagRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginBottom: 12,
-  },
-  goodDeedTagChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    backgroundColor: '#262626',
-    borderWidth: 1,
-    borderColor: '#333',
-  },
-  goodDeedTagChipActive: {
-    backgroundColor: '#D4AF37',
-    borderColor: '#D4AF37',
-  },
-  goodDeedTagText: {
-    color: '#9ca3af',
-    fontSize: 12,
-  },
-  goodDeedTagTextActive: {
-    color: '#000',
-    fontWeight: 'bold',
-  },
-  goodDeedListContainer: {
-    marginTop: 16,
-  },
-  goodDeedListTitle: {
-    color: '#D4AF37',
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  goodDeedItem: {
-    flexDirection: 'row',
-    backgroundColor: '#1a1a1a',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  goodDeedItemImage: {
-    width: 50,
-    height: 50,
-    borderRadius: 6,
-    marginRight: 12,
-  },
-  goodDeedItemContent: {
-    flex: 1,
-  },
-  goodDeedItemText: {
-    color: '#FFF',
-    fontSize: 14,
-  },
-  goodDeedItemTag: {
-    color: '#D4AF37',
-    fontSize: 12,
-    marginTop: 4,
-  },
-  // 履歴画像スタイル
-  historyImage: {
-    width: '100%',
-    height: 150,
-    borderRadius: 8,
-    marginBottom: 12,
-  },
-  addToDiaryButton: {
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#2a2a2a',
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  addToDiaryButtonText: {
-    color: '#D4AF37',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  goodDeedLogItem: {
-    paddingVertical: 6,
-    paddingLeft: 8,
-    borderLeftWidth: 2,
-    borderLeftColor: '#D4AF37',
-    marginBottom: 6,
-  },
-  goodDeedLogText: {
-    color: '#FFF',
-    fontSize: 14,
-  },
-  saveReviewButton: {
-    flex: 1,
-    backgroundColor: '#2DD4BF',
-    borderRadius: 8,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  saveReviewButtonText: {
-    color: '#000',
-    fontSize: 14,
-    fontWeight: 'bold',
-  },
-  // Apple風ボタンスタイル
-  appleMainButton: {
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  appleMainButtonText: {
-    color: '#FFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  appleEditButton: {
-    backgroundColor: '#2c2c2e',
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 16,
-    marginBottom: 8,
-  },
-  appleEditButtonText: {
-    color: '#007AFF',
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  appleDeleteLink: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  appleDeleteLinkText: {
-    color: '#FF3B30',
-    fontSize: 15,
-  },
-  appleCancelLink: {
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  appleCancelLinkText: {
-    color: '#007AFF',
-    fontSize: 15,
   },
 });

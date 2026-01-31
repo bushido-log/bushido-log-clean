@@ -419,6 +419,8 @@ export default function App() {
   const [gratitudeList, setGratitudeList] = useState<string[]>([]);
   const [gratitudeInput, setGratitudeInput] = useState('');
   const [showGratitudeComplete, setShowGratitudeComplete] = useState(false);
+  const [gratitudeAiComment, setGratitudeAiComment] = useState('');
+  const [isLoadingGratitudeComment, setIsLoadingGratitudeComment] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizIndex, setQuizIndex] = useState(0);
   
@@ -1590,10 +1592,11 @@ export default function App() {
     </View>
   );
 
-  // トースト表示
+  // トースト表示（済マーク付き）
   const renderSaveToast = () => (
     showSaveToast ? (
       <View style={styles.toastContainer}>
+        <Text style={styles.toastCheckmark}>✓</Text>
         <Text style={styles.toastText}>{saveToastMessage}</Text>
       </View>
     ) : null
@@ -2801,16 +2804,61 @@ export default function App() {
   );
 
   // 感謝タブ
+  // 10個達成時にAIが感謝リストを見て感想を生成
+  const generateGratitudeComment = async (list: string[]) => {
+    setIsLoadingGratitudeComment(true);
+    try {
+      const gratitudeText = list.join('、');
+      const res = await fetch('https://bushido-log-server.onrender.com/api/gratitude-comment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gratitudes: gratitudeText }),
+      });
+      const data = await res.json();
+      if (data.comment) {
+        setGratitudeAiComment(data.comment);
+      } else {
+        setGratitudeAiComment('10個達成だ。よくやった。今日はもう勝っている。');
+      }
+    } catch {
+      setGratitudeAiComment('10個達成だ。よくやった。今日はもう勝っている。');
+    }
+    setIsLoadingGratitudeComment(false);
+  };
+
+  // AIが感謝に反応するフレーズ
+  const gratitudeResponses = [
+    (text: string) => `「${text.slice(0, 10)}」か。良いことに気づいたな。`,
+    (text: string) => `その感謝、心に刻め。`,
+    (text: string) => `小さなことに感謝できる者は強い。`,
+    (text: string) => `「${text.slice(0, 10)}」。忘れるな。`,
+    (text: string) => `感謝は武士の基本だ。よくやった。`,
+    (text: string) => `その気づき、大事にせよ。`,
+    (text: string) => `一つ一つの感謝が、お前を強くする。`,
+    (text: string) => `良い目を持っているな。`,
+    (text: string) => `感謝できる心、それが武士道だ。`,
+    (text: string) => `その調子だ。続けよ。`,
+  ];
+
   const handleAddGratitude = () => {
     if (!gratitudeInput.trim()) return;
     if (gratitudeList.length >= 10) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    const newList = [...gratitudeList, gratitudeInput.trim()];
+    const inputText = gratitudeInput.trim();
+    const newList = [...gratitudeList, inputText];
     setGratitudeList(newList);
     setGratitudeInput('');
+    
+    // AIの反応をトーストで表示（音声なし）
+    const response = gratitudeResponses[Math.floor(Math.random() * gratitudeResponses.length)](inputText);
+    showSaveSuccess(response);
+    
     if (newList.length === 10) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setShowGratitudeComplete(true);
+      setTimeout(() => {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        setShowGratitudeComplete(true);
+        generateGratitudeComment(newList);
+      }, 2000);
     }
   };
 
@@ -2839,7 +2887,12 @@ export default function App() {
           </>
         ) : (
           <View style={styles.gratitudeCompleteBox}>
-            <Text style={styles.gratitudeCompleteText}>よくやった。今日はもう勝っている。</Text>
+            <Text style={styles.gratitudeCompleteTitle}>🎉 10個達成！</Text>
+            {isLoadingGratitudeComment ? (
+              <Text style={styles.gratitudeCompleteText}>侍キングが感想を考え中...</Text>
+            ) : (
+              <Text style={styles.gratitudeCompleteText}>{gratitudeAiComment || 'よくやった。今日はもう勝っている。'}</Text>
+            )}
             {isPro ? (
               <Pressable
                 style={styles.quizButton}
@@ -3957,6 +4010,30 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
   },
   // スタート画面スタイル
+  dojoGateOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#020617',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  dojoGateTitle: {
+    fontSize: 64,
+    color: '#C9A24D',
+    fontWeight: 'bold',
+    letterSpacing: 16,
+    marginBottom: 16,
+  },
+  dojoGateSubtitle: {
+    fontSize: 16,
+    color: '#C9A24D',
+    opacity: 0.7,
+    letterSpacing: 4,
+  },
   startScreen: {
     flex: 1,
     backgroundColor: '#000',
@@ -4127,6 +4204,13 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     marginBottom: 12,
+  },
+  gratitudeCompleteTitle: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#D4AF37',
+    marginBottom: 12,
+    textAlign: 'center',
   },
   gratitudeCompleteBox: {
     backgroundColor: '#1a1a1a',

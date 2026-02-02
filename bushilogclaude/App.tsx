@@ -45,6 +45,11 @@ const RITUAL_SOUND = require('./sounds/ritual.mp3');
 const CHECK_SOUND = require('./sounds/check.mp3');
 const CORRECT_SOUND = require('./sounds/correct.mp3');
 const WRONG_SOUND = require('./sounds/wrong.mp3');
+const KATANA_SOUND = require('./sounds/katana_swish.mp3');
+
+// 道場の門 画像
+const DOJO_GATE_DIM = require('./assets/images/dojo_gate_dim.png');
+const DOJO_GATE_LIGHT = require('./assets/images/dojo_gate_light.png');
 
 const SESSION_KEY = 'samurai_session_id';
 
@@ -490,17 +495,48 @@ export default function App() {
   
   // アラーム機能
   const [showDojoGate, setShowDojoGate] = useState(true);
-  const gateOpacity = useRef(new Animated.Value(0)).current;
-  const gateScale = useRef(new Animated.Value(0.9)).current;
+  const [gatePhase, setGatePhase] = useState<'dim' | 'light' | 'button'>('dim');
+  const dimOpacity = useRef(new Animated.Value(1)).current;
+  const lightOpacity = useRef(new Animated.Value(0)).current;
+  const buttonOpacity = useRef(new Animated.Value(0)).current;
   
+  // 道場の門アニメーション
   useEffect(() => {
     if (showDojoGate) {
-      Animated.parallel([
-        Animated.timing(gateOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
-        Animated.spring(gateScale, { toValue: 1, friction: 8, useNativeDriver: true }),
-      ]).start();
+      // 0.8秒後に暗い門→明るい門へクロスフェード
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(dimOpacity, { toValue: 0, duration: 800, useNativeDriver: true }),
+          Animated.timing(lightOpacity, { toValue: 1, duration: 800, useNativeDriver: true }),
+        ]).start(() => {
+          setGatePhase('light');
+          // 200ms待ってからボタンをフェードイン
+          setTimeout(() => {
+            setGatePhase('button');
+            Animated.timing(buttonOpacity, { toValue: 1, duration: 400, useNativeDriver: true }).start();
+          }, 200);
+        });
+      }, 100);
     }
-  }, []);
+  }, [showDojoGate]);
+  
+  // 道場の門を閉じる（刀音付き）
+  const handleEnterDojo = async () => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(KATANA_SOUND);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+      });
+    } catch (e) {
+      console.log('katana sound error', e);
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    // 150ms後に遷移
+    setTimeout(() => {
+      setShowDojoGate(false);
+    }, 150);
+  };
   const [alarmHour, setAlarmHour] = useState(7);
   const [alarmMinute, setAlarmMinute] = useState(0);
   const [alarmSet, setAlarmSet] = useState(false);
@@ -1656,19 +1692,26 @@ export default function App() {
     <View style={styles.startScreen}>
       {/* 道場入口 */}
       {showDojoGate && (
-        <Pressable 
-          style={styles.dojoGateOverlay}
-          onPress={() => {
-            playConfirmSound();
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-            setShowDojoGate(false);
-          }}
-        >
-          <Animated.View style={{ opacity: gateOpacity, transform: [{ scale: gateScale }], alignItems: 'center' }}>
-            <Text style={styles.dojoGateTitle}>武士道</Text>
-            <Text style={styles.dojoGateSubtitle}>— 道場に入る —</Text>
+        <View style={styles.dojoGateOverlay}>
+          {/* 暗い門 */}
+          <Animated.Image
+            source={DOJO_GATE_DIM}
+            style={[styles.dojoGateImage, { opacity: dimOpacity }]}
+            resizeMode="cover"
+          />
+          {/* 明るい門 */}
+          <Animated.Image
+            source={DOJO_GATE_LIGHT}
+            style={[styles.dojoGateImage, { opacity: lightOpacity, position: 'absolute' }]}
+            resizeMode="cover"
+          />
+          {/* 道場に入るボタン */}
+          <Animated.View style={[styles.dojoGateButtonContainer, { opacity: buttonOpacity }]}>
+            <Pressable style={styles.dojoGateButton} onPress={handleEnterDojo}>
+              <Text style={styles.dojoGateButtonText}>道場に入る</Text>
+            </Pressable>
           </Animated.View>
-        </Pressable>
+        </View>
       )}
       
       <Pressable
@@ -4521,10 +4564,38 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#020617',
+    backgroundColor: '#000',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 999,
+  },
+  dojoGateImage: {
+    width: '100%',
+    height: '100%',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+  },
+  dojoGateButtonContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+  },
+  dojoGateButton: {
+    backgroundColor: 'rgba(201, 162, 77, 0.9)',
+    paddingHorizontal: 48,
+    paddingVertical: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C9A24D',
+  },
+  dojoGateButtonText: {
+    fontSize: 20,
+    color: '#000',
+    fontWeight: 'bold',
+    letterSpacing: 4,
   },
   dojoGateTitle: {
     fontSize: 64,

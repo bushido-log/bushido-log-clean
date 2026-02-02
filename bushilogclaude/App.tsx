@@ -22,6 +22,7 @@ import {
   Text,
   TextInput,
   Image,
+  ImageBackground,
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
@@ -52,6 +53,7 @@ const KATANA_SOUND = require('./sounds/katana_swish.mp3');
 // 道場の門 画像
 const DOJO_GATE_DIM = require('./assets/images/dojo_gate_dim.png');
 const DOJO_GATE_LIGHT = require('./assets/images/dojo_gate_light.png');
+const CONSULT_BG = require('./assets/images/consult_bg.png');
 
 // Intro動画
 const INTRO_VIDEO = require('./assets/intro_video.mov');
@@ -802,7 +804,7 @@ export default function App() {
   // chat
   const [isSummoned, setIsSummoned] = useState(false);
   // 欲望可視化モード
-  const [consultMode, setConsultMode] = useState<'text' | 'visualize'>('text');
+  const [consultMode, setConsultMode] = useState<'select' | 'text' | 'visualize'>('select');
   const [yokubouImage, setYokubouImage] = useState<string | null>(null);
   const [yokubouReason, setYokubouReason] = useState('');
   const [yokubouAiReply, setYokubouAiReply] = useState('');
@@ -1927,6 +1929,35 @@ export default function App() {
   const renderConsultTab = () => {
     const historyToShow = history.length > 50 ? history.slice(history.length - 50) : history;
 
+    // 選択画面
+    if (consultMode === 'select') {
+      return (
+        <ImageBackground source={CONSULT_BG} style={styles.consultSelectBg} resizeMode="cover">
+          <View style={styles.consultSelectContainer}>
+            {/* タイトル */}
+            <View style={styles.consultTitleBox}>
+              <Text style={styles.consultTitle}>サムライ相談所</Text>
+              <Text style={styles.consultSubtitle}>〜欲望を一刀両断〜</Text>
+            </View>
+            
+            <Pressable
+              style={styles.consultSelectButton}
+              onPress={() => { playEnterSound(); setConsultMode('text'); setIsSummoned(true); }}
+            >
+              <Text style={styles.consultSelectButtonText}>君の欲望を話してみろ</Text>
+            </Pressable>
+            
+            <Pressable
+              style={styles.consultSelectButton}
+              onPress={() => { playEnterSound(); setConsultMode('visualize'); }}
+            >
+              <Text style={styles.consultSelectButtonText}>君の欲望を見せてみろ</Text>
+            </Pressable>
+          </View>
+        </ImageBackground>
+      );
+    }
+
     return (
       <ScrollView 
         style={{ flex: 1 }} 
@@ -1936,26 +1967,10 @@ export default function App() {
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
-        <Pressable style={styles.urgeButton} onPress={() => { playTapSound(); handleUrgePress(); }}>
-          <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
+        {/* 戻るボタン */}
+        <Pressable style={styles.consultBackButton} onPress={() => { playTapSound(); setConsultMode('select'); setIsSummoned(false); }}>
+          <Text style={styles.consultBackButtonText}>← 戻る</Text>
         </Pressable>
-        <Text style={styles.caption}>ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。</Text>
-
-        {/* 相談モード切り替え */}
-        <View style={styles.consultModeRow}>
-          <Pressable
-            style={[styles.consultModeButton, consultMode === 'text' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('text'); }}
-          >
-            <Text style={[styles.consultModeText, consultMode === 'text' && styles.consultModeTextActive]}>テキスト相談</Text>
-          </Pressable>
-          <Pressable
-            style={[styles.consultModeButton, consultMode === 'visualize' && styles.consultModeButtonActive]}
-            onPress={() => { playTapSound(); setConsultMode('visualize'); }}
-          >
-            <Text style={[styles.consultModeText, consultMode === 'visualize' && styles.consultModeTextActive]}>欲望可視化</Text>
-          </Pressable>
-        </View>
 
         {consultMode === 'visualize' ? (
           <View style={styles.yokubouBox}>
@@ -5532,6 +5547,58 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   // 欲望可視化スタイル
+  // 相談選択画面
+  consultSelectBg: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  consultSelectContainer: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 50,
+    paddingTop: 150,
+  },
+  consultTitleBox: {
+    marginBottom: 40,
+    alignItems: 'center',
+  },
+  consultTitle: {
+    color: '#1a1a1a',
+    fontSize: 20,
+    fontWeight: '300',
+    letterSpacing: 3,
+  },
+  consultSubtitle: {
+    color: '#666',
+    fontSize: 11,
+    marginTop: 8,
+    letterSpacing: 1,
+  },
+  consultSelectButton: {
+    backgroundColor: 'transparent',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 4,
+    marginBottom: 14,
+    width: '100%',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#8B0000',
+  },
+  consultSelectButtonText: {
+    color: '#8B0000',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  consultBackButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  consultBackButtonText: {
+    color: '#C9A24D',
+    fontSize: 14,
+  },
   consultModeRow: {
     flexDirection: 'row',
     marginBottom: 16,

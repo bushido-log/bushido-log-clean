@@ -2,7 +2,7 @@
 // BUSHIDO LOG - single file version (keeps your current features)
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Audio } from 'expo-av';
+import { Audio, Video, ResizeMode } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
@@ -45,11 +45,16 @@ const RITUAL_SOUND = require('./sounds/ritual.mp3');
 const CHECK_SOUND = require('./sounds/check.mp3');
 const CORRECT_SOUND = require('./sounds/correct.mp3');
 const WRONG_SOUND = require('./sounds/wrong.mp3');
+const ENTER_SOUND = require('./sounds/enter.mp3');
+const FOCUS_START_SOUND = require('./sounds/focus_start.mp3');
 const KATANA_SOUND = require('./sounds/katana_swish.mp3');
 
 // 道場の門 画像
 const DOJO_GATE_DIM = require('./assets/images/dojo_gate_dim.png');
 const DOJO_GATE_LIGHT = require('./assets/images/dojo_gate_light.png');
+
+// Intro動画
+const INTRO_VIDEO = require('./assets/intro_video.mov');
 
 const SESSION_KEY = 'samurai_session_id';
 
@@ -63,6 +68,7 @@ const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
 const FIRST_LAUNCH_KEY = 'BUSHIDO_FIRST_LAUNCH_V1';
+const INTRO_SKIP_KEY = 'BUSHIDO_INTRO_SKIP_V1';
 const FREE_TRIAL_DAYS = 3;
 
 const MAX_LEVEL = 10;
@@ -296,9 +302,13 @@ async function getSessionId(): Promise<string> {
 // Audio helpers
 // =========================
 
+// マスター音量（0.0〜1.0）
+const MASTER_VOLUME = 0.3;
+
 async function playSound(source: any) {
   try {
     const { sound } = await Audio.Sound.createAsync(source);
+    await sound.setVolumeAsync(MASTER_VOLUME);
     await sound.playAsync();
     sound.setOnPlaybackStatusUpdate((status: any) => {
       if (status.isLoaded && status.didJustFinish) {
@@ -337,6 +347,23 @@ async function playCorrectSound() {
 
 async function playWrongSound() {
   await playSound(WRONG_SOUND);
+}
+
+async function playEnterSound() {
+  try {
+    const { sound } = await Audio.Sound.createAsync(ENTER_SOUND);
+    await sound.setVolumeAsync(0.15); // 他より小さめ
+    await sound.playAsync();
+    sound.setOnPlaybackStatusUpdate((status: any) => {
+      if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
+    });
+  } catch (e) {
+    console.log('enter sound error', e);
+  }
+}
+
+async function playFocusStartSound() {
+  await playSound(FOCUS_START_SOUND);
 }
 
 // =========================
@@ -495,6 +522,10 @@ export default function App() {
   
   // アラーム機能
   const [showDojoGate, setShowDojoGate] = useState(true);
+  const [showIntro, setShowIntro] = useState(false);
+  const [videoFinished, setVideoFinished] = useState(false);
+  const [introSkipped, setIntroSkipped] = useState(false);
+  const [skipIntroNext, setSkipIntroNext] = useState(false);
   const [gatePhase, setGatePhase] = useState<'dim' | 'light' | 'button'>('dim');
   const dimOpacity = useRef(new Animated.Value(1)).current;
   const lightOpacity = useRef(new Animated.Value(0)).current;
@@ -520,10 +551,19 @@ export default function App() {
     }
   }, [showDojoGate]);
   
+  // Introスキップ設定を読み込み
+  useEffect(() => {
+    (async () => {
+      const skipped = await AsyncStorage.getItem(INTRO_SKIP_KEY);
+      setIntroSkipped(skipped === 'true');
+    })();
+  }, []);
+  
   // 道場の門を閉じる（刀音付き）
   const handleEnterDojo = async () => {
     try {
       const { sound } = await Audio.Sound.createAsync(KATANA_SOUND);
+      await sound.setVolumeAsync(MASTER_VOLUME);
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((status: any) => {
         if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
@@ -533,9 +573,29 @@ export default function App() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     // 150ms後に遷移
-    setTimeout(() => {
+    setTimeout(async () => {
       setShowDojoGate(false);
+      // Introをスキップしていなければ表示
+      if (!introSkipped) {
+        setShowIntro(true);
+      }
     }, 150);
+  };
+  
+  // Introを閉じてホームへ
+  const handleCloseIntro = async () => {
+    // 動画を一度見たら次回からスキップ
+    await AsyncStorage.setItem(INTRO_SKIP_KEY, 'true');
+    setIntroSkipped(true);
+    setVideoFinished(false);
+    setShowIntro(false);
+  };
+  
+  // Introを再表示（設定から）
+  const resetIntroSkip = async () => {
+    await AsyncStorage.removeItem(INTRO_SKIP_KEY);
+    setIntroSkipped(false);
+    Alert.alert('完了', '次回起動時にIntroが表示されます');
   };
   const [alarmHour, setAlarmHour] = useState(7);
   const [alarmMinute, setAlarmMinute] = useState(0);
@@ -814,6 +874,7 @@ export default function App() {
     (async () => {
       try {
         const { sound } = await Audio.Sound.createAsync(STARTUP_SOUND);
+        await sound.setVolumeAsync(MASTER_VOLUME);
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate((status: any) => {
           if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
@@ -1085,6 +1146,7 @@ export default function App() {
     const url = `${SAMURAI_TTS_URL}?text=${encodeURIComponent(text)}`;
     try {
       const { sound } = await Audio.Sound.createAsync({ uri: url });
+      await sound.setVolumeAsync(MASTER_VOLUME);
       await sound.playAsync();
       sound.setOnPlaybackStatusUpdate((status: any) => {
         if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
@@ -1688,6 +1750,37 @@ export default function App() {
   ];
   const randomQuote = startScreenQuotes[Math.floor(Math.random() * startScreenQuotes.length)];
 
+  // Intro画面（動画版）
+  const renderIntroScreen = () => (
+    <View style={styles.introScreen}>
+      <Video
+        source={INTRO_VIDEO}
+        style={styles.introVideo}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping={false}
+        volume={MASTER_VOLUME}
+        onPlaybackStatusUpdate={(status: any) => {
+          if (status.didJustFinish && !videoFinished) {
+            setVideoFinished(true);
+          }
+        }}
+      />
+      {/* 動画再生中はスキップボタン、終了後はホームへボタン */}
+      {videoFinished ? (
+        <View style={styles.introBottomContainer}>
+          <Pressable style={styles.introHomeButton} onPress={() => { playTapSound(); handleCloseIntro(); }}>
+            <Text style={styles.introHomeButtonText}>ホームへ →</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <Pressable style={styles.introSkipButton} onPress={() => { playTapSound(); handleCloseIntro(); }}>
+          <Text style={styles.introSkipButtonText}>スキップ →</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+
   const renderStartScreen = () => (
     <View style={styles.startScreen}>
       {/* 道場入口 */}
@@ -1731,7 +1824,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('consult');
           setShowStartScreen(false);
@@ -1743,7 +1836,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('gratitude');
           setShowStartScreen(false);
@@ -1755,7 +1848,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('goal');
           setShowStartScreen(false);
@@ -1767,7 +1860,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('review');
           setShowStartScreen(false);
@@ -1779,7 +1872,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('focus');
           setShowStartScreen(false);
@@ -1793,7 +1886,7 @@ export default function App() {
       <Pressable
         style={styles.startButton}
         onPress={() => {
-          playConfirmSound();
+          playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('alarm');
           setShowStartScreen(false);
@@ -1843,7 +1936,7 @@ export default function App() {
         showsVerticalScrollIndicator={true}
         bounces={true}
       >
-        <Pressable style={styles.urgeButton} onPress={handleUrgePress}>
+        <Pressable style={styles.urgeButton} onPress={() => { playTapSound(); handleUrgePress(); }}>
           <Text style={styles.urgeText}>サムライキングを呼び出す</Text>
         </Pressable>
         <Text style={styles.caption}>ムラムラ・不安・サボりたくなったら、このボタンを押して本音を打ち込むのだ。</Text>
@@ -1870,7 +1963,7 @@ export default function App() {
             <Text style={styles.yokubouSub}>今やりたいことの写真を撮り、なぜやりたいか書け。AIが核心を突く。</Text>
 
             {yokubouImage ? (
-              <Pressable style={styles.yokubouImagePicker} onPress={pickYokubouImage}>
+              <Pressable style={styles.yokubouImagePicker} onPress={() => { playTapSound(); pickYokubouImage(); }}>
                 <Image source={{ uri: yokubouImage }} style={styles.yokubouImagePreview} />
               </Pressable>
             ) : (
@@ -1880,10 +1973,10 @@ export default function App() {
             )}
 
             <View style={styles.yokubouButtonRow}>
-              <Pressable style={styles.yokubouCameraButton} onPress={takeYokubouPhoto}>
+              <Pressable style={styles.yokubouCameraButton} onPress={() => { playTapSound(); takeYokubouPhoto(); }}>
                 <Text style={styles.yokubouCameraButtonText}>📷 撮影</Text>
               </Pressable>
-              <Pressable style={styles.yokubouGalleryButton} onPress={pickYokubouImage}>
+              <Pressable style={styles.yokubouGalleryButton} onPress={() => { playTapSound(); pickYokubouImage(); }}>
                 <Text style={styles.yokubouGalleryButtonText}>🖼 選択</Text>
               </Pressable>
             </View>
@@ -1926,7 +2019,7 @@ export default function App() {
             )}
 
             {(yokubouImage || yokubouReason || yokubouAiReply) && (
-              <Pressable style={styles.yokubouResetButton} onPress={resetYokubou}>
+              <Pressable style={styles.yokubouResetButton} onPress={() => { playTapSound(); resetYokubou(); }}>
                 <Text style={styles.yokubouResetText}>リセット</Text>
               </Pressable>
             )}
@@ -2003,7 +2096,7 @@ export default function App() {
                     開発者本人が個別の相談内容を見ることはないでござる。
                   </Text>
 
-                  <Pressable style={styles.secondaryButton} onPress={handleClearChatMessages}>
+                  <Pressable style={styles.secondaryButton} onPress={() => { playTapSound(); handleClearChatMessages(); }}>
                     <Text style={styles.secondaryButtonText}>チャット画面をリセット</Text>
                   </Pressable>
                 </>
@@ -2051,7 +2144,7 @@ export default function App() {
                           );
                         })}
 
-                      <Pressable style={styles.secondaryButton} onPress={handleClearHistory}>
+                      <Pressable style={styles.secondaryButton} onPress={() => { playTapSound(); handleClearHistory(); }}>
                         <Text style={styles.secondaryButtonText}>相談履歴を全部削除</Text>
                       </Pressable>
                     </>
@@ -2086,7 +2179,7 @@ export default function App() {
                 <Text style={styles.samuraiMissionText}>{samuraiMissionText}</Text>
                 <Pressable
                   style={[styles.samuraiMissionButton, missionCompletedToday && { opacity: 0.5 }]}
-                  onPress={handleCompleteSamuraiMission}
+                  onPress={() => { playTapSound(); handleCompleteSamuraiMission(); }}
                   disabled={missionCompletedToday}
                 >
                   <Text style={styles.samuraiMissionButtonText}>
@@ -2095,7 +2188,7 @@ export default function App() {
                 </Pressable>
               </View>
             ) : (
-              <Pressable style={styles.samuraiMissionButton} onPress={handleGenerateSamuraiMission}>
+              <Pressable style={styles.samuraiMissionButton} onPress={() => { playTapSound(); handleGenerateSamuraiMission(); }}>
                 <Text style={styles.samuraiMissionButtonText}>{isGeneratingMission ? '生成中…' : 'サムライミッションを受け取る'}</Text>
               </Pressable>
             )}
@@ -2146,11 +2239,11 @@ export default function App() {
             multiline
           />
 
-          <Pressable style={styles.primaryButton} onPress={handleSaveTodayMission}>
+          <Pressable style={styles.primaryButton} onPress={() => { playTapSound(); handleSaveTodayMission(); }}>
             <Text style={styles.primaryButtonText}>今日の目標を保存する</Text>
           </Pressable>
 
-          <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={handleResetTodayLog}>
+          <Pressable style={[styles.secondaryButton, { marginTop: 8 }]} onPress={() => { playTapSound(); handleResetTodayLog(); }}>
             <Text style={styles.secondaryButtonText}>今日の目標・日記をリセット</Text>
           </Pressable>
         </View>
@@ -2189,7 +2282,7 @@ export default function App() {
               <TextInput style={styles.onboardingInput} value={obRule} onChangeText={setObRule} multiline />
 
               <View style={{ flexDirection: 'row', marginTop: 8 }}>
-                <Pressable style={[styles.onboardingButton, { flex: 1, marginRight: 4 }]} onPress={handleSaveOnboarding}>
+                <Pressable style={[styles.onboardingButton, { flex: 1, marginRight: 4 }]} onPress={() => { playTapSound(); handleSaveOnboarding(); }}>
                   <Text style={styles.onboardingButtonText}>保存</Text>
                 </Pressable>
                 <Pressable
@@ -2343,7 +2436,7 @@ export default function App() {
                   placeholderTextColor="#666"
                 />
 
-                <Pressable style={styles.appleMainButton} onPress={handleSaveEditedLog}>
+                <Pressable style={styles.appleMainButton} onPress={() => { playTapSound(); handleSaveEditedLog(); }}>
                   <Text style={styles.appleMainButtonText}>変更を保存</Text>
                 </Pressable>
                 <Pressable
@@ -2390,10 +2483,10 @@ export default function App() {
                   placeholderTextColor="#666"
                 />
 
-                <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
+                <Pressable style={styles.appleMainButton} onPress={() => { playTapSound(); handleSaveNightReview(); }}>
                   <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
                 </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
+                <Pressable style={styles.appleDeleteLink} onPress={() => { playTapSound(); handleDeleteLog(activeLog.date); }}>
                   <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
                 </Pressable>
               </>
@@ -2408,10 +2501,10 @@ export default function App() {
                 <Text style={styles.historyLabel}>◆ 明日変えてみる行動</Text>
                 <Text style={styles.historyText}>{activeLog.review?.nextAction || '（未入力）'}</Text>
 
-                <Pressable style={styles.appleEditButton} onPress={() => handleEditLogFromCalendar(activeLog)}>
+                <Pressable style={styles.appleEditButton} onPress={() => { playTapSound(); handleEditLogFromCalendar(activeLog); }}>
                   <Text style={styles.appleEditButtonText}>編集する</Text>
                 </Pressable>
-                <Pressable style={styles.appleDeleteLink} onPress={() => handleDeleteLog(activeLog.date)}>
+                <Pressable style={styles.appleDeleteLink} onPress={() => { playTapSound(); handleDeleteLog(activeLog.date); }}>
                   <Text style={styles.appleDeleteLinkText}>この日の記録を削除</Text>
                 </Pressable>
               </>
@@ -2452,7 +2545,7 @@ export default function App() {
               placeholderTextColor="#666"
             />
 
-            <Pressable style={styles.appleMainButton} onPress={handleSaveNightReview}>
+            <Pressable style={styles.appleMainButton} onPress={() => { playTapSound(); handleSaveNightReview(); }}>
               <Text style={styles.appleMainButtonText}>振り返りを保存</Text>
             </Pressable>
           </View>
@@ -2739,6 +2832,7 @@ export default function App() {
     if (focusQuestionAnswer.trim().toLowerCase() === currentFocusQ.a.toLowerCase()) {
       playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      playFocusStartSound();
       setShowFocusQuestion(false);
       setShowFocusEntry(false);
       setFocusStartTime(new Date());
@@ -2876,6 +2970,7 @@ export default function App() {
           <Pressable
             style={styles.focusTypeButton}
             onPress={() => {
+              playTapSound();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setFocusType('net');
               setShowFocusEntry(true);
@@ -2889,6 +2984,7 @@ export default function App() {
           <Pressable
             style={styles.focusTypeButton}
             onPress={() => {
+              playTapSound();
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
               setFocusType('study');
               setShowFocusEntry(true);
@@ -2926,6 +3022,7 @@ export default function App() {
             style={styles.primaryButton}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+              playFocusStartSound();
               setShowFocusEntry(false);
               setFocusTimerRunning(true);
               setFocusMinutesLeft(focusDuration);
@@ -3017,6 +3114,7 @@ export default function App() {
               style={styles.primaryButton}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                playFocusStartSound();
                 setShowFocusEntry(false);
                 setFocusTimerRunning(true);
                 setFocusMinutesLeft(focusDuration);
@@ -3537,6 +3635,11 @@ export default function App() {
           <Switch value={settings.enableSfx} onValueChange={v => updateSettings({ enableSfx: v })} />
         </View>
 
+        <Text style={styles.sectionTitle}>その他</Text>
+        <Pressable style={styles.settingsButton} onPress={resetIntroSkip}>
+          <Text style={styles.settingsButtonText}>Introをもう一度表示する</Text>
+        </Pressable>
+
         <Text style={styles.sectionTitle}>サムライキングの厳しさ</Text>
         <View style={styles.segmentRow}>
           {[
@@ -3623,7 +3726,7 @@ export default function App() {
         placeholderTextColor="#6b7280"
       />
 
-      <Pressable style={styles.primaryButton} onPress={handleSaveOnboarding}>
+      <Pressable style={styles.primaryButton} onPress={() => { playTapSound(); handleSaveOnboarding(); }}>
         <Text style={styles.primaryButtonText}>サムライ宣言を保存して始める</Text>
       </Pressable>
     </View>
@@ -3658,6 +3761,11 @@ export default function App() {
     );
   }
 
+  // Intro画面表示
+  if (showIntro) {
+    return renderIntroScreen();
+  }
+
   // スタート画面表示（オンボーディング完了後）
   if (showStartScreen && !isOnboarding) {
     return renderStartScreen();
@@ -3671,7 +3779,7 @@ export default function App() {
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
                 <Pressable
                   onPress={() => {
-                    playConfirmSound();
+                    playTapSound();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                     setShowStartScreen(true);
                   }}
@@ -4558,6 +4666,132 @@ const styles = StyleSheet.create({
     color: '#d1d5db',
   },
   // スタート画面スタイル
+  // Intro画面スタイル
+  introScreen: {
+    flex: 1,
+    backgroundColor: '#000',
+  },
+  introVideo: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+  },
+  introSkipButton: {
+    position: 'absolute',
+    bottom: 50,
+    right: 24,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 162, 77, 0.5)',
+  },
+  introSkipButtonText: {
+    color: '#C9A24D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  introBottomContainer: {
+    position: 'absolute',
+    bottom: 50,
+    right: 24,
+  },
+  introHomeButton: {
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(201, 162, 77, 0.5)',
+  },
+  introHomeButtonText: {
+    color: '#C9A24D',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  introScrollContent: {
+    padding: 24,
+    paddingTop: 60,
+    paddingBottom: 40,
+  },
+  introTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#C9A24D',
+    textAlign: 'center',
+    marginBottom: 32,
+    letterSpacing: 2,
+  },
+  introSection: {
+    marginBottom: 20,
+    paddingLeft: 8,
+  },
+  introSectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#e5e7eb',
+    marginBottom: 4,
+  },
+  introSectionText: {
+    fontSize: 14,
+    color: '#9ca3af',
+    lineHeight: 20,
+  },
+  skipIntroCheckbox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 24,
+    marginBottom: 24,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#4b5563',
+    borderRadius: 4,
+    marginRight: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#C9A24D',
+    borderColor: '#C9A24D',
+  },
+  checkboxMark: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  skipIntroText: {
+    fontSize: 14,
+    color: '#9ca3af',
+  },
+  introButton: {
+    backgroundColor: '#C9A24D',
+    paddingVertical: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  introButtonText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#000',
+    letterSpacing: 2,
+  },
+  settingsButton: {
+    backgroundColor: '#1e293b',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  settingsButtonText: {
+    fontSize: 14,
+    color: '#C9A24D',
+    textAlign: 'center',
+  },
   dojoGateOverlay: {
     position: 'absolute',
     top: 0,

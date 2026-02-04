@@ -6,6 +6,7 @@ import { Audio, Video, ResizeMode } from 'expo-av';
 import * as Haptics from 'expo-haptics';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
+import * as Notifications from 'expo-notifications';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -26,8 +27,17 @@ import {
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import { initializePurchases, checkProStatus, getOffering, purchasePro, restorePurchases, getMonthlyPrice } from './src/services/purchaseService';
+import { initializePurchases, checkProStatus, getOffering, purchasePro, restorePurchases, getMonthlyPrice, getAnnualPrice, purchaseAnnual } from './src/services/purchaseService';
 import { PurchasesPackage } from 'react-native-purchases';
+
+// 通知の設定
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 // =========================
 // Config / Constants
@@ -69,6 +79,7 @@ const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
 const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
+const SAMURAI_MISSION_KEY = 'SAMURAI_MISSION_V1';
 const FIRST_LAUNCH_KEY = 'BUSHIDO_FIRST_LAUNCH_V1';
 const INTRO_SKIP_KEY = 'BUSHIDO_INTRO_SKIP_V1';
 const FREE_TRIAL_DAYS = 3;
@@ -154,6 +165,49 @@ AIに送信されるデータには、ユーザーの入力テキストや、音
 
 10. お問い合わせ窓口
 本ポリシーに関するお問い合わせは、下記までご連絡ください。
+・メールアドレス：oyaisyours@gmail.com
+`;
+
+const TERMS_OF_SERVICE_TEXT = `
+利用規約
+
+この利用規約（以下「本規約」）は、BUSHIDO LOG（以下「本アプリ」）の利用条件を定めるものです。本アプリをご利用いただく前に、本規約をよくお読みください。
+
+1. 規約への同意
+本アプリをダウンロード、インストール、または使用することにより、本規約に同意したものとみなされます。
+
+2. サービス内容
+本アプリは、AI技術を活用した自己成長支援サービスを提供します。サービスの内容は予告なく変更される場合があります。
+
+3. 利用料金
+・本アプリは、月額または年額のサブスクリプション形式でご利用いただけます。
+・料金は、App Storeに表示される金額となります。
+・サブスクリプションは、現在の期間終了の24時間前までにキャンセルしない限り、自動的に更新されます。
+・購入後のキャンセル・返金は、Appleの規定に従います。
+
+4. 禁止事項
+以下の行為を禁止します：
+・法令または公序良俗に違反する行為
+・本アプリの不正利用やリバースエンジニアリング
+・他のユーザーまたは第三者への迷惑行為
+・本アプリの運営を妨害する行為
+
+5. 免責事項
+・本アプリは「現状有姿」で提供され、特定目的への適合性を保証するものではありません。
+・AIによるアドバイスは参考情報であり、医療・法律・金融等の専門的助言に代わるものではありません。
+・本アプリの利用により生じた損害について、当方は一切の責任を負いません。
+
+6. 知的財産権
+本アプリに含まれるコンテンツ、デザイン、ソフトウェアの著作権その他の知的財産権は、当方または正当な権利者に帰属します。
+
+7. 規約の変更
+本規約は、必要に応じて変更することがあります。重要な変更がある場合は、アプリ内でお知らせします。
+
+8. 準拠法・管轄
+本規約は日本法に準拠し、本規約に関する紛争は東京地方裁判所を第一審の専属的合意管轄裁判所とします。
+
+9. お問い合わせ
+本規約に関するお問い合わせは、下記までご連絡ください。
 ・メールアドレス：oyaisyours@gmail.com
 `;
 
@@ -560,6 +614,51 @@ export default function App() {
       setIntroSkipped(skipped === 'true');
     })();
   }, []);
+
+  // RevenueCat初期化とPro状態チェック
+  useEffect(() => {
+    (async () => {
+      try {
+        await initializePurchases();
+        const proStatus = await checkProStatus();
+        // setIsPro(proStatus); // TEST
+        const monthly = await getMonthlyPrice();
+        const annual = await getAnnualPrice();
+        setMonthlyPrice(monthly);
+        setAnnualPrice(annual);
+      } catch (e) {
+        console.log('RevenueCat init error', e);
+      }
+    })();
+  }, []);
+  
+  // 通知の権限リクエスト
+  useEffect(() => {
+    (async () => {
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.log('Notification permission not granted');
+      }
+    })();
+  }, []);
+
+  // 通知タップ時のハンドラー
+  useEffect(() => {
+    const subscription = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (data?.type === 'wakeup_alarm') {
+        // 起床アラームの通知タップ → アラームタブへ移動して鳴らす
+        setTab('alarm');
+        setAlarmRinging(true);
+      } else if (data?.type === 'mission_deadline') {
+        // ミッション期限通知タップ → アラーム画面表示
+        setMissionStatus('expired');
+        setMissionAlarmActive(true);
+        setShowMissionAlarm(true);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
   
   // 道場の門を閉じる（刀音付き）
   const handleEnterDojo = async () => {
@@ -606,6 +705,8 @@ export default function App() {
   const [alarmRinging, setAlarmRinging] = useState(false);
   const [alarmLevel, setAlarmLevel] = useState(1);
   const alarmIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const [alarmNotificationId, setAlarmNotificationId] = useState<string | null>(null);
+  const [missionNotificationId, setMissionNotificationId] = useState<string | null>(null);
   
   const alarmMessages = {
     1: [
@@ -789,17 +890,21 @@ export default function App() {
   const [obIdentity, setObIdentity] = useState('');
   const [obQuit, setObQuit] = useState('');
   const [obRule, setObRule] = useState('');
+  const [onboardingStep, setOnboardingStep] = useState(1); // 新オンボーディング: 1-4
+  const [userStartChoice, setUserStartChoice] = useState<'free' | 'serious' | null>(null);
 
   // settings
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   // 課金関連
-  const [isPro, setIsPro] = useState(false);
+  const [isPro, setIsPro] = useState(true);
   const [trialExpired, setTrialExpired] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [currentOffering, setCurrentOffering] = useState<PurchasesPackage | null>(null);
-  const [monthlyPrice, setMonthlyPrice] = useState('¥700/月');
+  const [monthlyPrice, setMonthlyPrice] = useState('¥700');
+  const [annualPrice, setAnnualPrice] = useState('¥7,000');
   const [samuraiKingUses, setSamuraiKingUses] = useState(0);
   const [showPrivacy, setShowPrivacy] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   // chat
   const [isSummoned, setIsSummoned] = useState(false);
@@ -846,6 +951,35 @@ export default function App() {
   const [samuraiMissionText, setSamuraiMissionText] = useState('');
   const [isGeneratingMission, setIsGeneratingMission] = useState(false);
   const [missionCompletedToday, setMissionCompletedToday] = useState(false);
+  
+  // サムライミッション（Lv2機能）
+  type MissionStatus = 'none' | 'offered' | 'accepted' | 'started' | 'completed' | 'expired' | 'amnesty';
+  const [missionStatus, setMissionStatus] = useState<MissionStatus>('none');
+  const [missionSource, setMissionSource] = useState<'ai' | 'self'>('ai');
+  const [missionAcceptedAt, setMissionAcceptedAt] = useState<number | null>(null);
+  const [missionDeadlineAt, setMissionDeadlineAt] = useState<number | null>(null);
+  const [missionStarted, setMissionStarted] = useState(false);
+  const [dailyMissionUsed, setDailyMissionUsed] = useState(false);
+  const [amnestyUsedToday, setAmnestyUsedToday] = useState(false);
+  const [missionAlarmActive, setMissionAlarmActive] = useState(false);
+  const [missionDeadlineMinutes, setMissionDeadlineMinutes] = useState(10);
+  
+  // ミッションアラーム解除用
+  const [showMissionAlarm, setShowMissionAlarm] = useState(false);
+  const [missionQuizCorrectStreak, setMissionQuizCorrectStreak] = useState(0);
+  const [missionQuizQuestion, setMissionQuizQuestion] = useState({ q: '', a: '' });
+  const [missionQuizAnswer, setMissionQuizAnswer] = useState('');
+  const [missionQuizTimeLeft, setMissionQuizTimeLeft] = useState(10);
+  const [showAlternativeAction, setShowAlternativeAction] = useState(false);
+  const [alternativeAction, setAlternativeAction] = useState('');
+  
+  // 相談からのミッション提案
+  const [showMissionProposal, setShowMissionProposal] = useState(false);
+  const [proposedMission, setProposedMission] = useState('');
+  const [lastConsultText, setLastConsultText] = useState(''); // 最後の相談内容
+  const [lastConsultReply, setLastConsultReply] = useState(''); // 最後の返答
+  const [canCreateMission, setCanCreateMission] = useState(false); // ミッション生成可能か
+  const [isGeneratingMissionFromConsult, setIsGeneratingMissionFromConsult] = useState(false);
 
   // XP
   const [totalXp, setTotalXp] = useState(0);
@@ -937,12 +1071,23 @@ export default function App() {
       try {
         const json = await AsyncStorage.getItem(ONBOARDING_KEY);
         if (json) {
-          const data: OnboardingData = JSON.parse(json);
-          setOnboardingData(data);
-          setObIdentity(data.identity ?? '');
-          setObQuit(data.quit ?? '');
-          setObRule(data.rule ?? '');
-          setIsOnboarding(false);
+          const data = JSON.parse(json);
+          // 新フォーマット: { completed: true, choice: 'free' | 'serious' }
+          // 旧フォーマット: OnboardingData { identity, quit, rule }
+          if (data.completed) {
+            // 新フォーマット
+            setUserStartChoice(data.choice || 'free');
+            setIsOnboarding(false);
+          } else if (data.identity !== undefined) {
+            // 旧フォーマット（既存ユーザー対応）
+            setOnboardingData(data);
+            setObIdentity(data.identity ?? '');
+            setObQuit(data.quit ?? '');
+            setObRule(data.rule ?? '');
+            setIsOnboarding(false);
+          } else {
+            setIsOnboarding(true);
+          }
         } else {
           setIsOnboarding(true);
         }
@@ -981,6 +1126,110 @@ export default function App() {
       }
     })();
   }, []);
+
+  // samuraiKingUsesを読み込み（初回無料体験の管理）
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(SAMURAI_KING_USES_KEY);
+        if (json) {
+          const data = JSON.parse(json);
+          const today = new Date().toISOString().split('T')[0];
+          if (data.date === today) {
+            setSamuraiKingUses(data.count);
+          } else {
+            setSamuraiKingUses(0);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load samuraiKingUses', e);
+      }
+    })();
+  }, []);
+
+  // サムライミッションの読み込みと日付リセット
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(SAMURAI_MISSION_KEY);
+        const today = new Date().toISOString().split('T')[0];
+        if (json) {
+          const data = JSON.parse(json);
+          if (data.date !== today) {
+            console.log('Mission: New day, resetting...');
+            setMissionStatus('none');
+            setDailyMissionUsed(false);
+            setAmnestyUsedToday(false);
+            setMissionStarted(false);
+            setMissionAlarmActive(false);
+            setSamuraiMissionText('');
+            setMissionAcceptedAt(null);
+            setMissionDeadlineAt(null);
+          } else {
+            setSamuraiMissionText(data.missionText || '');
+            setMissionStatus(data.status || 'none');
+            setMissionSource(data.source || 'ai');
+            setMissionAcceptedAt(data.acceptedAt || null);
+            setMissionDeadlineAt(data.deadlineAt || null);
+            setMissionStarted(data.started || false);
+            setDailyMissionUsed(data.dailyUsed || false);
+            setAmnestyUsedToday(data.amnestyUsed || false);
+            setMissionAlarmActive(data.alarmActive || false);
+            console.log('Mission: Restored state:', data.status);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to load mission', e);
+      }
+    })();
+  }, []);
+
+  // ミッションデータを保存する関数
+  const saveMissionState = async (updates: Partial<{
+    missionText: string;
+    status: MissionStatus;
+    source: 'ai' | 'self';
+    acceptedAt: number | null;
+    deadlineAt: number | null;
+    started: boolean;
+    dailyUsed: boolean;
+    amnestyUsed: boolean;
+    alarmActive: boolean;
+  }>) => {
+    const today = new Date().toISOString().split('T')[0];
+    const current = {
+      date: today,
+      missionText: updates.missionText ?? samuraiMissionText,
+      status: updates.status ?? missionStatus,
+      source: updates.source ?? missionSource,
+      acceptedAt: updates.acceptedAt ?? missionAcceptedAt,
+      deadlineAt: updates.deadlineAt ?? missionDeadlineAt,
+      started: updates.started ?? missionStarted,
+      dailyUsed: updates.dailyUsed ?? dailyMissionUsed,
+      amnestyUsed: updates.amnestyUsed ?? amnestyUsedToday,
+      alarmActive: updates.alarmActive ?? missionAlarmActive,
+    };
+    await AsyncStorage.setItem(SAMURAI_MISSION_KEY, JSON.stringify(current));
+  };
+
+  // ミッションタイマー監視
+  useEffect(() => {
+    if (missionStatus !== 'accepted' || !missionDeadlineAt) return;
+    
+    const interval = setInterval(() => {
+      const now = Date.now();
+      if (now > missionDeadlineAt && !missionStarted) {
+        console.log('Mission: Deadline exceeded, alarm triggered!');
+        setMissionStatus('expired');
+        setMissionAlarmActive(true);
+        setShowMissionAlarm(true);
+        saveMissionState({ status: 'expired', alarmActive: true });
+        clearInterval(interval);
+      }
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [missionStatus, missionDeadlineAt, missionStarted]);
 
   useEffect(() => {
     (async () => {
@@ -1121,6 +1370,7 @@ export default function App() {
   const saveDailyLogsToStorage = async (logs: DailyLog[]) => {
     try {
       await AsyncStorage.setItem(DAILY_LOGS_KEY, JSON.stringify(logs));
+      markMissionStarted(); // サムライミッション開始判定
     } catch (e) {
       console.error('Failed to save daily logs', e);
     }
@@ -1336,6 +1586,13 @@ export default function App() {
         setSamuraiKingUses(newUses);
         await AsyncStorage.setItem(SAMURAI_KING_USES_KEY, JSON.stringify({ date: today, count: newUses }));
       }
+      
+      // 相談内容を保持（ミッション生成用）- 自動提案はしない
+      console.log("Mission button check:", { isPro, dailyMissionUsed, missionStatus }); if (isPro && !dailyMissionUsed && missionStatus === 'none') {
+        setLastConsultText(userText);
+        setLastConsultReply(replyText);
+        setCanCreateMission(true);
+      }
     } catch (error) {
       console.log('SamuraiKing error', error);
       setMessages(prev => [
@@ -1362,6 +1619,372 @@ export default function App() {
     setMode('history');
     await loadHistory();
   };
+
+  // =========================
+  // サムライミッション機能
+  // =========================
+
+  // クイズ問題を生成
+  const generateMissionQuiz = () => {
+    const quizTypes = ['add', 'multiply', 'sequence'];
+    const type = quizTypes[Math.floor(Math.random() * quizTypes.length)];
+    
+    if (type === 'add') {
+      const a = Math.floor(Math.random() * 50) + 10;
+      const b = Math.floor(Math.random() * 50) + 10;
+      return { q: `${a} + ${b} = ?`, a: String(a + b) };
+    } else if (type === 'multiply') {
+      const a = Math.floor(Math.random() * 9) + 2;
+      const b = Math.floor(Math.random() * 9) + 2;
+      return { q: `${a} × ${b} = ?`, a: String(a * b) };
+    } else {
+      const start = Math.floor(Math.random() * 5) + 1;
+      const diff = Math.floor(Math.random() * 3) + 2;
+      const seq = [start, start + diff, start + diff * 2];
+      return { q: `${seq.join(', ')}, ? (次の数)`, a: String(start + diff * 3) };
+    }
+  };
+
+  // 代替行動を生成
+  const generateAlternativeAction = () => {
+    const actions = [
+      '立って深呼吸を5回する',
+      '冷たい水で顔を洗う',
+      '今日の最重要タスクを1行で書く',
+      '立ったまま30秒間目を閉じる',
+      '窓を開けて外の空気を吸う',
+    ];
+    return actions[Math.floor(Math.random() * actions.length)];
+  };
+
+  // 相談内容からミッションを生成
+  const generateMissionFromConsult = async () => {
+    if (!lastConsultReply || isGeneratingMissionFromConsult) return;
+    
+    setIsGeneratingMissionFromConsult(true);
+    
+    try {
+      // サムライキングの返答からミッションを抽出するプロンプト
+      const missionPrompt = `【ミッション抽出依頼】
+以下はサムライキングがユーザーに提案した返答です。
+この返答から「具体的な行動」を1つだけ抽出してミッション形式にしてください。
+
+サムライキングの返答：
+「${lastConsultReply}」
+
+ルール：
+- 返答に含まれる行動をそのまま使う（勝手に変えない）
+- 時間・場所・回数が明記されていればそのまま含める
+- 明記されていなければ最低限だけ補足
+- 1〜2文で簡潔に
+
+出力形式：
+ミッション内容のみ。説明や前置きは不要。`;
+
+      const missionText = await callSamuraiKing(missionPrompt);
+      
+      // 余計な前置きを削除
+      const cleanMission = missionText
+        .replace(/^(ミッション[：:]\s*|では[、,]\s*|よし[、,]\s*|了解[、,]\s*)/i, '')
+        .trim();
+      
+      setProposedMission(cleanMission);
+      setShowMissionProposal(true);
+      setCanCreateMission(false);
+      
+    } catch (error) {
+      console.error('Mission generation error:', error);
+      Alert.alert('エラー', 'ミッション生成に失敗しました');
+    } finally {
+      setIsGeneratingMissionFromConsult(false);
+    }
+  };
+
+  // 相談からのミッション提案を受諾
+  const acceptProposedMission = async () => {
+    setShowMissionProposal(false);
+    
+    // ミッションを設定
+    setSamuraiMissionText(proposedMission);
+    setMissionSource('ai');
+    setMissionStatus('offered');
+    
+    await saveMissionState({
+      missionText: proposedMission,
+      source: 'ai',
+      status: 'offered',
+    });
+    
+    playCorrectSound();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    
+    // トーストで表示（チャットに流さない）
+    showSaveSuccess('契約成立！目標タブで期限を設定せよ');
+    
+    // 目標タブに自動移動
+    setTimeout(() => setTab('goal'), 500);
+  };
+
+  // 相談からのミッション提案を拒否
+  const rejectProposedMission = () => {
+    setShowMissionProposal(false);
+    
+    playWrongSound();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+    
+    // トーストで表示（チャットに流さない）
+    const angryMessages = [
+      '今回は逃げたな…だが次がある',
+      '臆病者め…次は逃げるなよ',
+      'やらぬか。まあいい、お前の人生だ',
+    ];
+    const angryMsg = angryMessages[Math.floor(Math.random() * angryMessages.length)];
+    showSaveSuccess(angryMsg);
+  };
+
+  // ミッション受諾
+  const acceptMission = async () => {
+    if (dailyMissionUsed) {
+      Alert.alert('今日のミッションは終了', '明日また挑戦しよう！');
+      return;
+    }
+    
+    const now = Date.now();
+    const deadline = now + missionDeadlineMinutes * 60 * 1000;
+    
+    setMissionStatus('accepted');
+    setMissionAcceptedAt(now);
+    setMissionDeadlineAt(deadline);
+    setDailyMissionUsed(true);
+    setMissionStarted(false);
+    
+    await saveMissionState({
+      status: 'accepted',
+      acceptedAt: now,
+      deadlineAt: deadline,
+      dailyUsed: true,
+      started: false,
+    });
+    
+    // 期限切れ通知をスケジュール
+    if (missionNotificationId) {
+      await Notifications.cancelScheduledNotificationAsync(missionNotificationId);
+    }
+    const notifId = await Notifications.scheduleNotificationAsync({
+      content: {
+        title: '⚠️ ミッション期限切れ',
+        body: '逃げたな？アプリを開いてアラームを解除せよ！',
+        sound: true,
+        data: { type: 'mission_deadline' },
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.DATE,
+        date: new Date(deadline),
+      },
+    });
+    setMissionNotificationId(notifId);
+    
+    playTapSound();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    Alert.alert('契約成立！', `${missionDeadlineMinutes}分以内に行動を開始せよ`);
+    console.log('Mission: Accepted, deadline:', new Date(deadline).toLocaleTimeString());
+  };
+
+  // ミッション開始を記録
+  const markMissionStarted = async () => {
+    if (missionStatus === 'accepted' && !missionStarted) {
+      console.log('Mission: Started!');
+      setMissionStarted(true);
+      setMissionStatus('started');
+      await saveMissionState({ started: true, status: 'started' });
+      
+      // 期限通知をキャンセル（開始したので不要）
+      if (missionNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(missionNotificationId);
+        setMissionNotificationId(null);
+      }
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  };
+
+  // ミッション完了
+  const completeMission = async () => {
+    if (missionStatus === 'started' || missionStatus === 'accepted') {
+      console.log('Mission: Completed!');
+      setMissionStatus('completed');
+      setMissionCompletedToday(true);
+      await saveMissionState({ status: 'completed' });
+      
+      // 期限通知をキャンセル
+      if (missionNotificationId) {
+        await Notifications.cancelScheduledNotificationAsync(missionNotificationId);
+        setMissionNotificationId(null);
+      }
+      
+      const xpGain = 50;
+      const newXp = totalXp + xpGain;
+      setTotalXp(newXp);
+      await AsyncStorage.setItem(XP_KEY, String(newXp));
+      
+      playCorrectSound();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSaveSuccess(`修行達成！+${xpGain} XP`);
+    }
+  };
+
+  // クイズ解答チェック
+  const checkMissionQuizAnswer = () => {
+    if (missionQuizAnswer.trim() === missionQuizQuestion.a) {
+      const newStreak = missionQuizCorrectStreak + 1;
+      setMissionQuizCorrectStreak(newStreak);
+      playCorrectSound();
+      
+      if (newStreak >= 3) {
+        setMissionAlarmActive(false);
+        setShowMissionAlarm(false);
+        setMissionQuizCorrectStreak(0);
+        saveMissionState({ alarmActive: false });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showSaveSuccess('アラーム解除！今日も頑張ろう');
+      } else {
+        setMissionQuizQuestion(generateMissionQuiz());
+        setMissionQuizAnswer('');
+        setMissionQuizTimeLeft(10);
+      }
+    } else {
+      playWrongSound();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setMissionQuizCorrectStreak(0);
+      setMissionQuizQuestion(generateMissionQuiz());
+      setMissionQuizAnswer('');
+      setMissionQuizTimeLeft(10);
+    }
+  };
+
+  // カメラでアラーム解除
+  const dismissAlarmWithCamera = async () => {
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('カメラ権限が必要です');
+      return;
+    }
+    
+    const result = await ImagePicker.launchCameraAsync({
+      allowsEditing: false,
+      quality: 0.5,
+    });
+    
+    if (!result.canceled) {
+      setMissionAlarmActive(false);
+      setShowMissionAlarm(false);
+      saveMissionState({ alarmActive: false });
+      playCorrectSound();
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showSaveSuccess('アラーム解除！今日も頑張ろう');
+    }
+  };
+
+  // 恩赦（1日1回）
+  const grantAmnesty = async () => {
+    if (amnestyUsedToday) {
+      Alert.alert('恩赦は1日1回のみ', '今日はもう使用済みです');
+      return;
+    }
+    
+    setAmnestyUsedToday(true);
+    setMissionAlarmActive(false);
+    setShowMissionAlarm(false);
+    setMissionStatus('amnesty');
+    
+    setAlternativeAction(generateAlternativeAction());
+    setShowAlternativeAction(true);
+    
+    await saveMissionState({
+      status: 'amnesty',
+      alarmActive: false,
+      amnestyUsed: true,
+    });
+    
+    const xpGain = 25;
+    const newXp = totalXp + xpGain;
+    setTotalXp(newXp);
+    await AsyncStorage.setItem(XP_KEY, String(newXp));
+  };
+
+  // 代替行動完了
+  const completeAlternativeAction = () => {
+    setShowAlternativeAction(false);
+    playCorrectSound();
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showSaveSuccess('代替行動完了！+25 XP');
+  };
+
+  // 自作ミッションのバリデーション
+  const validateSelfMission = (text: string): { valid: boolean; error?: string } => {
+    const timePatterns = /(\d+秒|\d+分|\d+時間|[0-9]+sec|[0-9]+min)/i;
+    if (!timePatterns.test(text)) {
+      return { valid: false, error: '時間を含めてください（例：3分、60秒）' };
+    }
+    
+    const placePatterns = /(立って|座って|机|玄関|風呂|洗面|トイレ|外|ベッド|リビング|キッチン|で)/i;
+    if (!placePatterns.test(text)) {
+      return { valid: false, error: '場所か姿勢を含めてください（例：立って、机で）' };
+    }
+    
+    return { valid: true };
+  };
+
+  // 自作ミッションを設定
+  const setSelfMission = async (text: string) => {
+    const validation = validateSelfMission(text);
+    if (!validation.valid) {
+      Alert.alert('ミッションの形式', validation.error);
+      return false;
+    }
+    
+    setSamuraiMissionText(text);
+    setMissionSource('self');
+    setMissionStatus('offered');
+    await saveMissionState({
+      missionText: text,
+      source: 'self',
+      status: 'offered',
+    });
+    return true;
+  };
+
+  // クイズタイマー
+  useEffect(() => {
+    if (!showMissionAlarm || missionQuizTimeLeft <= 0) return;
+    
+    const timer = setTimeout(() => {
+      setMissionQuizTimeLeft(prev => prev - 1);
+    }, 1000);
+    
+    return () => clearTimeout(timer);
+  }, [showMissionAlarm, missionQuizTimeLeft]);
+
+  // タイムアウトで不正解扱い
+  useEffect(() => {
+    if (showMissionAlarm && missionQuizTimeLeft === 0) {
+      playWrongSound();
+      setMissionQuizCorrectStreak(0);
+      setMissionQuizQuestion(generateMissionQuiz());
+      setMissionQuizAnswer('');
+      setMissionQuizTimeLeft(10);
+    }
+  }, [missionQuizTimeLeft, showMissionAlarm]);
+
+  // アラーム表示時にクイズ初期化
+  useEffect(() => {
+    if (showMissionAlarm) {
+      setMissionQuizQuestion(generateMissionQuiz());
+      setMissionQuizAnswer('');
+      setMissionQuizCorrectStreak(0);
+      setMissionQuizTimeLeft(10);
+    }
+  }, [showMissionAlarm]);
 
   // =========================
   // Daily log actions (goal/review)
@@ -1476,6 +2099,15 @@ export default function App() {
     try {
       const mission = await callSamuraiMissionGPT();
       setSamuraiMissionText(mission);
+      setMissionSource('ai');
+      setMissionStatus('offered');
+      
+      // ミッション状態を保存
+      await saveMissionState({
+        missionText: mission,
+        source: 'ai',
+        status: 'offered',
+      });
 
       await upsertTodayLog(prev => ({
         date: getTodayStr(),
@@ -2085,6 +2717,19 @@ export default function App() {
                     ))}
                   </ScrollView>
 
+                  {/* 相談からミッションを作るボタン（Pro限定・送信中は非表示） */}
+                  {canCreateMission && isPro && !dailyMissionUsed && missionStatus === 'none' && !isSending && !typingMessageId && (
+                    <Pressable
+                      style={styles.createMissionButton}
+                      onPress={() => { playTapSound(); generateMissionFromConsult(); }}
+                      disabled={isGeneratingMissionFromConsult}
+                    >
+                      <Text style={styles.createMissionButtonText}>
+                        {isGeneratingMissionFromConsult ? 'ミッション生成中...' : '⚔️ この相談からミッションを作る'}
+                      </Text>
+                    </Pressable>
+                  )}
+
                   <View style={styles.inputRow}>
                     <TextInput
                       style={styles.input}
@@ -2185,27 +2830,110 @@ export default function App() {
           <View style={{ marginBottom: 12 }}>
             <View style={styles.samuraiMissionHeaderRow}>
               <Text style={styles.samuraiMissionTitle}>サムライミッション</Text>
-              <Text style={styles.samuraiMissionXp}>達成で 10XP</Text>
+              <Text style={styles.samuraiMissionXp}>{isPro ? '達成で 50XP' : 'Pro限定'}</Text>
             </View>
-            <Text style={styles.goalSub}>AIが「今日やるといい一手」をくれるでござる。</Text>
+            
+            {isPro ? (
+              <>
+                <Text style={styles.goalSub}>AIが「今日やるといい一手」をくれるでござる。</Text>
 
-            {samuraiMissionText ? (
-              <View style={styles.samuraiMissionBox}>
-                <Text style={styles.samuraiMissionText}>{samuraiMissionText}</Text>
-                <Pressable
-                  style={[styles.samuraiMissionButton, missionCompletedToday && { opacity: 0.5 }]}
-                  onPress={() => { playTapSound(); handleCompleteSamuraiMission(); }}
-                  disabled={missionCompletedToday}
+                {/* ミッションステータス表示 */}
+                {missionStatus !== 'none' && missionStatus !== 'offered' && (
+                  <View style={{ backgroundColor: '#2a2a3e', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                    <Text style={{ color: '#888', fontSize: 12, textAlign: 'center' }}>
+                      ステータス: {
+                        missionStatus === 'accepted' ? '⏳ 受諾済み（行動待ち）' :
+                        missionStatus === 'started' ? '🔥 行動開始' :
+                        missionStatus === 'completed' ? '✅ 完了' :
+                        missionStatus === 'expired' ? '⚠️ 期限切れ' :
+                        missionStatus === 'amnesty' ? '🙏 恩赦' : ''
+                      }
+                    </Text>
+                    {missionStatus === 'accepted' && missionDeadlineAt && (
+                      <Text style={{ color: '#FF4444', fontSize: 14, textAlign: 'center', marginTop: 4 }}>
+                        残り: {Math.max(0, Math.floor((missionDeadlineAt - Date.now()) / 1000 / 60))}分
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                {samuraiMissionText ? (
+                  <View style={styles.samuraiMissionBox}>
+                    <Text style={styles.samuraiMissionText}>{samuraiMissionText}</Text>
+                    
+                    {/* 受諾前：受諾ボタン表示 */}
+                    {missionStatus === 'offered' && (
+                      <View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                          <Text style={{ color: '#888', marginRight: 8 }}>期限:</Text>
+                          <Pressable onPress={() => setMissionDeadlineMinutes(5)} style={{ backgroundColor: missionDeadlineMinutes === 5 ? '#D4AF37' : '#333', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginRight: 8 }}>
+                            <Text style={{ color: missionDeadlineMinutes === 5 ? '#000' : '#FFF' }}>5分</Text>
+                          </Pressable>
+                          <Pressable onPress={() => setMissionDeadlineMinutes(10)} style={{ backgroundColor: missionDeadlineMinutes === 10 ? '#D4AF37' : '#333', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, marginRight: 8 }}>
+                            <Text style={{ color: missionDeadlineMinutes === 10 ? '#000' : '#FFF' }}>10分</Text>
+                          </Pressable>
+                          <Pressable onPress={() => setMissionDeadlineMinutes(30)} style={{ backgroundColor: missionDeadlineMinutes === 30 ? '#D4AF37' : '#333', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}>
+                            <Text style={{ color: missionDeadlineMinutes === 30 ? '#000' : '#FFF' }}>30分</Text>
+                          </Pressable>
+                        </View>
+                        <Pressable
+                          style={[styles.samuraiMissionButton, { backgroundColor: '#D4AF37' }]}
+                          onPress={acceptMission}
+                        >
+                          <Text style={[styles.samuraiMissionButtonText, { color: '#000' }]}>契約する（{missionDeadlineMinutes}分以内に行動開始）</Text>
+                        </Pressable>
+                      </View>
+                    )}
+
+                    {/* 受諾後〜完了前：完了ボタン表示 */}
+                    {(missionStatus === 'accepted' || missionStatus === 'started') && (
+                      <Pressable
+                        style={styles.samuraiMissionButton}
+                        onPress={completeMission}
+                      >
+                        <Text style={styles.samuraiMissionButtonText}>ミッション完了！</Text>
+                      </Pressable>
+                    )}
+
+                    {/* 完了済み */}
+                    {(missionStatus === 'completed' || missionStatus === 'amnesty') && (
+                      <View style={[styles.samuraiMissionButton, { opacity: 0.5 }]}>
+                        <Text style={styles.samuraiMissionButtonText}>
+                          {missionStatus === 'completed' ? '✅ 達成済み！' : '🙏 恩赦済み'}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                ) : (
+                  <Pressable 
+                    style={[styles.samuraiMissionButton, dailyMissionUsed && { opacity: 0.5 }]} 
+                    onPress={() => { 
+                      if (dailyMissionUsed) {
+                        Alert.alert('今日のミッションは終了', '明日また挑戦しよう！');
+                        return;
+                      }
+                      playTapSound(); 
+                      handleGenerateSamuraiMission(); 
+                    }}
+                    disabled={dailyMissionUsed}
+                  >
+                    <Text style={styles.samuraiMissionButtonText}>
+                      {dailyMissionUsed ? '今日のミッション終了' : isGeneratingMission ? '生成中…' : 'サムライミッションを受け取る'}
+                    </Text>
+                  </Pressable>
+                )}
+              </>
+            ) : (
+              // 無料ユーザー向け：Proへのアップグレード促進
+              <View>
+                <Text style={styles.goalSub}>Proになると、サムライキングからミッションを受け取り、期限付きで挑戦できる。逃げたらアラームが鳴る。本気で変わりたい者だけの機能だ。</Text>
+                <Pressable 
+                  style={[styles.samuraiMissionButton, { backgroundColor: '#D4AF37' }]}
+                  onPress={() => setShowPaywall(true)}
                 >
-                  <Text style={styles.samuraiMissionButtonText}>
-                    {missionCompletedToday ? '達成済み！' : 'ミッション達成！XPゲット'}
-                  </Text>
+                  <Text style={[styles.samuraiMissionButtonText, { color: '#000' }]}>🔓 Proで解放する</Text>
                 </Pressable>
               </View>
-            ) : (
-              <Pressable style={styles.samuraiMissionButton} onPress={() => { playTapSound(); handleGenerateSamuraiMission(); }}>
-                <Text style={styles.samuraiMissionButtonText}>{isGeneratingMission ? '生成中…' : 'サムライミッションを受け取る'}</Text>
-              </Pressable>
             )}
           </View>
 
@@ -2650,26 +3378,54 @@ export default function App() {
     );
   };
 
-  // Paywallモーダル
+  // Paywallモーダル（App Store審査対応版）
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
+  
   const renderPaywall = () => (
     <Modal visible={showPaywall} animationType="slide" transparent>
       <View style={styles.paywallOverlay}>
         <View style={styles.paywallCard}>
-          <Text style={styles.paywallTitle}>この先はPro</Text>
-          <Text style={styles.paywallSubtitle}>決断を続けたい人のために。</Text>
-          <Text style={styles.paywallPrice}>{monthlyPrice}</Text>
+          <Text style={styles.paywallTitle}>道場に入る</Text>
+          <Text style={styles.paywallSubtitle}>ここから先は、{'\n'}自分と向き合い続ける人のための場所です。</Text>
+          
+          {/* プラン選択 */}
+          <View style={styles.planContainer}>
+            <Pressable
+              style={[styles.planOption, selectedPlan === 'annual' && styles.planSelected]}
+              onPress={() => setSelectedPlan('annual')}
+            >
+              <View style={styles.planBadge}><Text style={styles.planBadgeText}>2ヶ月分お得</Text></View>
+              <Text style={styles.planName}>年額プラン</Text>
+              <Text style={styles.planPrice}>{annualPrice}/年</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.planOption, selectedPlan === 'monthly' && styles.planSelected]}
+              onPress={() => setSelectedPlan('monthly')}
+            >
+              <Text style={styles.planName}>月額プラン</Text>
+              <Text style={styles.planPrice}>{monthlyPrice}/月</Text>
+            </Pressable>
+          </View>
+
+          {/* 購入ボタン */}
           <Pressable
             style={styles.paywallButton}
             onPress={async () => {
-              const success = await purchasePro();
+              const success = selectedPlan === 'annual' 
+                ? await purchaseAnnual() 
+                : await purchasePro();
               if (success) {
                 setIsPro(true);
                 setShowPaywall(false);
               }
             }}
           >
-            <Text style={styles.paywallButtonText}>Proにする</Text>
+            <Text style={styles.paywallButtonText}>
+              {selectedPlan === 'annual' ? '年額プランで始める' : '月額プランで始める'}
+            </Text>
           </Pressable>
+
+          {/* 購入を復元 */}
           <Pressable
             style={styles.paywallRestoreButton}
             onPress={async () => {
@@ -2682,8 +3438,131 @@ export default function App() {
           >
             <Text style={styles.paywallRestoreText}>購入を復元</Text>
           </Pressable>
+
+          {/* 今は入らない */}
           <Pressable onPress={() => { playTapSound(); setShowPaywall(false); }}>
-            <Text style={styles.paywallCloseText}>今はやめる</Text>
+            <Text style={styles.paywallCloseText}>今は入らない</Text>
+          </Pressable>
+
+          {/* 法的説明（Apple必須） */}
+          <Text style={styles.paywallLegal}>
+            サブスクリプションは購入確認時にiTunesアカウントに請求されます。
+            現在の期間終了の24時間前までにキャンセルしない限り、自動的に更新されます。
+            購入後、設定アプリからいつでも管理・キャンセルできます。
+          </Text>
+
+          {/* 利用規約・プライバシーポリシー */}
+          <View style={styles.paywallLinks}>
+            <Pressable onPress={() => { setShowPaywall(false); setShowTerms(true); }}>
+              <Text style={styles.paywallLinkText}>利用規約</Text>
+            </Pressable>
+            <Text style={styles.paywallLinkDivider}>｜</Text>
+            <Pressable onPress={() => { setShowPaywall(false); setShowPrivacy(true); }}>
+              <Text style={styles.paywallLinkText}>プライバシーポリシー</Text>
+            </Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // ミッションアラームモーダル
+  const renderMissionAlarm = () => (
+    <Modal visible={showMissionAlarm} animationType="slide" transparent={false}>
+      <View style={styles.missionAlarmContainer}>
+        <Text style={styles.missionAlarmTitle}>⚠️ ミッション期限切れ ⚠️</Text>
+        <Text style={styles.missionAlarmSubtitle}>アラームを解除するには以下のいずれかを実行</Text>
+        
+        {/* クイズ解除 */}
+        <View style={styles.missionAlarmSection}>
+          <Text style={styles.missionAlarmSectionTitle}>🧠 クイズ解除（{missionQuizCorrectStreak}/3問正解）</Text>
+          <Text style={styles.missionQuizTimer}>残り {missionQuizTimeLeft}秒</Text>
+          <Text style={styles.missionQuizQuestion}>{missionQuizQuestion.q}</Text>
+          <TextInput
+            style={styles.missionQuizInput}
+            value={missionQuizAnswer}
+            onChangeText={setMissionQuizAnswer}
+            placeholder="答えを入力"
+            placeholderTextColor="#666"
+            keyboardType="number-pad"
+            autoFocus
+          />
+          <Pressable style={styles.missionAlarmButton} onPress={checkMissionQuizAnswer}>
+            <Text style={styles.missionAlarmButtonText}>回答</Text>
+          </Pressable>
+        </View>
+
+        {/* カメラ解除 */}
+        <Pressable style={styles.missionAlarmSecondaryButton} onPress={dismissAlarmWithCamera}>
+          <Text style={styles.missionAlarmSecondaryText}>📸 写真を撮って解除</Text>
+        </Pressable>
+
+        {/* 恩赦 */}
+        {!amnestyUsedToday && (
+          <Pressable style={styles.missionAmnestyButton} onPress={grantAmnesty}>
+            <Text style={styles.missionAmnestyText}>🙏 今日は許してやろう（1日1回）</Text>
+          </Pressable>
+        )}
+      </View>
+    </Modal>
+  );
+
+  // 代替行動モーダル
+  const renderAlternativeAction = () => (
+    <Modal visible={showAlternativeAction} animationType="slide" transparent>
+      <View style={styles.paywallOverlay}>
+        <View style={styles.paywallCard}>
+          <Text style={styles.paywallTitle}>代替行動</Text>
+          <Text style={styles.paywallSubtitle}>恩赦の代わりにこれをやれ</Text>
+          <Text style={[styles.paywallPrice, { fontSize: 18, lineHeight: 28 }]}>{alternativeAction}</Text>
+          <Pressable style={styles.paywallButton} onPress={completeAlternativeAction}>
+            <Text style={styles.paywallButtonText}>完了した</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  // ミッション提案モーダル（相談後に表示）
+  const renderMissionProposal = () => (
+    <Modal visible={showMissionProposal} animationType="slide" transparent>
+      <View style={styles.paywallOverlay}>
+        <View style={styles.paywallCard}>
+          <Text style={styles.paywallTitle}>⚔️ ミッション提案</Text>
+          <Text style={styles.paywallSubtitle}>相談内容に基づく挑戦状</Text>
+          
+          <View style={styles.missionProposalBox}>
+            <Text style={styles.missionProposalText}>{proposedMission}</Text>
+          </View>
+          
+          <Text style={styles.missionProposalHint}>
+            このミッションを受けると、期限内に行動を開始する必要があります。
+            逃げると…サムライアラームが鳴り響きます。
+          </Text>
+          
+          <Pressable 
+            style={[styles.paywallButton, { backgroundColor: '#D4AF37' }]} 
+            onPress={acceptProposedMission}
+          >
+            <Text style={[styles.paywallButtonText, { color: '#000' }]}>このミッションを受ける</Text>
+          </Pressable>
+          
+          <Pressable 
+            style={[styles.paywallRestoreButton, { marginTop: 12 }]} 
+            onPress={() => {
+              playTapSound();
+              setShowMissionProposal(false);
+              setTab('goal'); // 目標タブに移動
+            }}
+          >
+            <Text style={[styles.paywallRestoreText, { color: '#2DD4BF' }]}>自分でミッションを作る</Text>
+          </Pressable>
+          
+          <Pressable 
+            style={{ marginTop: 8, padding: 8 }} 
+            onPress={rejectProposedMission}
+          >
+            <Text style={{ color: '#666', fontSize: 12, textAlign: 'center' }}>今はやらない</Text>
           </Pressable>
         </View>
       </View>
@@ -2852,6 +3731,7 @@ export default function App() {
       setShowFocusEntry(false);
       setFocusStartTime(new Date());
       setFocusTimerRunning(true);
+      markMissionStarted(); // サムライミッション開始判定
       setFocusMinutesLeft(25);
       setFocusSecondsLeft(0);
       setFocusMode('work');
@@ -2940,13 +3820,50 @@ export default function App() {
         
         <Pressable
           style={[styles.primaryButton, { marginTop: 24, backgroundColor: alarmSet ? '#ef4444' : '#2DD4BF' }]}
-          onPress={() => {
+          onPress={async () => {
             playTapSound();
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setAlarmSet(!alarmSet);
+            
             if (!alarmSet) {
+              // アラームをセット：通知をスケジュール
+              const now = new Date();
+              let triggerDate = new Date();
+              triggerDate.setHours(alarmHour, alarmMinute, 0, 0);
+              
+              // 設定時刻が過去なら翌日に
+              if (triggerDate <= now) {
+                triggerDate.setDate(triggerDate.getDate() + 1);
+              }
+              
+              // 既存の通知をキャンセル
+              if (alarmNotificationId) {
+                await Notifications.cancelScheduledNotificationAsync(alarmNotificationId);
+              }
+              
+              // 新しい通知をスケジュール
+              const notifId = await Notifications.scheduleNotificationAsync({
+                content: {
+                  title: '⚔️ サムライキング参上',
+                  body: `起きろ！${alarmMission}を撮影して目を覚ませ！`,
+                  sound: true,
+                  data: { type: 'wakeup_alarm' },
+                },
+                trigger: {
+                  type: Notifications.SchedulableTriggerInputTypes.DATE,
+                  date: triggerDate,
+                },
+              });
+              setAlarmNotificationId(notifId);
+              setAlarmSet(true);
               Alert.alert('アラーム設定完了', 
-                alarmHour + ':' + String(alarmMinute).padStart(2, '0') + ' に起床せよ。\n撮影場所：' + alarmMission + '\n\n※実際のアラーム機能は次のアップデートで追加予定');
+                alarmHour + ':' + String(alarmMinute).padStart(2, '0') + ' に起床せよ。\n撮影場所：' + alarmMission);
+            } else {
+              // アラームを解除
+              if (alarmNotificationId) {
+                await Notifications.cancelScheduledNotificationAsync(alarmNotificationId);
+                setAlarmNotificationId(null);
+              }
+              setAlarmSet(false);
             }
           }}
         >
@@ -3040,6 +3957,7 @@ export default function App() {
               playFocusStartSound();
               setShowFocusEntry(false);
               setFocusTimerRunning(true);
+              markMissionStarted(); // サムライミッション開始判定
               setFocusMinutesLeft(focusDuration);
               setFocusSecondsLeft(0);
             }}
@@ -3132,6 +4050,7 @@ export default function App() {
                 playFocusStartSound();
                 setShowFocusEntry(false);
                 setFocusTimerRunning(true);
+                markMissionStarted(); // サムライミッション開始判定
                 setFocusMinutesLeft(focusDuration);
                 setFocusSecondsLeft(0);
                 setFocusUrl('https://www.google.com');
@@ -3706,46 +4625,146 @@ export default function App() {
     </ScrollView>
   );
 
-  const renderOnboarding = () => (
-    <View style={styles.onboardingContainer}>
-      <Text style={styles.appTitle}>BUSHIDO LOG</Text>
-      <Text style={styles.onboardingLead}>まずは「どんなサムライとして生きるか」を決めるところから始めよう。</Text>
+  const renderOnboarding = () => {
+    // Step 1: Welcome（思想のみ）
+    if (onboardingStep === 1) {
+      return (
+        <View style={styles.newOnboardingContainer}>
+          <View style={styles.newOnboardingContent}>
+            <Text style={styles.newOnboardingTitle}>
+              漢は、考えすぎると動けなくなる。
+            </Text>
+            <Text style={styles.newOnboardingTitle}>
+              ブシログは、"一歩だけ"を決めるアプリだ。
+            </Text>
+            <Text style={styles.newOnboardingSubtext}>
+              説教しない。監視しない。逃げ道は残す。
+            </Text>
+          </View>
+          <Pressable 
+            style={styles.newOnboardingButton} 
+            onPress={() => { playTapSound(); setOnboardingStep(2); }}
+          >
+            <Text style={styles.newOnboardingButtonText}>次へ</Text>
+          </Pressable>
+        </View>
+      );
+    }
 
-      <Text style={styles.onboardingLabel}>1. どんなサムライとして生きたい？</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obIdentity}
-        onChangeText={setObIdentity}
-        multiline
-        placeholder="例）家族に優しく、世界で戦うサムライアーティスト"
-        placeholderTextColor="#6b7280"
-      />
+    // Step 2: 使い方の本質
+    if (onboardingStep === 2) {
+      return (
+        <View style={styles.newOnboardingContainer}>
+          <View style={styles.newOnboardingContent}>
+            <Text style={styles.newOnboardingTitle}>迷ったら、相談する。</Text>
+            <Text style={styles.newOnboardingTitle}>決めたら、ミッションにする。</Text>
+            <Text style={styles.newOnboardingTitle}>やったら、強くなる。</Text>
+            <Text style={styles.newOnboardingSubtext}>
+              全部、1〜3分で終わる。
+            </Text>
+          </View>
+          <Pressable 
+            style={styles.newOnboardingButton} 
+            onPress={() => { playTapSound(); setOnboardingStep(3); }}
+          >
+            <Text style={styles.newOnboardingButtonText}>わかった</Text>
+          </Pressable>
+        </View>
+      );
+    }
 
-      <Text style={styles.onboardingLabel}>2. やめたい習慣は？</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obQuit}
-        onChangeText={setObQuit}
-        multiline
-        placeholder="例）ダラダラSNS、夜更かし"
-        placeholderTextColor="#6b7280"
-      />
+    // Step 3: 始め方の選択
+    if (onboardingStep === 3) {
+      return (
+        <View style={styles.newOnboardingContainer}>
+          <View style={styles.newOnboardingContent}>
+            <Text style={styles.newOnboardingQuestion}>どう始める？</Text>
+          </View>
+          <View style={styles.newOnboardingChoices}>
+            <Pressable 
+              style={styles.newOnboardingPrimaryChoice} 
+              onPress={() => { 
+                playTapSound(); 
+                setUserStartChoice('free');
+                setOnboardingStep(4); 
+              }}
+            >
+              <Text style={styles.newOnboardingChoiceTitle}>まずは無料で試す</Text>
+              <Text style={styles.newOnboardingChoiceSub}>3日間、すべての機能を使える</Text>
+            </Pressable>
+            
+            <Pressable 
+              style={styles.newOnboardingSecondaryChoice} 
+              onPress={() => { 
+                playTapSound(); 
+                setUserStartChoice('serious');
+                setOnboardingStep(4); 
+              }}
+            >
+              <Text style={styles.newOnboardingChoiceTitle2}>最初から本気でいく</Text>
+              <Text style={styles.newOnboardingChoiceSub2}>Proモード・鬼コーチ解放</Text>
+            </Pressable>
+          </View>
+        </View>
+      );
+    }
 
-      <Text style={styles.onboardingLabel}>3. 毎日のマイルール</Text>
-      <TextInput
-        style={styles.onboardingInput}
-        value={obRule}
-        onChangeText={setObRule}
-        multiline
-        placeholder="例）毎日1つは未来のための行動をする"
-        placeholderTextColor="#6b7280"
-      />
+    // Step 4: 分岐画面
+    if (onboardingStep === 4) {
+      if (userStartChoice === 'serious') {
+        // 本気を選んだ人
+        return (
+          <View style={styles.newOnboardingContainer}>
+            <View style={styles.newOnboardingContent}>
+              <Text style={styles.newOnboardingTitle}>Proモードでは、</Text>
+              <Text style={styles.newOnboardingTitle}>相談は無制限。</Text>
+              <Text style={styles.newOnboardingTitle}>鬼コーチが選べる。</Text>
+              <Text style={styles.newOnboardingTitle}>制限は、なくなる。</Text>
+              <Text style={styles.newOnboardingSubtext}>
+                いつでも解約できる。
+              </Text>
+            </View>
+            <Pressable 
+              style={styles.newOnboardingButton} 
+              onPress={async () => { 
+                playTapSound();
+                await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify({ completed: true, choice: 'serious' }));
+                setIsOnboarding(false);
+                setShowPaywall(true); // Paywall表示
+              }}
+            >
+              <Text style={styles.newOnboardingButtonText}>Proで始める</Text>
+            </Pressable>
+          </View>
+        );
+      } else {
+        // 無料を選んだ人
+        return (
+          <View style={styles.newOnboardingContainer}>
+            <View style={styles.newOnboardingContent}>
+              <Text style={styles.newOnboardingTitle}>3日間、すべて解放する。</Text>
+              <Text style={styles.newOnboardingTitle}>合わなければ、消していい。</Text>
+            </View>
+            <Pressable 
+              style={styles.newOnboardingButton} 
+              onPress={async () => { 
+                playTapSound();
+                // 3日間トライアル開始
+                const trialStart = new Date().toISOString();
+                await AsyncStorage.setItem(FIRST_LAUNCH_KEY, trialStart);
+                await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify({ completed: true, choice: 'free' }));
+                setIsOnboarding(false);
+              }}
+            >
+              <Text style={styles.newOnboardingButtonText}>無料で始める</Text>
+            </Pressable>
+          </View>
+        );
+      }
+    }
 
-      <Pressable style={styles.primaryButton} onPress={() => { playTapSound(); handleSaveOnboarding(); }}>
-        <Text style={styles.primaryButtonText}>サムライ宣言を保存して始める</Text>
-      </Pressable>
-    </View>
-  );
+    return null;
+  };
 
   const renderTimeOver = () => (
     <View style={styles.timeOverContainer}>
@@ -3850,8 +4869,24 @@ export default function App() {
           </View>
         </View>
       </Modal>
+      <Modal visible={showTerms} animationType="slide" transparent>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>利用規約</Text>
+            <ScrollView style={{ maxHeight: 400 }}>
+              <Text style={styles.modalText}>{TERMS_OF_SERVICE_TEXT}</Text>
+            </ScrollView>
+            <Pressable style={[styles.primaryButton, { marginTop: 12 }]} onPress={() => setShowTerms(false)}>
+              <Text style={styles.primaryButtonText}>閉じる</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
       {renderSaveToast()}
       {renderPaywall()}
+      {renderMissionAlarm()}
+      {renderAlternativeAction()}
+      {renderMissionProposal()}
       
       {/* クイズモーダル */}
       <Modal visible={showQuiz} animationType="slide" transparent>
@@ -4938,7 +5973,9 @@ const styles = StyleSheet.create({
   paywallSubtitle: {
     fontSize: 14,
     color: '#888',
-    marginBottom: 16,
+    marginBottom: 20,
+    textAlign: 'center',
+    lineHeight: 22,
   },
   paywallPrice: {
     fontSize: 28,
@@ -4979,6 +6016,73 @@ const styles = StyleSheet.create({
     color: '#666',
     fontSize: 14,
     marginTop: 8,
+  },
+  // プラン選択スタイル
+  planContainer: {
+    width: '100%',
+    marginBottom: 20,
+  },
+  planOption: {
+    backgroundColor: '#2a2a3e',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+  },
+  planSelected: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#2a2a4e',
+  },
+  planBadge: {
+    position: 'absolute',
+    top: -10,
+    right: 12,
+    backgroundColor: '#D4AF37',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  planBadgeText: {
+    color: '#000',
+    fontSize: 11,
+    fontWeight: 'bold',
+  },
+  planName: {
+    fontSize: 16,
+    color: '#FFF',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  planPrice: {
+    fontSize: 20,
+    color: '#D4AF37',
+    fontWeight: 'bold',
+  },
+  paywallLegal: {
+    fontSize: 10,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 16,
+    lineHeight: 14,
+    paddingHorizontal: 8,
+  },
+  paywallLinks: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 12,
+  },
+  paywallLinkText: {
+    fontSize: 12,
+    color: '#888',
+    textDecorationLine: 'underline',
+  },
+  paywallLinkDivider: {
+    fontSize: 12,
+    color: '#666',
+    marginHorizontal: 8,
   },
   // Proボタンスタイル
   proButton: {
@@ -5953,5 +7057,214 @@ const styles = StyleSheet.create({
   appleCancelLinkText: {
     color: '#007AFF',
     fontSize: 15,
+  },
+  // ミッションアラームスタイル
+  missionAlarmContainer: {
+    flex: 1,
+    backgroundColor: '#1a1a2e',
+    padding: 24,
+    justifyContent: 'center',
+  },
+  missionAlarmTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#FF4444',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  missionAlarmSubtitle: {
+    fontSize: 14,
+    color: '#888',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  missionAlarmSection: {
+    backgroundColor: '#2a2a3e',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+  },
+  missionAlarmSectionTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FFF',
+    marginBottom: 12,
+  },
+  missionQuizTimer: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#FF4444',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  missionQuizQuestion: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#D4AF37',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  missionQuizInput: {
+    backgroundColor: '#1a1a2e',
+    borderRadius: 12,
+    padding: 16,
+    fontSize: 24,
+    color: '#FFF',
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  missionAlarmButton: {
+    backgroundColor: '#2DD4BF',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  missionAlarmButtonText: {
+    color: '#000',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  missionAlarmSecondaryButton: {
+    backgroundColor: '#2a2a3e',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  missionAlarmSecondaryText: {
+    color: '#FFF',
+    fontSize: 16,
+  },
+  missionAmnestyButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#666',
+    borderRadius: 12,
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  missionAmnestyText: {
+    color: '#888',
+    fontSize: 14,
+  },
+  // ミッション提案スタイル
+  missionProposalBox: {
+    backgroundColor: '#2a2a3e',
+    borderRadius: 12,
+    padding: 16,
+    marginVertical: 16,
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+  },
+  missionProposalText: {
+    color: '#FFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    lineHeight: 26,
+  },
+  missionProposalHint: {
+    color: '#888',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 18,
+  },
+  // 新オンボーディングスタイル
+  newOnboardingContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'space-between',
+    paddingHorizontal: 32,
+    paddingTop: 120,
+    paddingBottom: 60,
+  },
+  newOnboardingContent: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  newOnboardingTitle: {
+    color: '#FFF',
+    fontSize: 22,
+    fontWeight: '600',
+    lineHeight: 36,
+    textAlign: 'left',
+  },
+  newOnboardingSubtext: {
+    color: '#666',
+    fontSize: 14,
+    marginTop: 32,
+    lineHeight: 22,
+  },
+  newOnboardingQuestion: {
+    color: '#FFF',
+    fontSize: 28,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  newOnboardingButton: {
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    paddingVertical: 18,
+    alignItems: 'center',
+    minHeight: 56,
+  },
+  newOnboardingButtonText: {
+    color: '#000',
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  newOnboardingChoices: {
+    gap: 16,
+  },
+  newOnboardingPrimaryChoice: {
+    backgroundColor: '#FFF',
+    borderRadius: 14,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    minHeight: 80,
+  },
+  newOnboardingChoiceTitle: {
+    color: '#000',
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  newOnboardingChoiceSub: {
+    color: '#666',
+    fontSize: 13,
+  },
+  newOnboardingSecondaryChoice: {
+    backgroundColor: 'transparent',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#333',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    minHeight: 80,
+  },
+  newOnboardingChoiceTitle2: {
+    color: '#FFF',
+    fontSize: 17,
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  newOnboardingChoiceSub2: {
+    color: '#888',
+    fontSize: 13,
+  },
+  // 相談からミッション作成ボタン
+  createMissionButton: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    marginVertical: 12,
+    alignItems: 'center',
+  },
+  createMissionButtonText: {
+    color: '#000',
+    fontSize: 15,
+    fontWeight: '600',
   },
 });

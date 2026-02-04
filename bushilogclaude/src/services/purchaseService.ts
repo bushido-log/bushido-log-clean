@@ -40,6 +40,32 @@ export async function getOffering(): Promise<PurchasesPackage | null> {
   }
 }
 
+export async function getAnnualOffering(): Promise<PurchasesPackage | null> {
+  try {
+    const offerings = await Purchases.getOfferings();
+    if (offerings.current && offerings.current.annual) {
+      return offerings.current.annual;
+    }
+    return null;
+  } catch (e) {
+    console.error('Get annual offering error:', e);
+    return null;
+  }
+}
+
+export async function purchaseAnnual(): Promise<boolean> {
+  try {
+    const pkg = await getAnnualOffering();
+    if (pkg === null) return false;
+    const { customerInfo } = await Purchases.purchasePackage(pkg);
+    return customerInfo.entitlements.active['pro'] !== undefined;
+  } catch (e: any) {
+    if (e && e.userCancelled) return false;
+    console.error('Purchase annual error:', e);
+    return false;
+  }
+}
+
 export async function purchasePro(): Promise<boolean> {
   try {
     const pkg = await getOffering();
@@ -67,8 +93,18 @@ export async function getMonthlyPrice(): Promise<string> {
   try {
     const pkg = await getOffering();
     if (pkg) return pkg.product.priceString;
-    return '¥700/月';
+    return '¥700';
   } catch (e) {
-    return '¥700/月';
+    return '¥700';
+  }
+}
+
+export async function getAnnualPrice(): Promise<string> {
+  try {
+    const pkg = await getAnnualOffering();
+    if (pkg) return pkg.product.priceString;
+    return '¥7,000';
+  } catch (e) {
+    return '¥7,000';
   }
 }

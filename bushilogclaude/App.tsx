@@ -55,7 +55,7 @@ const CONFIRM_SOUND = require('./sounds/confirm.mp3');
 const RITUAL_SOUND = require('./sounds/ritual.mp3');
 const CHECK_SOUND = require('./sounds/check.mp3');
 const CORRECT_SOUND = require('./sounds/correct.mp3');
-const WRONG_SOUND = require('./sounds/wrong.mp3');
+const WRONG_SOUND = require('./sounds/wrong.mp3');const LEVELUP_SOUND = require('./sounds/sfx_levelup.mp3');const EXP_SOUND = require('./sounds/sfx_exp.mp3');const EVOLUTION_SOUND = require('./sounds/sfx_evolution.mp3');const WIN_SOUND = require('./sounds/sfx_win.mp3');const FAIL_SOUND = require('./sounds/sfx_fail.mp3');const ATTACK_SOUND = require('./sounds/sfx_attack.mp3');
 const ENTER_SOUND = require('./sounds/enter.mp3');
 const FOCUS_START_SOUND = require('./sounds/focus_start.mp3');
 const KATANA_SOUND = require('./sounds/katana_swish.mp3');
@@ -67,6 +67,38 @@ const CONSULT_BG = require('./assets/images/consult_bg.png');
 
 // Intro動画
 const INTRO_VIDEO = require('./assets/intro_video.mov');
+
+// キャラクター画像（レベル別）
+const CHARACTER_IMAGES: { [key: number]: any } = {
+  1: require('./assets/characters/level01.png'),
+  2: require('./assets/characters/level02.png'),
+  3: require('./assets/characters/level03.png'),
+  4: require('./assets/characters/level04.png'),
+  5: require('./assets/characters/level05.png'),
+  6: require('./assets/characters/level06.png'),
+  7: require('./assets/characters/level07.png'),
+  8: require('./assets/characters/level08.png'),
+  9: require('./assets/characters/level09.png'),
+  10: require('./assets/characters/level10.png'),
+};
+
+// レベル別称号
+const LEVEL_TITLES: { [key: number]: string } = {
+  0: '名もなき者',
+  1: '見習い侍',
+  2: '修行中',
+  3: '侍',
+  4: '剣豪',
+  5: '修羅',
+  6: '将軍',
+  7: '伝説',
+  8: '神速',
+  9: '覇王',
+  10: '無双',
+};
+
+// レベルアップに必要なXP（累計）
+const LEVEL_XP_THRESHOLDS = [0, 30, 80, 150, 250, 400, 600, 900, 1300, 1700, 2500];
 
 const SESSION_KEY = 'samurai_session_id';
 
@@ -325,10 +357,43 @@ function getStreakCount(logs: DailyLog[]): number {
 }
 
 function getRankFromXp(xp: number) {
-  if (xp < 30) return { label: '見習い侍', next: 30 - xp };
-  if (xp < 100) return { label: '一人前侍', next: 100 - xp };
-  if (xp < 300) return { label: '修羅の侍', next: 300 - xp };
-  return { label: '伝説の侍', next: 0 };
+  // 10段階レベルシステム
+  let level = 0;
+  for (let i = LEVEL_XP_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= LEVEL_XP_THRESHOLDS[i]) {
+      level = i;
+      break;
+    }
+  }
+  const label = LEVEL_TITLES[level] || '名もなき者';
+  const nextThreshold = LEVEL_XP_THRESHOLDS[level + 1] || LEVEL_XP_THRESHOLDS[LEVEL_XP_THRESHOLDS.length - 1];
+  const next = level >= 10 ? 0 : nextThreshold - xp;
+  return { label, next, level };
+}
+
+// XPからレベル情報を取得
+function getLevelFromXp(xp: number) {
+  let level = 0;
+  for (let i = LEVEL_XP_THRESHOLDS.length - 1; i >= 0; i--) {
+    if (xp >= LEVEL_XP_THRESHOLDS[i]) {
+      level = i;
+      break;
+    }
+  }
+  const currentThreshold = LEVEL_XP_THRESHOLDS[level] || 0;
+  const nextThreshold = LEVEL_XP_THRESHOLDS[level + 1] || LEVEL_XP_THRESHOLDS[LEVEL_XP_THRESHOLDS.length - 1];
+  const xpInLevel = xp - currentThreshold;
+  const xpForLevel = nextThreshold - currentThreshold;
+  const progress = level >= 10 ? 1 : xpInLevel / xpForLevel;
+  return { 
+    level, 
+    title: LEVEL_TITLES[level] || '名もなき者',
+    xp,
+    xpInLevel,
+    xpForLevel,
+    progress,
+    nextLevelXp: nextThreshold,
+  };
 }
 
 function getSamuraiLevelInfo(streak: number) {
@@ -405,7 +470,7 @@ async function playWrongSound() {
   await playSound(WRONG_SOUND);
 }
 
-async function playEnterSound() {
+async function playLevelupSound() { await playSound(LEVELUP_SOUND); }async function playExpSound() { await playSound(EXP_SOUND); }async function playEvolutionSound() { await playSound(EVOLUTION_SOUND); }async function playWinSound() { await playSound(WIN_SOUND); }async function playFailSound() { await playSound(FAIL_SOUND); }async function playAttackSound() { await playSound(ATTACK_SOUND); }async function playEnterSound() {
   try {
     const { sound } = await Audio.Sound.createAsync(ENTER_SOUND);
     await sound.setVolumeAsync(0.15); // 他より小さめ
@@ -539,7 +604,7 @@ export default function App() {
   };
   const messagesRef = useRef<ScrollView | null>(null);
 
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm'>('consult');
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm' | 'character'>('consult');
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
@@ -983,6 +1048,9 @@ export default function App() {
 
   // XP
   const [totalXp, setTotalXp] = useState(0);
+  const [showLevelUpModal, setShowLevelUpModal] = useState(false);
+  const [levelUpInfo, setLevelUpInfo] = useState<{ oldLevel: number; newLevel: number } | null>(null);
+  const logoGlowAnim = useRef(new Animated.Value(0)).current;
 
   // browser
   const [browserUrl, setBrowserUrl] = useState('https://google.com');
@@ -1112,6 +1180,21 @@ export default function App() {
       }
     })();
   }, []);
+
+  // ロゴの光るアニメーション（Lv1以上で常時）
+  useEffect(() => {
+    const level = getLevelFromXp(totalXp).level;
+    if (level >= 1) {
+      const pulse = Animated.loop(
+        Animated.sequence([
+          Animated.timing(logoGlowAnim, { toValue: 1, duration: 1500, useNativeDriver: true }),
+          Animated.timing(logoGlowAnim, { toValue: 0, duration: 1500, useNativeDriver: true }),
+        ])
+      );
+      pulse.start();
+      return () => pulse.stop();
+    }
+  }, [totalXp]);
 
   useEffect(() => {
     (async () => {
@@ -1808,6 +1891,24 @@ export default function App() {
     }
   };
 
+  // XP付与とレベルアップチェック
+  const addXpWithLevelCheck = async (xpGain: number) => {
+    const oldLevel = getLevelFromXp(totalXp).level;
+    const newXp = totalXp + xpGain;
+    const newLevel = getLevelFromXp(newXp).level;
+    
+    setTotalXp(newXp);
+    await AsyncStorage.setItem(XP_KEY, String(newXp));
+    
+    // レベルアップした場合
+    if (newLevel > oldLevel) {
+      setLevelUpInfo({ oldLevel, newLevel });
+      playLevelupSound(); setTimeout(() => setShowLevelUpModal(true), 500);
+    }
+    
+    return newXp;
+  };
+
   // ミッション完了
   const completeMission = async () => {
     if (missionStatus === 'started' || missionStatus === 'accepted') {
@@ -1823,9 +1924,7 @@ export default function App() {
       }
       
       const xpGain = 50;
-      const newXp = totalXp + xpGain;
-      setTotalXp(newXp);
-      await AsyncStorage.setItem(XP_KEY, String(newXp));
+      await addXpWithLevelCheck(xpGain);
       
       playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -1907,9 +2006,7 @@ export default function App() {
     });
     
     const xpGain = 25;
-    const newXp = totalXp + xpGain;
-    setTotalXp(newXp);
-    await AsyncStorage.setItem(XP_KEY, String(newXp));
+    await addXpWithLevelCheck(xpGain);
   };
 
   // 代替行動完了
@@ -2140,9 +2237,7 @@ export default function App() {
     await tap('success');
 
     const gainedXp = 10;
-    const newXp = totalXp + gainedXp;
-    setTotalXp(newXp);
-    await AsyncStorage.setItem(XP_KEY, String(newXp));
+    await addXpWithLevelCheck(gainedXp);
 
     setMissionCompletedToday(true);
 
@@ -2452,7 +2547,36 @@ export default function App() {
       >
         <Text style={styles.settingsIconText}>⚙️</Text>
       </Pressable>
-      <Image source={require('./assets/icon.png')} style={styles.dojoIcon} />
+      <Pressable 
+        onPress={() => { 
+          playTapSound(); 
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
+          const levelInfo = getLevelFromXp(totalXp); 
+          if (levelInfo.level >= 1) { 
+            setShowStartScreen(false); 
+            setTab('character'); 
+          } else { 
+            showSaveSuccess('修行の成果は、やがて姿を持つ'); 
+          } 
+        }} 
+        style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, alignItems: 'center' }]}
+      >
+        <Animated.View style={{ 
+          opacity: logoGlowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }),
+          transform: [{ scale: logoGlowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }],
+          shadowColor: getLevelFromXp(totalXp).level >= 1 ? '#D4AF37' : 'transparent',
+          shadowOffset: { width: 0, height: 0 },
+          shadowOpacity: getLevelFromXp(totalXp).level >= 1 ? 0.8 : 0,
+          shadowRadius: 15,
+        }}>
+          <Image source={require('./assets/icon.png')} style={styles.dojoIcon} />
+        </Animated.View>
+        {getLevelFromXp(totalXp).level >= 1 && (
+          <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+            Lv.{getLevelFromXp(totalXp).level}
+          </Text>
+        )}
+      </Pressable>
       <Text style={styles.dojoTitle}>道場</Text>
       
       <Pressable
@@ -3745,6 +3869,127 @@ export default function App() {
     }
   };
 
+  // キャラクター育成画面
+  const renderCharacterTab = () => {
+    const levelInfo = getLevelFromXp(totalXp);
+    const characterImage = CHARACTER_IMAGES[Math.max(1, Math.min(10, levelInfo.level))] || CHARACTER_IMAGES[1];
+    
+    return (
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, alignItems: 'center' }}>
+        <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold', marginBottom: 8 }}>
+          サムライ育成
+        </Text>
+        
+        {/* キャラクター画像 */}
+        <View style={{ 
+          width: 250, 
+          height: 250, 
+          borderRadius: 20, 
+          overflow: 'hidden',
+          borderWidth: 3,
+          borderColor: '#D4AF37',
+          marginVertical: 20,
+          backgroundColor: '#1a1a2e',
+        }}>
+          <Image 
+            source={characterImage} 
+            style={{ width: '100%', height: '100%' }}
+            resizeMode="contain"
+          />
+        </View>
+        
+        {/* レベルと称号 */}
+        <Text style={{ color: '#fff', fontSize: 32, fontWeight: 'bold' }}>
+          Lv.{levelInfo.level}
+        </Text>
+        <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: '600', marginTop: 4 }}>
+          {levelInfo.title}
+        </Text>
+        
+        {/* EXPバー */}
+        <View style={{ width: '100%', marginTop: 24 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+            <Text style={{ color: '#888', fontSize: 14 }}>EXP</Text>
+            <Text style={{ color: '#888', fontSize: 14 }}>
+              {levelInfo.level >= 10 ? 'MAX' : `${levelInfo.xpInLevel} / ${levelInfo.xpForLevel}`}
+            </Text>
+          </View>
+          <View style={{ 
+            height: 12, 
+            backgroundColor: '#333', 
+            borderRadius: 6,
+            overflow: 'hidden',
+          }}>
+            <View style={{ 
+              height: '100%', 
+              width: `${levelInfo.progress * 100}%`,
+              backgroundColor: '#D4AF37',
+              borderRadius: 6,
+            }} />
+          </View>
+          <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', marginTop: 8 }}>
+            総EXP: {totalXp}
+          </Text>
+        </View>
+        
+        {/* レベル別解放要素（将来実装） */}
+        <View style={{ 
+          marginTop: 32, 
+          padding: 16, 
+          backgroundColor: '#1a1a2e',
+          borderRadius: 12,
+          width: '100%',
+        }}>
+          <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '600', marginBottom: 12 }}>
+            解放済み能力
+          </Text>
+          {levelInfo.level >= 1 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライ相談</Text>
+          )}
+          {levelInfo.level >= 2 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライミッション</Text>
+          )}
+          {levelInfo.level >= 3 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ 鬼コーチモード</Text>
+          )}
+          {levelInfo.level >= 5 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライアラーム</Text>
+          )}
+          {levelInfo.level < 10 && (
+            <Text style={{ color: '#555', fontSize: 12, marginTop: 8 }}>
+              次のレベルまで: {levelInfo.nextLevelXp - totalXp} XP
+            </Text>
+          )}
+        </View>
+        
+        {/* 進化プレビュー */}
+        {levelInfo.level < 10 && (
+          <View style={{ marginTop: 24, alignItems: 'center' }}>
+            <Text style={{ color: '#666', fontSize: 14, marginBottom: 8 }}>次の姿</Text>
+            <View style={{ 
+              width: 80, 
+              height: 80, 
+              borderRadius: 12,
+              overflow: 'hidden',
+              borderWidth: 2,
+              borderColor: '#333',
+              opacity: 0.5,
+            }}>
+              <Image 
+                source={CHARACTER_IMAGES[Math.min(10, levelInfo.level + 1)]} 
+                style={{ width: '100%', height: '100%' }}
+                resizeMode="contain"
+              />
+            </View>
+            <Text style={{ color: '#555', fontSize: 12, marginTop: 4 }}>
+              {LEVEL_TITLES[levelInfo.level + 1]}
+            </Text>
+          </View>
+        )}
+      </ScrollView>
+    );
+  };
+
   const renderAlarmTab = () => {
     // アラーム発動中の画面
     if (alarmRinging) {
@@ -4821,7 +5066,30 @@ export default function App() {
                 >
                   <Text style={styles.homeButtonText}>道場に戻る</Text>
                 </Pressable>
-                <Image source={require('./assets/icon.png')} style={styles.headerIcon} />
+                <Pressable
+                  onPress={() => {
+                    playTapSound();
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    const levelInfo = getLevelFromXp(totalXp);
+                    if (levelInfo.level >= 1) {
+                      setTab('character');
+                    } else {
+                      showSaveSuccess('修行の成果は、やがて姿を持つ');
+                    }
+                  }}
+                  style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }], alignItems: 'center' }]}
+                >
+                  <Animated.View style={{ 
+                    opacity: logoGlowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.7] }),
+                    transform: [{ scale: logoGlowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }],
+                    shadowColor: getLevelFromXp(totalXp).level >= 1 ? '#D4AF37' : 'transparent',
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: getLevelFromXp(totalXp).level >= 1 ? 0.8 : 0,
+                    shadowRadius: 10,
+                  }}>
+                    <Image source={require('./assets/icon.png')} style={styles.headerIcon} />
+                  </Animated.View>
+                </Pressable>
                 {isTimeLimited && (
                   <View style={styles.timeBadge}>
                     <Text style={styles.timeBadgeText}>残り：{remainingMinutes !== null ? `${remainingMinutes}分` : '∞'}</Text>
@@ -4848,6 +5116,7 @@ export default function App() {
                       {tab === 'alarm' && renderAlarmTab()}
                       {tab === 'gratitude' && renderGratitudeTab()}
                       {tab === 'settings' && renderSettingsTab()}
+                      {tab === 'character' && renderCharacterTab()}
                     </>
                   )}
                 </View>
@@ -4887,6 +5156,54 @@ export default function App() {
       {renderMissionAlarm()}
       {renderAlternativeAction()}
       {renderMissionProposal()}
+      
+      {/* レベルアップモーダル */}
+      <Modal visible={showLevelUpModal} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <Text style={{ color: '#D4AF37', fontSize: 16, marginBottom: 8 }}>🎊 LEVEL UP! 🎊</Text>
+          <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold', marginBottom: 8 }}>
+            Lv.{levelUpInfo?.newLevel || 1}
+          </Text>
+          <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: '600', marginBottom: 24 }}>
+            {LEVEL_TITLES[levelUpInfo?.newLevel || 1]}
+          </Text>
+          
+          {/* キャラ画像 */}
+          <View style={{ 
+            width: 200, 
+            height: 200, 
+            borderRadius: 20, 
+            overflow: 'hidden',
+            borderWidth: 3,
+            borderColor: '#D4AF37',
+            marginBottom: 24,
+            backgroundColor: '#1a1a2e',
+          }}>
+            <Image 
+              source={CHARACTER_IMAGES[Math.max(1, Math.min(10, levelUpInfo?.newLevel || 1))]} 
+              style={{ width: '100%', height: '100%' }}
+              resizeMode="contain"
+            />
+          </View>
+          
+          <Text style={{ color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 24 }}>
+            {levelUpInfo?.newLevel === 1 
+              ? 'サムライの姿が目覚めた！\nロゴをタップして育成画面を開こう' 
+              : '新たな力を手に入れた！'}
+          </Text>
+          
+          <Pressable
+            style={{ backgroundColor: '#D4AF37', paddingVertical: 14, paddingHorizontal: 40, borderRadius: 12 }}
+            onPress={() => {
+              playCorrectSound();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setShowLevelUpModal(false);
+            }}
+          >
+            <Text style={{ color: '#000', fontSize: 16, fontWeight: '600' }}>確認</Text>
+          </Pressable>
+        </View>
+      </Modal>
       
       {/* クイズモーダル */}
       <Modal visible={showQuiz} animationType="slide" transparent>

@@ -150,7 +150,6 @@ const DAILY_LOGS_KEY = 'BUSHIDO_DAILY_LOGS_V1';
 const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
 const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
 const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
-const STATS_KEY = 'BUSHIDO_STATS_V1';
 const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
@@ -1106,16 +1105,6 @@ export default function App() {
   const battleShakeAnim = useRef(new Animated.Value(0)).current;
   const playerShakeAnim = useRef(new Animated.Value(0)).current;
 
-  // ===== Stats System =====
-  const [samuraiStats, setSamuraiStats] = useState<{power: number, mind: number, skill: number, virtue: number}>({power: 75, mind: 75, skill: 75, virtue: 75});
-  const [statsAllocated, setStatsAllocated] = useState(false);
-  const [showStatsAlloc, setShowStatsAlloc] = useState(false);
-  const [tempStats, setTempStats] = useState({power: 75, mind: 75, skill: 75, virtue: 75});
-  const [lastRealloc, setLastRealloc] = useState<string | null>(null);
-  const [showReallocModal, setShowReallocModal] = useState(false);
-  const [reallocBudget] = useState(30);
-
-
   const [showLevelUpModal, setShowLevelUpModal] = useState(false);
   const [levelUpInfo, setLevelUpInfo] = useState<{ oldLevel: number; newLevel: number } | null>(null);
   const logoGlowAnim = useRef(new Animated.Value(0)).current;
@@ -1242,14 +1231,6 @@ export default function App() {
         if (saved) {
           const num = Number(saved);
           if (!Number.isNaN(num)) setTotalXp(num);
-        }
-        // Load stats
-        const statsJson = await AsyncStorage.getItem(STATS_KEY);
-        if (statsJson) {
-          const parsed = JSON.parse(statsJson);
-          setSamuraiStats(parsed.stats || {power: 75, mind: 75, skill: 75, virtue: 75});
-          setStatsAllocated(parsed.allocated || false);
-          setLastRealloc(parsed.lastRealloc || null);
         }
       } catch (e) {
         console.error('Failed to load XP', e);
@@ -3947,72 +3928,6 @@ export default function App() {
 
   // キャラクター育成画面
 
-
-  // ===== Stats Functions =====
-  const saveStats = async (stats: any, allocated: boolean, realloc: string | null) => {
-    try {
-      await AsyncStorage.setItem(STATS_KEY, JSON.stringify({
-        stats, allocated, lastRealloc: realloc
-      }));
-    } catch (e) { console.log('Stats save error', e); }
-  };
-
-  const confirmStatsAllocation = async () => {
-    const total = tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue;
-    if (total !== 300) return;
-    if (tempStats.power < 20 || tempStats.mind < 20 || tempStats.skill < 20 || tempStats.virtue < 20) return;
-    setSamuraiStats(tempStats);
-    setStatsAllocated(true);
-    setShowStatsAlloc(false);
-    await saveStats(tempStats, true, lastRealloc);
-    playCorrectSound();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showSaveSuccess('武士の器、定まれり');
-  };
-
-  const canReallocate = () => {
-    if (!lastRealloc) return true;
-    const last = new Date(lastRealloc);
-    const now = new Date();
-    return now.getMonth() !== last.getMonth() || now.getFullYear() !== last.getFullYear();
-  };
-
-  const startReallocation = () => {
-    if (!canReallocate()) {
-      showSaveSuccess('月に一度のみ再配分可能');
-      return;
-    }
-    setTempStats({...samuraiStats});
-    setShowReallocModal(true);
-  };
-
-  const confirmReallocation = async () => {
-    const total = tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue;
-    if (total !== 300) return;
-    if (tempStats.power < 20 || tempStats.mind < 20 || tempStats.skill < 20 || tempStats.virtue < 20) return;
-    const diff = Math.abs(tempStats.power - samuraiStats.power) + Math.abs(tempStats.mind - samuraiStats.mind) + Math.abs(tempStats.skill - samuraiStats.skill) + Math.abs(tempStats.virtue - samuraiStats.virtue);
-    if (diff > reallocBudget * 2) {
-      showSaveSuccess('最大' + reallocBudget + 'ポイントまで');
-      return;
-    }
-    const now = new Date().toISOString();
-    setSamuraiStats(tempStats);
-    setLastRealloc(now);
-    setShowReallocModal(false);
-    await saveStats(tempStats, true, now);
-    playCorrectSound();
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showSaveSuccess('過去は変えられぬ。だが、解釈は変えられる');
-  };
-
-  const adjustTempStat = (key: 'power' | 'mind' | 'skill' | 'virtue', delta: number) => {
-    const newVal = tempStats[key] + delta;
-    if (newVal < 20 || newVal > 100) return;
-    const others = Object.entries(tempStats).filter(([k]) => k !== key).reduce((s, [, v]) => s + v, 0);
-    if (others + newVal > 300) return;
-    setTempStats(prev => ({...prev, [key]: newVal}));
-  };
-
   // ===== Battle System Functions =====
   const getAvailableEnemies = () => {
     const levelInfo = getLevelFromXp(totalXp);
@@ -4054,7 +3969,7 @@ export default function App() {
     const levelInfo = getLevelFromXp(totalXp);
     const playerLevel = Math.max(1, levelInfo.level);
 
-    const playerAtk = playerLevel * 8 + Math.floor(samuraiStats.power * 0.3) + Math.floor(Math.random() * 15) + 5;
+    const playerAtk = playerLevel * 11 + Math.floor(Math.random() * 15) + 5;
     const enemyAtk = battleEnemy.power * 0.7 + Math.floor(Math.random() * battleEnemy.power * 0.4);
 
     const dmgToEnemy = Math.max(8, Math.round(playerAtk - battleEnemy.power * 0.2));
@@ -4390,83 +4305,31 @@ export default function App() {
           </Text>
         </View>
         
-        {/* ステータス表示 */}
-        <View style={{ marginTop: 28, width: '100%', backgroundColor: '#1a1a2e', borderRadius: 16, padding: 20 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text style={{ color: '#D4AF37', fontSize: 18, fontWeight: '700' }}>武士の器</Text>
-            {statsAllocated && canReallocate() && (
-              <Pressable onPress={startReallocation}>
-                <Text style={{ color: '#888', fontSize: 12 }}>再配分</Text>
-              </Pressable>
-            )}
-          </View>
-          
-          {!statsAllocated && levelInfo.level >= 1 ? (
-            <Pressable
-              onPress={() => { setTempStats({power: 75, mind: 75, skill: 75, virtue: 75}); setShowStatsAlloc(true); playTapSound(); }}
-              style={{ backgroundColor: '#D4AF37', padding: 16, borderRadius: 12, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#000', fontSize: 16, fontWeight: 'bold' }}>ステータスを配分する</Text>
-              <Text style={{ color: '#333', fontSize: 12, marginTop: 4 }}>300ポイントを自由に配分</Text>
-            </Pressable>
-          ) : statsAllocated ? (
-            <View>
-              {[
-                {key: 'power', label: '力', color: '#ef4444', icon: '⚔️'},
-                {key: 'mind', label: '心', color: '#3b82f6', icon: '🧘'},
-                {key: 'skill', label: '技', color: '#22c55e', icon: '🎯'},
-                {key: 'virtue', label: '徳', color: '#a855f7', icon: '✨'},
-              ].map(stat => (
-                <View key={stat.key} style={{ marginBottom: 14 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={{ color: stat.color, fontSize: 15, fontWeight: '600' }}>
-                      {stat.icon} {stat.label}
-                    </Text>
-                    <Text style={{ color: '#ccc', fontSize: 15, fontWeight: 'bold' }}>
-                      {samuraiStats[stat.key as keyof typeof samuraiStats]}
-                    </Text>
-                  </View>
-                  <View style={{ height: 8, backgroundColor: '#333', borderRadius: 4, overflow: 'hidden' }}>
-                    <View style={{ height: '100%', width: samuraiStats[stat.key as keyof typeof samuraiStats] + '%', backgroundColor: stat.color, borderRadius: 4 }} />
-                  </View>
-                </View>
-              ))}
-              <Text style={{ color: '#555', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
-                合計: {samuraiStats.power + samuraiStats.mind + samuraiStats.skill + samuraiStats.virtue} / 300
-              </Text>
-            </View>
-          ) : (
-            <Text style={{ color: '#555', fontSize: 13, textAlign: 'center' }}>Lv.1で解放</Text>
-          )}
-        </View>
-
-        {/* レベル別解放要素 */}
-        <View style={{ marginTop: 20, padding: 16, backgroundColor: '#1a1a2e', borderRadius: 12, width: '100%' }}>
+        {/* レベル別解放要素（将来実装） */}
+        <View style={{ 
+          marginTop: 32, 
+          padding: 16, 
+          backgroundColor: '#1a1a2e',
+          borderRadius: 12,
+          width: '100%',
+        }}>
           <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '600', marginBottom: 12 }}>
             解放済み能力
           </Text>
-          {[
-            { lv: 1, label: 'サムライ相談', icon: '💬' },
-            { lv: 1, label: 'ステータス配分', icon: '📊' },
-            { lv: 2, label: 'サムライミッション', icon: '🎯' },
-            { lv: 3, label: '修行対戦', icon: '⚔️' },
-            { lv: 3, label: '鬼コーチモード', icon: '🔥' },
-            { lv: 5, label: 'サムライアラーム', icon: '⏰' },
-            { lv: 7, label: 'ドラゴンボス挑戦', icon: '🐉' },
-            { lv: 9, label: '覚醒の扉', icon: '🌊' },
-          ].map((item, i) => (
-            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
-              <Text style={{ fontSize: 16, width: 28 }}>{item.icon}</Text>
-              <Text style={{ color: levelInfo.level >= item.lv ? '#ccc' : '#444', fontSize: 14, flex: 1 }}>
-                {item.label}
-              </Text>
-              <Text style={{ color: levelInfo.level >= item.lv ? '#22c55e' : '#555', fontSize: 12 }}>
-                {levelInfo.level >= item.lv ? '✅' : 'Lv.' + item.lv}
-              </Text>
-            </View>
-          ))}
+          {levelInfo.level >= 1 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライ相談</Text>
+          )}
+          {levelInfo.level >= 2 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライミッション</Text>
+          )}
+          {levelInfo.level >= 3 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ 鬼コーチモード</Text>
+          )}
+          {levelInfo.level >= 5 && (
+            <Text style={{ color: '#888', fontSize: 14, marginBottom: 4 }}>✅ サムライアラーム</Text>
+          )}
           {levelInfo.level < 10 && (
-            <Text style={{ color: '#555', fontSize: 12, marginTop: 10, textAlign: 'center' }}>
+            <Text style={{ color: '#555', fontSize: 12, marginTop: 8 }}>
               次のレベルまで: {levelInfo.nextLevelXp - totalXp} XP
             </Text>
           )}
@@ -5663,168 +5526,6 @@ export default function App() {
             )}
           </View>
       </KeyboardAvoidingView>
-
-
-      {/* Stats Allocation Modal */}
-      <Modal visible={showStatsAlloc} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '80%' }]}>
-            <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 }}>
-              武士の器を定めよ
-            </Text>
-            <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 20 }}>
-              300ポイントを配分せよ（各最低20）
-            </Text>
-
-            {[
-              {key: 'power', label: '力 (Power)', color: '#ef4444'},
-              {key: 'mind', label: '心 (Mind)', color: '#3b82f6'},
-              {key: 'skill', label: '技 (Skill)', color: '#22c55e'},
-              {key: 'virtue', label: '徳 (Virtue)', color: '#a855f7'},
-            ].map(stat => (
-              <View key={stat.key} style={{ marginBottom: 16 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ color: stat.color, fontSize: 16, fontWeight: '600' }}>{stat.label}</Text>
-                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>
-                    {tempStats[stat.key as keyof typeof tempStats]}
-                  </Text>
-                </View>
-                <View style={{ height: 6, backgroundColor: '#333', borderRadius: 3, overflow: 'hidden', marginBottom: 8 }}>
-                  <View style={{ height: '100%', width: tempStats[stat.key as keyof typeof tempStats] + '%', backgroundColor: stat.color, borderRadius: 3 }} />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, -5); playTapSound(); }}
-                    style={{ backgroundColor: '#333', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>-</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, -1); playTapSound(); }}
-                    style={{ backgroundColor: '#2a2a2a', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginLeft: 8 }}
-                  >
-                    <Text style={{ color: '#aaa', fontSize: 16 }}>-1</Text>
-                  </Pressable>
-                  <View style={{ width: 50, alignItems: 'center' }}>
-                    <Text style={{ color: '#666', fontSize: 11 }}>
-                      {tempStats[stat.key as keyof typeof tempStats]}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, 1); playTapSound(); }}
-                    style={{ backgroundColor: '#2a2a2a', width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center', marginRight: 8 }}
-                  >
-                    <Text style={{ color: '#aaa', fontSize: 16 }}>+1</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, 5); playTapSound(); }}
-                    style={{ backgroundColor: '#333', width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-
-            <Text style={{ color: tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue === 300 ? '#22c55e' : '#ef4444', fontSize: 14, textAlign: 'center', marginVertical: 12, fontWeight: 'bold' }}>
-              合計: {tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue} / 300
-              {tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue !== 300 ? ' (調整が必要)' : ' ✅'}
-            </Text>
-
-            <Pressable
-              onPress={confirmStatsAllocation}
-              disabled={tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue !== 300}
-              style={{ 
-                backgroundColor: tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue === 300 ? '#D4AF37' : '#444',
-                padding: 16, borderRadius: 12, alignItems: 'center', marginBottom: 8
-              }}
-            >
-              <Text style={{ color: tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue === 300 ? '#000' : '#888', fontSize: 16, fontWeight: 'bold' }}>
-                決定する
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowStatsAlloc(false)}
-              style={{ padding: 12, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#888', fontSize: 14 }}>戻る</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Reallocation Modal */}
-      <Modal visible={showReallocModal} animationType="slide" transparent>
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxHeight: '80%' }]}>
-            <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 }}>
-              修行回想
-            </Text>
-            <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 4, fontStyle: 'italic' }}>
-              「過去は変えられぬ。だが、解釈は変えられる」
-            </Text>
-            <Text style={{ color: '#666', fontSize: 12, textAlign: 'center', marginBottom: 20 }}>
-              月に一度、最大{reallocBudget}ポイントまで再配分可能
-            </Text>
-
-            {[
-              {key: 'power', label: '力', color: '#ef4444'},
-              {key: 'mind', label: '心', color: '#3b82f6'},
-              {key: 'skill', label: '技', color: '#22c55e'},
-              {key: 'virtue', label: '徳', color: '#a855f7'},
-            ].map(stat => (
-              <View key={stat.key} style={{ marginBottom: 14 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={{ color: stat.color, fontSize: 15, fontWeight: '600' }}>{stat.label}</Text>
-                  <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
-                    {samuraiStats[stat.key as keyof typeof samuraiStats]} → {tempStats[stat.key as keyof typeof tempStats]}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center' }}>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, -5); playTapSound(); }}
-                    style={{ backgroundColor: '#333', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 18 }}>-</Text>
-                  </Pressable>
-                  <View style={{ width: 60, alignItems: 'center' }}>
-                    <Text style={{ color: '#ccc', fontSize: 18, fontWeight: 'bold' }}>
-                      {tempStats[stat.key as keyof typeof tempStats]}
-                    </Text>
-                  </View>
-                  <Pressable
-                    onPress={() => { adjustTempStat(stat.key as any, 5); playTapSound(); }}
-                    style={{ backgroundColor: '#333', width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}
-                  >
-                    <Text style={{ color: '#fff', fontSize: 18 }}>+</Text>
-                  </Pressable>
-                </View>
-              </View>
-            ))}
-
-            <Text style={{ color: tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue === 300 ? '#22c55e' : '#ef4444', fontSize: 13, textAlign: 'center', marginVertical: 10 }}>
-              合計: {tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue} / 300
-            </Text>
-
-            <Pressable
-              onPress={confirmReallocation}
-              disabled={tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue !== 300}
-              style={{ 
-                backgroundColor: tempStats.power + tempStats.mind + tempStats.skill + tempStats.virtue === 300 ? '#D4AF37' : '#444',
-                padding: 14, borderRadius: 12, alignItems: 'center', marginBottom: 8
-              }}
-            >
-              <Text style={{ color: '#000', fontSize: 15, fontWeight: 'bold' }}>再配分を確定</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setShowReallocModal(false)}
-              style={{ padding: 10, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#888', fontSize: 14 }}>戻る</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
 
       <Modal visible={showPrivacy} animationType="slide" transparent>
         <View style={styles.modalBackdrop}>

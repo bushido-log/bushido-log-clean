@@ -3169,6 +3169,7 @@ export default function App() {
 
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+        {renderYokaiBanner('goal')}
         <View style={styles.goalCard}>
           <Text style={styles.goalTitle}>今日のサムライ目標</Text>
           <Text style={styles.goalSub}>{getTodayStr()} のミッションを 1つだけ決めるのだ。</Text>
@@ -3342,6 +3343,7 @@ export default function App() {
 
   const renderReviewTab = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+        {renderYokaiBanner('review')}
       {onboardingData && (
         <View style={styles.goalCard}>
           <View style={styles.samuraiHeaderTopRow}>
@@ -4098,6 +4100,55 @@ export default function App() {
 
 
 
+
+  // ===== Yokai Tab Presence System =====
+  const [defeatedYokaiToday, setDefeatedYokaiToday] = useState<string[]>([]);
+
+  const getTabYokai = (feature: YokaiFeature): YokaiData | null => {
+    const pool = YOKAI_LIST.filter(y => y.features.includes(feature) && !defeatedYokaiToday.includes(y.id));
+    if (pool.length === 0) return null;
+    // Deterministic: use today's date as seed
+    const today = new Date().toISOString().split('T')[0];
+    const hash = today.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    const featureHash = feature.split('').reduce((a, c) => a + c.charCodeAt(0), 0);
+    return pool[(hash + featureHash) % pool.length];
+  };
+
+  const markYokaiDefeated = (yokaiId: string) => {
+    setDefeatedYokaiToday(prev => prev.includes(yokaiId) ? prev : [...prev, yokaiId]);
+  };
+
+  const renderYokaiBanner = (feature: YokaiFeature) => {
+    const yokai = getTabYokai(feature);
+    if (!yokai) return null;
+    return (
+      <View style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#1a0808',
+        borderRadius: 14,
+        padding: 12,
+        marginBottom: 14,
+        borderWidth: 1,
+        borderColor: '#8B0000',
+      }}>
+        <View style={{
+          width: 50, height: 50, borderRadius: 10, overflow: 'hidden',
+          borderWidth: 2, borderColor: '#8B0000', backgroundColor: '#0a0a0a', marginRight: 12,
+        }}>
+          <Image source={YOKAI_IMAGES[yokai.id]} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: '#ef4444', fontSize: 13, fontWeight: '800' }}>{yokai.name}</Text>
+          <Text style={{ color: '#888', fontSize: 11, fontStyle: 'italic', marginTop: 2 }}>
+            「{yokai.quote}」
+          </Text>
+        </View>
+        <Text style={{ color: '#ef4444', fontSize: 20 }}>☠️</Text>
+      </View>
+    );
+  };
+
   // ===== IMINASHI Functions =====
   const IMINASHI_MESSAGES = [
     '……それ、本当に意味あったか？',
@@ -4256,9 +4307,12 @@ export default function App() {
 
   // ===== Yokai Encounter Functions =====
   const triggerYokaiDefeat = (feature: YokaiFeature, xpGain: number) => {
+    // Use the yokai that was showing on the tab (deterministic)
+    const tabYokai = getTabYokai(feature);
     const pool = YOKAI_LIST.filter(y => y.features.includes(feature));
     if (pool.length === 0) return;
-    const yokai = pool[Math.floor(Math.random() * pool.length)];
+    const yokai = tabYokai || pool[Math.floor(Math.random() * pool.length)];
+    markYokaiDefeated(yokai.id);
     setYokaiEncounter(yokai);
     setYokaiPhase('appear');
     setYokaiXp(xpGain);
@@ -4458,225 +4512,99 @@ export default function App() {
 
   const renderBattleTab = () => {
     const levelInfo = getLevelFromXp(totalXp);
-    const characterImage = CHARACTER_IMAGES[Math.max(1, Math.min(10, levelInfo.level))] || CHARACTER_IMAGES[1];
 
-    if (battleMode === 'select' || battleMode === null) {
-      const available = getAvailableEnemies();
-      return (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
-          <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 4 }}>
-            修行対戦
-          </Text>
-          <Text style={{ color: '#888', fontSize: 14, textAlign: 'center', marginBottom: 20 }}>
-            己の力を試せ
-          </Text>
+    const YOKAI_MISSIONS: { [key: string]: { mission: string; tab: YokaiFeature; action: string } } = {
+      mikkabozu: { mission: '今日の目標を書け', tab: 'goal', action: '目標タブで目標を保存する' },
+      hyakume: { mission: '10分以上集中しろ', tab: 'focus', action: '集中タイマーを完了する' },
+      deebu: { mission: '目標を立てて動け', tab: 'goal', action: '目標タブで目標を保存する' },
+      atodeyaru: { mission: '今すぐ目標を書け', tab: 'goal', action: '目標タブで目標を保存する' },
+      scroll: { mission: 'SNSをやめて集中しろ', tab: 'focus', action: '集中タイマーを完了する' },
+      tetsuya: { mission: '明日のアラームをセットしろ', tab: 'alarm', action: 'アラームをセットする' },
+      nidoneel: { mission: '明日ちゃんと起きろ', tab: 'alarm', action: 'アラームを解除する' },
+      hikakuzou: { mission: '感謝を３つ以上書け', tab: 'gratitude', action: '感謝を３つ以上書く' },
+      peeping: { mission: '自分のことに感謝しろ', tab: 'gratitude', action: '感謝を３つ以上書く' },
+      mottemiteya: { mission: '他人じゃなく自分を見ろ', tab: 'gratitude', action: '感謝を３つ以上書く' },
+      moumuri: { mission: '相談してミッションをこなせ', tab: 'consult', action: '相談ミッションを完了する' },
+      atamadekkachi: { mission: '振り返りを書け', tab: 'review', action: '振り返りを保存する' },
+    };
 
-          {battleWinStreak > 0 && (
-            <View style={{ backgroundColor: '#2a1a00', borderRadius: 8, padding: 10, marginBottom: 16, alignItems: 'center' }}>
-              <Text style={{ color: '#D4AF37', fontSize: 14, fontWeight: '600' }}>
-                🔥 {battleWinStreak}連勝中！
-              </Text>
-            </View>
-          )}
+    return (
+      <ScrollView style={{ flex: 1, padding: 16 }} contentContainerStyle={{ paddingBottom: 40 }}>
+        <Pressable
+          onPress={() => { playTapSound(); setInnerWorldView('menu'); setTab('innerWorld'); }}
+          style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}
+        >
+          <Text style={{ color: '#888', fontSize: 16 }}>← 修行の間</Text>
+        </Pressable>
 
-          {available.length === 0 ? (
-            <View style={{ alignItems: 'center', marginTop: 40 }}>
-              <Text style={{ color: '#888', fontSize: 16 }}>修行を積み、レベルを上げよ</Text>
-            </View>
-          ) : (
-            available.map((enemy, idx) => (
-              <Pressable
-                key={enemy.id}
-                onPress={() => startBattle(enemy)}
-                style={({ pressed }) => [{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  backgroundColor: pressed ? '#2a2a3e' : (enemy.isBoss ? '#1a0a1a' : '#1a1a2e'),
-                  borderRadius: 16,
-                  padding: 16,
-                  marginBottom: 12,
-                  borderWidth: enemy.isBoss ? 2 : 1,
-                  borderColor: enemy.isBoss ? '#8B0000' : '#333',
-                }]}
-              >
-                <View style={{
-                  width: 70, height: 70, borderRadius: 12, overflow: 'hidden',
-                  borderWidth: 2, borderColor: enemy.isBoss ? '#8B0000' : '#D4AF37',
-                  backgroundColor: '#0a0a1a',
-                }}>
-                  <Image source={enemy.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 16 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    {enemy.isBoss && <Text style={{ color: '#8B0000', fontSize: 12, marginRight: 6 }}>
-                      👹 BOSS</Text>}
-                    <Text style={{ color: '#fff', fontSize: 18, fontWeight: 'bold' }}>{enemy.name}</Text>
-                  </View>
-                  <Text style={{ color: '#888', fontSize: 12, marginTop: 4, fontStyle: 'italic' }}>
-                    「{enemy.quote}」
-                  </Text>
-                  <View style={{ flexDirection: 'row', marginTop: 6 }}>
-                    <Text style={{ color: '#D4AF37', fontSize: 12 }}>
-                      戦力: {'⚔️'.repeat(Math.ceil(enemy.power / 25))}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={{ color: '#D4AF37', fontSize: 20 }}>⚔️</Text>
-              </Pressable>
-            ))
-          )}
+        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+          <Text style={{ color: '#ef4444', fontSize: 22, fontWeight: '900' }}>⚔️ 修行対戦 ⚔️</Text>
+          <Text style={{ color: '#555', fontSize: 12, marginTop: 4 }}>妖怪を選んでミッションをこなせ</Text>
+        </View>
 
-          <Pressable
-            onPress={() => { playTapSound(); setTab('character'); setBattleMode(null); }}
-            style={{ marginTop: 16, padding: 14, borderRadius: 12, borderWidth: 1, borderColor: '#444', alignItems: 'center' }}
-          >
-            <Text style={{ color: '#888', fontSize: 14 }}>育成画面に戻る</Text>
-          </Pressable>
-        </ScrollView>
-      );
-    }
-
-    if (battleMode === 'fighting' && battleEnemy) {
-      return (
-        <View style={{ flex: 1, padding: 20, justifyContent: 'space-between' }}>
-          <View style={{ alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              {battleEnemy.isBoss && <Text style={{ color: '#8B0000', fontSize: 14, marginRight: 6 }}>👹</Text>}
-              <Text style={{ color: '#fff', fontSize: 20, fontWeight: 'bold' }}>{battleEnemy.name}</Text>
-            </View>
-            <View style={{ width: '80%', height: 10, backgroundColor: '#333', borderRadius: 5, overflow: 'hidden', marginBottom: 12 }}>
-              <View style={{ height: '100%', width: Math.max(0, enemyHp) + '%', backgroundColor: enemyHp > 50 ? '#ef4444' : enemyHp > 25 ? '#f59e0b' : '#dc2626', borderRadius: 5 }} />
-            </View>
-            <Text style={{ color: '#ef4444', fontSize: 12, marginBottom: 8 }}>HP: {enemyHp}/100</Text>
-
-            <Animated.View style={{
-              transform: [{ translateX: battleShakeAnim }],
-              width: 160, height: 160, borderRadius: 16, overflow: 'hidden',
-              borderWidth: 3, borderColor: battleEnemy.isBoss ? '#8B0000' : '#ef4444',
-              backgroundColor: '#1a1a2e',
-            }}>
-              <Image source={battleEnemy.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            </Animated.View>
-          </View>
-
-          <View style={{ alignItems: 'center', marginVertical: 8 }}>
-            <Text style={{ color: '#D4AF37', fontSize: 32, fontWeight: '900' }}>⚔️ VS ⚔️</Text>
-            {battleTurnLog.length > 0 && (
-              <View style={{ marginTop: 8, maxHeight: 60 }}>
-                {battleTurnLog.slice(-2).map((log, i) => (
-                  <Text key={i} style={{ color: '#ccc', fontSize: 13, textAlign: 'center' }}>{log}</Text>
-                ))}
+        {YOKAI_LIST.map((yokai) => {
+          const mission = YOKAI_MISSIONS[yokai.id];
+          const isDefeated = defeatedYokaiToday.includes(yokai.id);
+          if (!mission) return null;
+          return (
+            <Pressable
+              key={yokai.id}
+              onPress={() => {
+                if (isDefeated) {
+                  showSaveSuccess('この妖怪は今日倒した');
+                  return;
+                }
+                playTapSound();
+                setTab(mission.tab === 'consult' ? 'consult' : mission.tab as any);
+                setShowStartScreen(false);
+              }}
+              style={({ pressed }) => [{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: isDefeated ? '#0a1a0a' : (pressed ? '#1a0808' : '#0a0a1a'),
+                borderRadius: 14,
+                padding: 14,
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: isDefeated ? '#1a3a1a' : '#8B0000',
+                opacity: isDefeated ? 0.5 : 1,
+              }]}
+            >
+              <View style={{
+                width: 60, height: 60, borderRadius: 12, overflow: 'hidden',
+                borderWidth: 2, borderColor: isDefeated ? '#1a3a1a' : '#8B0000',
+                backgroundColor: '#0a0a0a', marginRight: 14,
+              }}>
+                <Image
+                  source={isDefeated ? YOKAI_LOSE_IMAGES[yokai.id] : YOKAI_IMAGES[yokai.id]}
+                  style={{ width: '100%', height: '100%' }}
+                  resizeMode="contain"
+                />
               </View>
-            )}
-          </View>
-
-          <View style={{ alignItems: 'center' }}>
-            <Animated.View style={{
-              transform: [{ translateX: playerShakeAnim }],
-              width: 130, height: 130, borderRadius: 16, overflow: 'hidden',
-              borderWidth: 3, borderColor: '#D4AF37',
-              backgroundColor: '#1a1a2e',
-            }}>
-              <Image source={characterImage} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-            </Animated.View>
-            <Text style={{ color: '#D4AF37', fontSize: 12, marginTop: 8 }}>HP: {playerHp}/100</Text>
-            <View style={{ width: '80%', height: 10, backgroundColor: '#333', borderRadius: 5, overflow: 'hidden', marginTop: 4 }}>
-              <View style={{ height: '100%', width: Math.max(0, playerHp) + '%', backgroundColor: playerHp > 50 ? '#22c55e' : playerHp > 25 ? '#f59e0b' : '#ef4444', borderRadius: 5 }} />
-            </View>
-            <Text style={{ color: '#aaa', fontSize: 14, marginTop: 4 }}>
-              Lv.{levelInfo.level} {levelInfo.title}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={executeBattleTurn}
-            disabled={battleAnimating}
-            style={({ pressed }) => [{
-              backgroundColor: battleAnimating ? '#444' : (pressed ? '#8B6914' : '#D4AF37'),
-              paddingVertical: 18,
-              borderRadius: 14,
-              alignItems: 'center',
-              marginTop: 12,
-              opacity: battleAnimating ? 0.6 : 1,
-            }]}
-          >
-            <Text style={{ color: battleAnimating ? '#888' : '#000', fontSize: 22, fontWeight: '900' }}>
-              {battleAnimating ? '...' : '⚔️ 斬る！'}
-            </Text>
-          </Pressable>
-        </View>
-      );
-    }
-
-    if (battleMode === 'result' && battleEnemy) {
-      const won = battleResult === 'win';
-      return (
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-          <Text style={{
-            fontSize: 48, fontWeight: '900',
-            color: won ? '#D4AF37' : '#ef4444',
-            marginBottom: 16,
-          }}>
-            {won ? '勝利' : '敗北'}
-          </Text>
-
-          <View style={{
-            width: 120, height: 120, borderRadius: 16, overflow: 'hidden',
-            borderWidth: 3, borderColor: won ? '#D4AF37' : '#555',
-            backgroundColor: '#1a1a2e', marginBottom: 20,
-            opacity: won ? 0.6 : 1,
-          }}>
-            <Image source={battleEnemy.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-          </View>
-
-          <Text style={{ color: '#888', fontSize: 16, marginBottom: 4 }}>
-            {won ? battleEnemy.name + 'を倒した' : battleEnemy.name + 'に敗れた'}
-          </Text>
-
-          <View style={{
-            backgroundColor: '#1a1a2e', borderRadius: 16, padding: 20,
-            marginVertical: 20, width: '100%',
-            borderLeftWidth: 3, borderLeftColor: '#D4AF37',
-          }}>
-            <Text style={{ color: '#D4AF37', fontSize: 12, marginBottom: 8 }}>サムライキングの言葉</Text>
-            <Text style={{ color: '#fff', fontSize: 16, fontStyle: 'italic', lineHeight: 24 }}>
-              「{battleQuote}」
-            </Text>
-          </View>
-
-          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-            <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: 'bold' }}>
-              +{battleXpGained} XP
-            </Text>
-            {battleWinStreak > 1 && won && (
-              <Text style={{ color: '#f59e0b', fontSize: 14, marginLeft: 8 }}>
-                🔥 {battleWinStreak}連勝ボーナス！
-              </Text>
-            )}
-          </View>
-          {!won && (
-            <Text style={{ color: '#666', fontSize: 12 }}>敗北でも5XP獲得</Text>
-          )}
-
-          <View style={{ width: '100%', marginTop: 24 }}>
-            <Pressable
-              onPress={() => { playTapSound(); setBattleMode('select'); setTab('battle'); }}
-              style={{ backgroundColor: '#D4AF37', paddingVertical: 16, borderRadius: 12, alignItems: 'center', marginBottom: 10 }}
-            >
-              <Text style={{ color: '#000', fontSize: 16, fontWeight: 'bold' }}>もう一度対戦する</Text>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Text style={{ color: isDefeated ? '#4a4a4a' : '#ccc', fontSize: 15, fontWeight: '800' }}>{yokai.name}</Text>
+                  {isDefeated && <Text style={{ color: '#2a6a2a', fontSize: 11, marginLeft: 8, fontWeight: '700' }}>✓ 討伐済</Text>}
+                </View>
+                <Text style={{ color: isDefeated ? '#333' : '#ef4444', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
+                  {isDefeated ? '─' : mission.mission}
+                </Text>
+                <Text style={{ color: '#444', fontSize: 10, marginTop: 2 }}>
+                  {isDefeated ? '' : mission.action}
+                </Text>
+              </View>
+              {!isDefeated && <Text style={{ color: '#555', fontSize: 18 }}>›</Text>}
             </Pressable>
-            <Pressable
-              onPress={() => { playTapSound(); setTab('character'); setBattleMode(null); }}
-              style={{ borderWidth: 1, borderColor: '#444', paddingVertical: 14, borderRadius: 12, alignItems: 'center' }}
-            >
-              <Text style={{ color: '#888', fontSize: 14 }}>育成画面に戻る</Text>
-            </Pressable>
-          </View>
-        </View>
-      );
-    }
+          );
+        })}
 
-    return null;
+        {defeatedYokaiToday.length > 0 && (
+          <Text style={{ color: '#D4AF37', fontSize: 14, textAlign: 'center', marginTop: 16 }}>
+            🔥 今日の討伐: {defeatedYokaiToday.length} / {YOKAI_LIST.length}
+          </Text>
+        )}
+      </ScrollView>
+    );
   };
 
   const renderCharacterTab = () => {
@@ -5246,6 +5174,7 @@ export default function App() {
 
   const renderFocusTab = () => (
     <View style={{ flex: 1 }}>
+        {renderYokaiBanner('focus')}
       {/* モード選択画面 */}
       {focusType === 'select' && (
         <View style={styles.goalCard}>
@@ -5722,6 +5651,7 @@ export default function App() {
 
   const renderGratitudeTab = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
+      {renderYokaiBanner('gratitude')}
       <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>感謝</Text>
         <Text style={styles.goalSub}>今日は感謝を10個書けるか？</Text>

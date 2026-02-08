@@ -1212,6 +1212,7 @@ export default function App() {
   const playerShakeAnim = useRef(new Animated.Value(0)).current;
 
 
+
   // ===== Inner World (修行の間) =====
   const [innerWorldView, setInnerWorldView] = useState<'menu' | 'yokaiDex'>('menu');
   // ===== Kegare (Katana Polishing) System =====
@@ -2330,6 +2331,10 @@ export default function App() {
         routineDone: newRoutineDone,
       };
     });
+    // IMINASHI check
+    const goalText = missionInput.trim() + ' ' + (todos || []).map((t: any) => t.text).join(' ');
+    if (checkIminashi(goalText)) return;
+
     showSaveSuccess('目標を刻んだ。今日も斬れ！');
     triggerYokaiDefeat('goal', 15);
   };
@@ -2357,6 +2362,10 @@ export default function App() {
       missionCompleted: prev?.missionCompleted ?? false,
       routineDone: prev?.routineDone ?? [],
     }));
+    // IMINASHI check
+    const reviewText = proudInput.trim() + ' ' + lessonInput.trim() + ' ' + nextActionInput.trim();
+    if (checkIminashi(reviewText)) return;
+
     showSaveSuccess('振り返り完了。明日も斬れ！');
     triggerYokaiDefeat('review', 20);
   };
@@ -4088,6 +4097,58 @@ export default function App() {
 
 
 
+
+  // ===== IMINASHI Functions =====
+  const IMINASHI_MESSAGES = [
+    '……それ、本当に意味あったか？',
+    '虚無が立ちはだかった',
+    '形だけの修行は、力にならない',
+  ];
+
+  const checkIminashi = (text: string): boolean => {
+    const trimmed = text.trim();
+    const elapsed = Date.now() - actionStartTimeRef.current;
+
+    // Check 1: Too short
+    if (trimmed.length < 5) {
+      triggerIminashi();
+      return true;
+    }
+
+    // Check 2: Same as last input
+    if (trimmed === lastUserInputRef.current && trimmed.length > 0) {
+      triggerIminashi();
+      return true;
+    }
+
+    // Check 3: Completed too fast (under 3 seconds)
+    if (elapsed <= 3000) {
+      triggerIminashi();
+      return true;
+    }
+
+    lastUserInputRef.current = trimmed;
+    return false;
+  };
+
+  const triggerIminashi = () => {
+    const msg = IMINASHI_MESSAGES[Math.floor(Math.random() * IMINASHI_MESSAGES.length)];
+    setIminashiMessage(msg);
+    setIsIminashiActive(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+  };
+
+  const clearIminashi = () => {
+    setIsIminashiActive(false);
+    setIminashiMessage('');
+    showSaveSuccess('虚無が霧散した');
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  };
+
+  const startActionTimer = () => {
+    actionStartTimeRef.current = Date.now();
+  };
+
   // ===== Kegare Functions =====
   const checkKegare = async () => {
     try {
@@ -4855,6 +4916,12 @@ export default function App() {
   };
 
 
+
+  // ===== IMINASHI (Anti-cheat Yokai) =====
+  const [isIminashiActive, setIsIminashiActive] = useState(false);
+  const [iminashiMessage, setIminashiMessage] = useState('');
+  const lastUserInputRef = useRef('');
+  const actionStartTimeRef = useRef(Date.now());
   // ===== Inner World (修行の間) =====
   const renderInnerWorldTab = () => {
     const levelInfo = getLevelFromXp(totalXp);
@@ -6091,6 +6158,44 @@ export default function App() {
     return (
       <>
         {renderStartScreen()}
+
+      {/* IMINASHI Overlay */}
+      {isIminashiActive && (
+        <Modal visible={true} animationType="fade" transparent>
+          <View style={{
+            flex: 1,
+            backgroundColor: 'rgba(0,0,0,0.92)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 30,
+          }}>
+            <Text style={{ color: '#444', fontSize: 60, marginBottom: 20 }}>🌫️</Text>
+            <Text style={{ color: '#666', fontSize: 14, fontWeight: '600', letterSpacing: 2, marginBottom: 12 }}>
+              ── イミナシ ──
+            </Text>
+            <Text style={{ color: '#888', fontSize: 18, fontStyle: 'italic', textAlign: 'center', marginBottom: 30, lineHeight: 28 }}>
+              「{iminashiMessage}」
+            </Text>
+            <Text style={{ color: '#555', fontSize: 13, textAlign: 'center', marginBottom: 30, lineHeight: 22 }}>
+              XPは得られなかった{"\n"}もう一度、真剣に向き合え
+            </Text>
+            <Pressable
+              onPress={clearIminashi}
+              style={({ pressed }) => [{
+                backgroundColor: pressed ? '#222' : '#1a1a1a',
+                paddingVertical: 16,
+                paddingHorizontal: 40,
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: '#333',
+              }]}
+            >
+              <Text style={{ color: '#888', fontSize: 16, fontWeight: '600' }}>ズルしても意味ないぞ</Text>
+            </Pressable>
+          </View>
+        </Modal>
+      )}
+
       {/* Katana Polishing Modal */}
       {showKatanaPolish && (
         <Modal visible={true} animationType="fade" transparent={false}>

@@ -84,6 +84,21 @@ const CHARACTER_IMAGES: { [key: number]: any } = {
 
 
 
+
+// ===== Kegare (Katana Polishing) =====
+const KATANA_RUSTY = require('./assets/images/katana_rusty.png');
+const KATANA_CLEAN = require('./assets/images/katana_clean.png');
+const SFX_POLISH = require('./sounds/sfx_polish.mp3');
+const SFX_KATANA_SHINE = require('./sounds/sfx_katana_shine.mp3');
+
+const KEGARE_QUOTES = [
+  '刀を磨く者、心も磨かれる',
+  '錆びた刀では、己は斬れぬ',
+  '日々の手入れが、真の強さを生む',
+  '武士の朝は、刀と共に始まる',
+  '磨かれた刃は、迷いを断つ',
+];
+
 // ===== YOKAI SYSTEM =====
 const YOKAI_IMAGES: { [key: string]: any } = {
   mikkabozu: require('./assets/yokai/yokai_mikkabozu.png'),
@@ -238,6 +253,7 @@ const ONBOARDING_KEY = 'BUSHIDO_ONBOARDING_V1';
 const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
 const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
 const STATS_KEY = 'BUSHIDO_STATS_V1';
+const KEGARE_KEY = 'BUSHIDO_KEGARE_V1';
 const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
@@ -871,6 +887,8 @@ export default function App() {
     // 150ms後に遷移
     setTimeout(async () => {
       setShowDojoGate(false);
+      // 穢れチェック
+      await checkKegare();
       // Introをスキップしていなければ表示
       if (!introSkipped) {
         setShowIntro(true);
@@ -1192,6 +1210,17 @@ export default function App() {
   const [battleXpGained, setBattleXpGained] = useState(0);
   const battleShakeAnim = useRef(new Animated.Value(0)).current;
   const playerShakeAnim = useRef(new Animated.Value(0)).current;
+
+  // ===== Kegare (Katana Polishing) System =====
+  const [showKatanaPolish, setShowKatanaPolish] = useState(false);
+  const [polishCount, setPolishCount] = useState(0);
+  const [polishRequired, setPolishRequired] = useState(5);
+  const [polishComplete, setPolishComplete] = useState(false);
+  const [loginStreak, setLoginStreak] = useState(0);
+  const [kegareQuote, setKegareQuote] = useState('');
+  const katanaGlowAnim = useRef(new Animated.Value(0)).current;
+  const katanaScaleAnim = useRef(new Animated.Value(1)).current;
+
   // ===== Yokai Defeat System =====
   const [yokaiEncounter, setYokaiEncounter] = useState<YokaiData | null>(null);
   const [yokaiPhase, setYokaiPhase] = useState<'appear' | 'attack' | 'defeated' | null>(null);
@@ -4054,6 +4083,112 @@ export default function App() {
 
 
 
+
+  // ===== Kegare Functions =====
+  const checkKegare = async () => {
+    try {
+      const json = await AsyncStorage.getItem(KEGARE_KEY);
+      const today = new Date().toISOString().split('T')[0];
+      
+      if (json) {
+        const data = JSON.parse(json);
+        if (data.lastDate === today) {
+          setShowKatanaPolish(false);
+          return;
+        }
+        
+        const lastDate = new Date(data.lastDate);
+        const now = new Date(today);
+        const diffDays = Math.floor((now.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+        
+        if (diffDays === 1) {
+          setLoginStreak((data.streak || 0) + 1);
+          setPolishRequired(3);
+        } else if (diffDays <= 3) {
+          setLoginStreak(1);
+          setPolishRequired(5);
+        } else if (diffDays <= 7) {
+          setLoginStreak(1);
+          setPolishRequired(8);
+        } else {
+          setLoginStreak(1);
+          setPolishRequired(12);
+        }
+      } else {
+        setLoginStreak(1);
+        setPolishRequired(5);
+      }
+      
+      setPolishCount(0);
+      setPolishComplete(false);
+      setShowKatanaPolish(true);
+      setKegareQuote(KEGARE_QUOTES[Math.floor(Math.random() * KEGARE_QUOTES.length)]);
+    } catch (e) {
+      console.log('Kegare check error', e);
+    }
+  };
+
+  const handlePolish = async () => {
+    if (polishComplete) return;
+    
+    const newCount = polishCount + 1;
+    setPolishCount(newCount);
+    
+    try {
+      const { sound } = await Audio.Sound.createAsync(SFX_POLISH);
+      await sound.setVolumeAsync(MASTER_VOLUME);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((s: any) => {
+        if (s.isLoaded && s.didJustFinish) sound.unloadAsync();
+      });
+    } catch (e) {}
+    
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    
+    Animated.sequence([
+      Animated.timing(katanaScaleAnim, { toValue: 1.05, duration: 80, useNativeDriver: true }),
+      Animated.timing(katanaScaleAnim, { toValue: 1, duration: 80, useNativeDriver: true }),
+    ]).start();
+    
+    if (newCount >= polishRequired) {
+      setPolishComplete(true);
+      
+      try {
+        const { sound } = await Audio.Sound.createAsync(SFX_KATANA_SHINE);
+        await sound.setVolumeAsync(MASTER_VOLUME);
+        await sound.playAsync();
+        sound.setOnPlaybackStatusUpdate((s: any) => {
+          if (s.isLoaded && s.didJustFinish) sound.unloadAsync();
+        });
+      } catch (e) {}
+      
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(katanaGlowAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+          Animated.timing(katanaGlowAnim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+        ]),
+        { iterations: 3 }
+      ).start();
+      
+      const streakXp = loginStreak >= 7 ? 20 : loginStreak >= 3 ? 10 : 5;
+      await addXpWithLevelCheck(streakXp);
+      
+      const today = new Date().toISOString().split('T')[0];
+      await AsyncStorage.setItem(KEGARE_KEY, JSON.stringify({
+        lastDate: today,
+        streak: loginStreak,
+      }));
+    }
+  };
+
+  const dismissKatanaPolish = () => {
+    setShowKatanaPolish(false);
+    katanaGlowAnim.setValue(0);
+    katanaScaleAnim.setValue(1);
+  };
+
   // ===== Yokai Encounter Functions =====
   const triggerYokaiDefeat = (feature: YokaiFeature, xpGain: number) => {
     const pool = YOKAI_LIST.filter(y => y.features.includes(feature));
@@ -5772,7 +5907,116 @@ export default function App() {
 
   // スタート画面表示（オンボーディング完了後）
   if (showStartScreen && !isOnboarding) {
-    return renderStartScreen();
+    return (
+      <>
+        {renderStartScreen()}
+      {/* Katana Polishing Modal */}
+      {showKatanaPolish && (
+        <Modal visible={true} animationType="fade" transparent={false}>
+          <View style={{ flex: 1, backgroundColor: '#0a0a0a', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            
+            <Text style={{ color: '#8B0000', fontSize: 14, fontWeight: '600', letterSpacing: 2, marginBottom: 8 }}>
+              ── 刀の手入れ ──
+            </Text>
+            <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: '900', marginBottom: 24 }}>
+              {polishComplete ? '磨き上げ完了' : '刃を磨け'}
+            </Text>
+            
+            <Pressable
+              onPress={handlePolish}
+              disabled={polishComplete}
+              style={{ alignItems: 'center' }}
+            >
+              <Animated.View style={{
+                transform: [{ scale: katanaScaleAnim }],
+                opacity: katanaGlowAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [1, 1],
+                }),
+              }}>
+                <Animated.View style={{
+                  shadowColor: '#D4AF37',
+                  shadowOffset: { width: 0, height: 0 },
+                  shadowOpacity: katanaGlowAnim,
+                  shadowRadius: 30,
+                }}>
+                  <Image
+                    source={polishComplete ? KATANA_CLEAN : KATANA_RUSTY}
+                    style={{ width: 280, height: 280 }}
+                    resizeMode="contain"
+                  />
+                </Animated.View>
+              </Animated.View>
+            </Pressable>
+
+            {!polishComplete && (
+              <View style={{ marginTop: 24, alignItems: 'center' }}>
+                <View style={{ width: 200, height: 8, backgroundColor: '#222', borderRadius: 4, overflow: 'hidden' }}>
+                  <View style={{
+                    height: '100%',
+                    width: (polishCount / polishRequired * 100) + '%',
+                    backgroundColor: '#D4AF37',
+                    borderRadius: 4,
+                  }} />
+                </View>
+                <Text style={{ color: '#666', fontSize: 13, marginTop: 8 }}>
+                  {polishCount} / {polishRequired}
+                </Text>
+                <Text style={{ color: '#444', fontSize: 12, marginTop: 16 }}>
+                  刀をタップして磨け
+                </Text>
+              </View>
+            )}
+
+            {polishComplete && (
+              <View style={{ marginTop: 24, alignItems: 'center' }}>
+                <View style={{
+                  backgroundColor: '#1a1a2e',
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                  width: '100%',
+                  borderLeftWidth: 3,
+                  borderLeftColor: '#D4AF37',
+                }}>
+                  <Text style={{ color: '#D4AF37', fontSize: 12, marginBottom: 4 }}>サムライキングの言葉</Text>
+                  <Text style={{ color: '#ccc', fontSize: 16, fontStyle: 'italic' }}>
+                    「{kegareQuote}」
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                  <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold' }}>
+                    +{loginStreak >= 7 ? 20 : loginStreak >= 3 ? 10 : 5} XP
+                  </Text>
+                </View>
+
+                {loginStreak > 1 && (
+                  <Text style={{ color: '#f59e0b', fontSize: 14, marginBottom: 16 }}>
+                    🔥 {loginStreak}日連続ログイン！
+                  </Text>
+                )}
+
+                <Pressable
+                  onPress={dismissKatanaPolish}
+                  style={({ pressed }) => [{
+                    backgroundColor: pressed ? '#8B6914' : '#D4AF37',
+                    paddingVertical: 18,
+                    paddingHorizontal: 50,
+                    borderRadius: 14,
+                  }]}
+                >
+                  <Text style={{ color: '#000', fontSize: 18, fontWeight: '900' }}>道場へ</Text>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        </Modal>
+      )}
+
+
+      </>
+    );
   }
 
   return (
@@ -5864,6 +6108,7 @@ export default function App() {
             )}
           </View>
       </KeyboardAvoidingView>
+
 
 
 

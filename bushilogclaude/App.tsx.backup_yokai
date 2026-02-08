@@ -83,93 +83,6 @@ const CHARACTER_IMAGES: { [key: number]: any } = {
 };
 
 
-
-// ===== YOKAI SYSTEM =====
-const YOKAI_IMAGES: { [key: string]: any } = {
-  mikkabozu: require('./assets/yokai/yokai_mikkabozu.png'),
-  hyakume: require('./assets/yokai/yokai_hyakume.png'),
-  deebu: require('./assets/yokai/yokai_deebu.png'),
-  atodeyaru: require('./assets/yokai/yokai_atodeyaru.png'),
-  scroll: require('./assets/yokai/yokai_scroll.png'),
-  tetsuya: require('./assets/yokai/yokai_tetsuya.png'),
-  nidoneel: require('./assets/yokai/yokai_nidoneel.png'),
-  hikakuzou: require('./assets/yokai/yokai_hikakuzou.png'),
-  peeping: require('./assets/yokai/yokai_peeping.png'),
-  mottemiteya: require('./assets/yokai/yokai_mottemiteya.png'),
-  moumuri: require('./assets/yokai/yokai_moumuri.png'),
-  atamadekkachi: require('./assets/yokai/yokai_atamadekkachi.png'),
-};
-
-const YOKAI_LOSE_IMAGES: { [key: string]: any } = {
-  mikkabozu: require('./assets/yokai/loseyokai_mikkabozu.png'),
-  hyakume: require('./assets/yokai/loseyokai_hyakume.png'),
-  deebu: require('./assets/yokai/loseyokai_deebu.png'),
-  atodeyaru: require('./assets/yokai/loseyokai_atodeyaru.png'),
-  scroll: require('./assets/yokai/loseyokai_scroll.png'),
-  tetsuya: require('./assets/yokai/loseyokai_tetsuya.png'),
-  nidoneel: require('./assets/yokai/loseyokai_nidoneel.png'),
-  hikakuzou: require('./assets/yokai/loseyokai_hikakuzou.png'),
-  peeping: require('./assets/yokai/loseyokai_peeping.png'),
-  mottemiteya: require('./assets/yokai/loseyokai_mottemiteya.png'),
-  moumuri: require('./assets/yokai/loseyokai_moumuri.png'),
-  atamadekkachi: require('./assets/yokai/loseyokai_atamadekkachi.png'),
-};
-
-const YOKAI_VIDEOS: { [key: string]: any } = {
-  mikkabozu: require('./assets/yokai/yokai_mikkabozu.mp4'),
-  hyakume: require('./assets/yokai/yokai_hyakume.mp4'),
-  deebu: require('./assets/yokai/yokai_deebu.mp4'),
-  atodeyaru: require('./assets/yokai/yokai_atodeyaru.mp4'),
-  scroll: require('./assets/yokai/yokai_scroll.mp4'),
-  tetsuya: require('./assets/yokai/yokai_tetsuya.mp4'),
-  nidoneel: require('./assets/yokai/yokai_nidoneel.mp4'),
-  hikakuzou: require('./assets/yokai/yokai_hikakuzou.mp4'),
-  peeping: require('./assets/yokai/yokai_peeping.mp4'),
-  mottemiteya: require('./assets/yokai/yokai_mottemiteya.mp4'),
-  moumuri: require('./assets/yokai/yokai_moumuri.mp4'),
-  atamadekkachi: require('./assets/yokai/yokai_atamadekkachi.mp4'),
-};
-
-const YOKAI_LOSE_VIDEOS: { [key: string]: any } = {
-  mikkabozu: require('./assets/yokai/loseyokai_mikkabozu.mp4'),
-  hyakume: require('./assets/yokai/loseyokai_hyakume.mp4'),
-  deebu: require('./assets/yokai/loseyokai_deebu.mp4'),
-  atodeyaru: require('./assets/yokai/loseyokai_atodeyaru.mp4'),
-  scroll: require('./assets/yokai/loseyokai_scroll.mp4'),
-  tetsuya: require('./assets/yokai/loseyokai_tetsuya.mp4'),
-  nidoneel: require('./assets/yokai/loseyokai_nidoneel.mp4'),
-  hikakuzou: require('./assets/yokai/loseyokai_hikakuzou.mp4'),
-  peeping: require('./assets/yokai/loseyokai_peeping.mp4'),
-  mottemiteya: require('./assets/yokai/loseyokai_mottemiteya.mp4'),
-  moumuri: require('./assets/yokai/loseyokai_moumuri.mp4'),
-  atamadekkachi: require('./assets/yokai/loseyokai_atamadekkachi.mp4'),
-};
-
-type YokaiFeature = 'consult' | 'gratitude' | 'goal' | 'review' | 'focus' | 'alarm';
-
-interface YokaiData {
-  id: string;
-  name: string;
-  quote: string;
-  defeatQuote: string;
-  features: YokaiFeature[];
-}
-
-const YOKAI_LIST: YokaiData[] = [
-  { id: 'mikkabozu', name: '\u4e09\u65e5\u574a\u4e3b', quote: '\u3069\u3046\u305b\u307e\u305f\u3084\u3081\u308b\u3093\u3060\u308d\uff1f', defeatQuote: '\u304f\u305d\u2026\u7d9a\u3051\u3084\u304c\u3063\u305f\u306a\u2026', features: ['consult', 'goal'] },
-  { id: 'hyakume', name: '\u901a\u77e5\u767e\u76ee', quote: '\u307b\u3089\u3001\u307e\u305f\u901a\u77e5\u304c\u6765\u305f\u305e\uff01', defeatQuote: '\u304a\u524d\u2026\u901a\u77e5\u3092\u7121\u8996\u3067\u304d\u308b\u306e\u304b\u2026', features: ['focus'] },
-  { id: 'deebu', name: '\u30c7\u30fc\u30d6', quote: '\u4eca\u65e5\u306f\u3082\u3046\u4f11\u3082\u3046\u305c\u301c', defeatQuote: '\u3046\u305d\u3060\u308d\u2026\u307e\u3060\u52d5\u3051\u308b\u306e\u304b\u2026', features: ['goal', 'focus'] },
-  { id: 'atodeyaru', name: '\u30a2\u30c8\u30c7\u30e4\u30eb', quote: '\u660e\u65e5\u3084\u308c\u3070\u3044\u3044\u3058\u3083\u3093', defeatQuote: '\u30d0\u30ab\u306a\u2026\u4eca\u3084\u3063\u3061\u307e\u3046\u306e\u304b\u2026', features: ['consult', 'goal'] },
-  { id: 'scroll', name: '\u30b9\u30af\u30ed\u30fc\u30eb\u5996\u602a', quote: '\u3082\u3046\u3061\u3087\u3063\u3068\u3060\u3051\u898b\u3066\u3044\u3053\u3046\u3088', defeatQuote: '\u30b9\u30de\u30db\u3092\u7f6e\u3044\u305f\u3060\u3068\u2026\uff01', features: ['focus'] },
-  { id: 'tetsuya', name: '\u5fb9\u591c', quote: '\u307e\u3060\u5bdd\u306a\u304f\u3066\u3044\u3044\u3060\u308d\uff1f', defeatQuote: '\u304f\u305d\u2026\u3061\u3083\u3093\u3068\u5bdd\u308b\u306e\u304b\u3088\u2026', features: ['alarm', 'focus'] },
-  { id: 'nidoneel', name: '\u30cb\u30c9\u30cd\u30fc\u30eb', quote: '\u3042\u3068\uff15\u5206\u3060\u3051\u2026\u3042\u3068\uff15\u5206\u2026', defeatQuote: '\u5634\u2026\u4e00\u767a\u3067\u8d77\u304d\u305f\u3060\u3068\u2026\uff01', features: ['alarm'] },
-  { id: 'hikakuzou', name: '\u6bd4\u8f03\u5bf8\u8535', quote: '\u3042\u3044\u3064\u306e\u65b9\u304c\u4e0a\u3060\u305e\uff1f', defeatQuote: '\u304f\u305d\u2026\u81ea\u5206\u3060\u3051\u898b\u3066\u3084\u304c\u308b\u2026', features: ['gratitude'] },
-  { id: 'peeping', name: '\u30d4\u30fc\u30d4\u30f3\u30af\u30c8\u30e0', quote: '\u4ed6\u4eba\u306e\u3053\u3068\u304c\u6c17\u306b\u306a\u308b\u3060\u308d\uff1f', defeatQuote: '\u4ed6\u4eba\u3058\u3083\u306a\u304f\u81ea\u5206\u3092\u898b\u308b\u306e\u304b\u2026', features: ['gratitude'] },
-  { id: 'mottemiteya', name: '\u30e2\u30c3\u30c8\u30df\u30c6\u30e4', quote: '\u3082\u3063\u3068\u300c\u3044\u3044\u306d\u300d\u304c\u6b32\u3057\u3044\u3060\u308d\uff1f', defeatQuote: '\u81ea\u5206\u3067\u81ea\u5206\u3092\u8a8d\u3081\u3089\u308c\u308b\u306e\u304b\u2026', features: ['gratitude'] },
-  { id: 'moumuri', name: '\u30e2\u30a6\u30e0\u30ea', quote: '\u304a\u524d\u306b\u306f\u7121\u7406\u3060\u3088', defeatQuote: '\u7121\u7406\u3058\u3083\u306a\u304b\u3063\u305f\u306e\u304b\u2026\uff01', features: ['consult'] },
-  { id: 'atamadekkachi', name: '\u30a2\u30bf\u30de\u30c7\u30c3\u30ab\u30c1', quote: '\u8003\u3048\u3066\u308b\u3060\u3051\u3058\u3083\u30c0\u30e1\u3060\u305e', defeatQuote: '\u884c\u52d5\u3057\u305f\u3060\u3068\u2026\u8003\u3048\u308b\u3060\u3051\u3058\u3083\u306a\u3044\u306e\u304b\u2026', features: ['review'] },
-];
-
 // ===== BATTLE SYSTEM: Enemy Data =====
 const ENEMY_IMAGES: { [key: string]: any } = {
   enemy01: require('./assets/enemies/enemy01.png'),
@@ -1192,13 +1105,6 @@ export default function App() {
   const [battleXpGained, setBattleXpGained] = useState(0);
   const battleShakeAnim = useRef(new Animated.Value(0)).current;
   const playerShakeAnim = useRef(new Animated.Value(0)).current;
-  // ===== Yokai Defeat System =====
-  const [yokaiEncounter, setYokaiEncounter] = useState<YokaiData | null>(null);
-  const [yokaiPhase, setYokaiPhase] = useState<'appear' | 'attack' | 'defeated' | null>(null);
-  const [yokaiXp, setYokaiXp] = useState(0);
-  const [yokaiFeature, setYokaiFeature] = useState<string>('');
-  const yokaiShakeAnim = useRef(new Animated.Value(0)).current;
-
 
   // ===== Stats System =====
   const [samuraiStats, setSamuraiStats] = useState<{power: number, mind: number, skill: number, virtue: number}>({power: 75, mind: 75, skill: 75, virtue: 75});
@@ -2099,7 +2005,6 @@ export default function App() {
       playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showSaveSuccess(`修行達成！+${xpGain} XP`);
-      triggerYokaiDefeat('consult', 0);
     }
   };
 
@@ -2117,7 +2022,6 @@ export default function App() {
         saveMissionState({ alarmActive: false });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showSaveSuccess('アラーム解除！今日も頑張ろう');
-        triggerYokaiDefeat('alarm', 25);
       } else {
         setMissionQuizQuestion(generateMissionQuiz());
         setMissionQuizAnswer('');
@@ -2299,7 +2203,6 @@ export default function App() {
       };
     });
     showSaveSuccess('目標を刻んだ。今日も斬れ！');
-    triggerYokaiDefeat('goal', 15);
   };
   const handleSaveNightReview = async () => {
     // Pro限定機能（3日間は無料トライアル）
@@ -2326,7 +2229,6 @@ export default function App() {
       routineDone: prev?.routineDone ?? [],
     }));
     showSaveSuccess('振り返り完了。明日も斬れ！');
-    triggerYokaiDefeat('review', 20);
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
@@ -2732,8 +2634,7 @@ export default function App() {
           } else { 
             showSaveSuccess('修行の成果は、やがて姿を持つ'); 
           } 
-        }}
- 
+        }} 
         style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, alignItems: 'center' }]}
       >
         <Animated.View style={{ 
@@ -2831,6 +2732,23 @@ export default function App() {
         }}
       >
         <Text style={styles.startButtonText}>明日に備える{!isPro && getLevelFromXp(totalXp).level < 5 ? ' 🔒' : ''}</Text>
+      </Pressable>
+      <Pressable
+        style={[styles.startButton, !isPro && getLevelFromXp(totalXp).level < 3 ? { opacity: 0.4 } : { borderColor: '#8B0000', borderWidth: 1 }]}
+        onPress={() => {
+          if (!isPro && getLevelFromXp(totalXp).level < 3) {
+            playTapSound();
+            showSaveSuccess('Lv.3「足軽」で解放');
+            return;
+          }
+          playAttackSound();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          setBattleMode('select');
+          setTab('battle');
+          setShowStartScreen(false);
+        }}
+      >
+        <Text style={[styles.startButtonText, (isPro || getLevelFromXp(totalXp).level >= 3) && { color: '#ef4444' }]}>⚔️ 修行対戦{!isPro && getLevelFromXp(totalXp).level < 3 ? ' 🔒' : ''}</Text>
       </Pressable>
     </View>
   );
@@ -3949,7 +3867,6 @@ export default function App() {
               '集中完了。次の戦いに備えよ。',
               '時間を制した者が、己を制す。',
             ];
-            triggerYokaiDefeat('focus', 20);
             Alert.alert('集中完了', messages[Math.floor(Math.random() * messages.length)], [
               { text: '道場に戻る', onPress: () => {
                 setShowStartScreen(true);
@@ -4052,52 +3969,6 @@ export default function App() {
 
   // キャラクター育成画面
 
-
-
-  // ===== Yokai Encounter Functions =====
-  const triggerYokaiDefeat = (feature: YokaiFeature, xpGain: number) => {
-    const pool = YOKAI_LIST.filter(y => y.features.includes(feature));
-    if (pool.length === 0) return;
-    const yokai = pool[Math.floor(Math.random() * pool.length)];
-    setYokaiEncounter(yokai);
-    setYokaiPhase('appear');
-    setYokaiXp(xpGain);
-    setYokaiFeature(feature);
-    playAttackSound();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-  };
-
-  const yokaiAttack = async () => {
-    if (yokaiPhase !== 'appear' || !yokaiEncounter) return;
-    setYokaiPhase('attack');
-    await playAttackSound();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    // Shake animation
-    Animated.sequence([
-      Animated.timing(yokaiShakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 12, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -12, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 8, duration: 40, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -8, duration: 40, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 0, duration: 40, useNativeDriver: true }),
-    ]).start();
-
-    setTimeout(() => {
-      setYokaiPhase('defeated');
-      playWinSound();
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      addXpWithLevelCheck(yokaiXp);
-    }, 1200);
-  };
-
-  const closeYokaiModal = () => {
-    setYokaiEncounter(null);
-    setYokaiPhase(null);
-    setYokaiXp(0);
-    yokaiShakeAnim.setValue(0);
-  };
 
   // ===== Stats Functions =====
   const saveStats = async (stats: any, allocated: boolean, realloc: string | null) => {
@@ -4648,68 +4519,37 @@ export default function App() {
           </View>
         )}
 
-        {/* Battle Arena Section */}
-        {(isPro || levelInfo.level >= 3) && (
-          <View style={{ marginTop: 32, width: '100%' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-              <Text style={{ color: '#8B0000', fontSize: 16, fontWeight: '900', marginHorizontal: 12 }}>☠️ 対戦場 ☠️</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-            </View>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              {getAvailableEnemies().map((enemy) => (
-                <Pressable
-                  key={enemy.id}
-                  onPress={() => startBattle(enemy)}
-                  style={({ pressed }) => [{
-                    width: '48%',
-                    backgroundColor: pressed ? '#2a0a0a' : '#0a0a1a',
-                    borderRadius: 14,
-                    padding: 10,
-                    marginBottom: 10,
-                    alignItems: 'center',
-                    borderWidth: 1,
-                    borderColor: enemy.isBoss ? '#8B0000' : '#222',
-                    opacity: pressed ? 0.8 : 1,
-                  }]}
-                >
-                  <View style={{
-                    width: 70, height: 70, borderRadius: 12, overflow: 'hidden',
-                    borderWidth: 2, borderColor: enemy.isBoss ? '#8B0000' : '#333',
-                    backgroundColor: '#0a0a0a',
-                  }}>
-                    <Image source={enemy.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
-                  </View>
-                  {enemy.isBoss && (
-                    <Text style={{ color: '#8B0000', fontSize: 9, fontWeight: '900', marginTop: 4 }}>👹 BOSS</Text>
-                  )}
-                  <Text style={{ color: '#aaa', fontSize: 13, fontWeight: '700', marginTop: 4, textAlign: 'center' }}>{enemy.name}</Text>
-                  <Text style={{ color: '#555', fontSize: 9, fontStyle: 'italic', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
-                    「{enemy.quote}」
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {battleWinStreak > 0 && (
-              <Text style={{ color: '#D4AF37', fontSize: 13, textAlign: 'center', marginTop: 4 }}>
-                🔥 {battleWinStreak}連勝中
-              </Text>
-            )}
-          </View>
-        )}
-
-        {!isPro && levelInfo.level < 3 && (
-          <View style={{ marginTop: 32, width: '100%', alignItems: 'center', opacity: 0.4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-              <Text style={{ color: '#555', fontSize: 14, marginHorizontal: 12 }}>☠️ 対戦場 ☠️</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-            </View>
-            <Text style={{ color: '#555', fontSize: 13 }}>🔒 Lv.3「足軽」で解放</Text>
-          </View>
-        )}
+        {/* Battle Button */}
+        <Pressable
+          onPress={() => {
+            if (!isPro && getLevelFromXp(totalXp).level < 3) {
+              playTapSound();
+              showSaveSuccess('Lv.3「足軽」で解放');
+              return;
+            }
+            playAttackSound();
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            setBattleMode('select');
+            setTab('battle');
+          }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#8B0000' : '#1a0a0a',
+            borderWidth: 2,
+            borderColor: '#8B0000',
+            borderRadius: 16,
+            padding: 20,
+            marginTop: 24,
+            width: '100%',
+            alignItems: 'center',
+          }]}
+        >
+          <Text style={{ fontSize: 28, marginBottom: 4 }}>⚔️</Text>
+          <Text style={{ color: '#ef4444', fontSize: 20, fontWeight: '900' }}>修行対戦</Text>
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>己の力を試せ</Text>
+          {battleWinStreak > 0 && (
+            <Text style={{ color: '#D4AF37', fontSize: 12, marginTop: 4 }}>🔥 {battleWinStreak}連勝中</Text>
+          )}
+        </Pressable>
 
       </ScrollView>
     );
@@ -5865,99 +5705,6 @@ export default function App() {
           </View>
       </KeyboardAvoidingView>
 
-
-
-      {/* Yokai Defeat Modal */}
-      {yokaiEncounter && (
-        <Modal visible={true} animationType="fade" transparent>
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { alignItems: 'center', paddingVertical: 30 }]}>
-
-              {yokaiPhase === 'appear' && (
-                <>
-                  <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>☠️ 妖怪出現！</Text>
-                  <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12 }}>{yokaiEncounter.name}</Text>
-
-                  <View style={{ width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#ef4444', backgroundColor: '#1a0a0a', marginBottom: 16 }}>
-                    <Video
-                      source={YOKAI_VIDEOS[yokaiEncounter.id]}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode={ResizeMode.CONTAIN}
-                      shouldPlay
-                      isLooping
-                      isMuted
-                    />
-                  </View>
-
-                  <View style={{ backgroundColor: '#1a0a0a', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderLeftWidth: 3, borderLeftColor: '#ef4444' }}>
-                    <Text style={{ color: '#ef4444', fontSize: 16, fontStyle: 'italic', textAlign: 'center' }}>
-                      「{yokaiEncounter.quote}」
-                    </Text>
-                  </View>
-
-                  <Pressable
-                    onPress={yokaiAttack}
-                    style={({ pressed }) => [{ backgroundColor: pressed ? '#8B6914' : '#D4AF37', paddingVertical: 18, paddingHorizontal: 50, borderRadius: 14 }]}
-                  >
-                    <Text style={{ color: '#000', fontSize: 22, fontWeight: '900' }}>⚔️ 斬る！</Text>
-                  </Pressable>
-                </>
-              )}
-
-              {yokaiPhase === 'attack' && (
-                <>
-                  <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: '900', marginBottom: 16 }}>⚔️ 一太刀！</Text>
-                  <Animated.View style={{ transform: [{ translateX: yokaiShakeAnim }], width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#ef4444', backgroundColor: '#1a0a0a' }}>
-                    <Video
-                      source={YOKAI_VIDEOS[yokaiEncounter.id]}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode={ResizeMode.CONTAIN}
-                      shouldPlay
-                      isLooping
-                      isMuted
-                    />
-                  </Animated.View>
-                </>
-              )}
-
-              {yokaiPhase === 'defeated' && (
-                <>
-                  <Text style={{ color: '#D4AF37', fontSize: 32, fontWeight: '900', marginBottom: 8 }}>討伐成功！</Text>
-                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 16 }}>{yokaiEncounter.name}を倒した！</Text>
-
-                  <View style={{ width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#555', backgroundColor: '#1a0a0a', marginBottom: 16 }}>
-                    <Video
-                      source={YOKAI_LOSE_VIDEOS[yokaiEncounter.id]}
-                      style={{ width: '100%', height: '100%' }}
-                      resizeMode={ResizeMode.CONTAIN}
-                      shouldPlay
-                      isLooping
-                      isMuted
-                    />
-                  </View>
-
-                  <View style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, marginBottom: 16, width: '100%', borderLeftWidth: 3, borderLeftColor: '#D4AF37' }}>
-                    <Text style={{ color: '#888', fontSize: 13, marginBottom: 4 }}>{yokaiEncounter.name}の最期</Text>
-                    <Text style={{ color: '#ccc', fontSize: 16, fontStyle: 'italic', textAlign: 'center' }}>
-                      「{yokaiEncounter.defeatQuote}」
-                    </Text>
-                  </View>
-
-                  <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>+{yokaiXp} XP</Text>
-
-                  <Pressable
-                    onPress={closeYokaiModal}
-                    style={({ pressed }) => [{ backgroundColor: pressed ? '#8B6914' : '#D4AF37', paddingVertical: 16, paddingHorizontal: 40, borderRadius: 14 }]}
-                  >
-                    <Text style={{ color: '#000', fontSize: 18, fontWeight: 'bold' }}>続ける</Text>
-                  </Pressable>
-                </>
-              )}
-
-            </View>
-          </View>
-        </Modal>
-      )}
 
       {/* Stats Allocation Modal */}
       <Modal visible={showStatsAlloc} animationType="slide" transparent>

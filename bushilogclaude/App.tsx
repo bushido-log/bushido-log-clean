@@ -750,7 +750,7 @@ export default function App() {
   };
   const messagesRef = useRef<ScrollView | null>(null);
 
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm' | 'character' | 'battle'>('consult');
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm' | 'character' | 'battle' | 'innerWorld'>('consult');
   const [showStartScreen, setShowStartScreen] = useState(true);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
@@ -1211,6 +1211,9 @@ export default function App() {
   const battleShakeAnim = useRef(new Animated.Value(0)).current;
   const playerShakeAnim = useRef(new Animated.Value(0)).current;
 
+
+  // ===== Inner World (修行の間) =====
+  const [innerWorldView, setInnerWorldView] = useState<'menu' | 'yokaiDex'>('menu');
   // ===== Kegare (Katana Polishing) System =====
   const [showKatanaPolish, setShowKatanaPolish] = useState(false);
   const [polishCount, setPolishCount] = useState(0);
@@ -2757,7 +2760,8 @@ export default function App() {
           const levelInfo = getLevelFromXp(totalXp); 
           if (levelInfo.level >= 1) { 
             setShowStartScreen(false); 
-            setTab('character'); 
+            setInnerWorldView('menu');
+            setTab('innerWorld'); 
           } else { 
             showSaveSuccess('修行の成果は、やがて姿を持つ'); 
           } 
@@ -4850,6 +4854,183 @@ export default function App() {
     );
   };
 
+
+  // ===== Inner World (修行の間) =====
+  const renderInnerWorldTab = () => {
+    const levelInfo = getLevelFromXp(totalXp);
+
+    if (innerWorldView === 'yokaiDex') {
+      return (
+        <View style={{ flex: 1, padding: 20 }}>
+          <Pressable
+            onPress={() => { playTapSound(); setInnerWorldView('menu'); }}
+            style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 20 }}
+          >
+            <Text style={{ color: '#888', fontSize: 16 }}>← 修行の間</Text>
+          </Pressable>
+
+          <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 20 }}>👹 妖怪図鑑</Text>
+
+          <ScrollView>
+            {YOKAI_LIST.map((yokai) => (
+              <View key={yokai.id} style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#0a0a1a',
+                borderRadius: 14,
+                padding: 12,
+                marginBottom: 10,
+                borderWidth: 1,
+                borderColor: '#222',
+              }}>
+                <View style={{
+                  width: 60, height: 60, borderRadius: 12, overflow: 'hidden',
+                  borderWidth: 2, borderColor: '#333', backgroundColor: '#0a0a0a', marginRight: 14,
+                }}>
+                  <Image source={YOKAI_IMAGES[yokai.id]} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: '#ccc', fontSize: 16, fontWeight: '700' }}>{yokai.name}</Text>
+                  <Text style={{ color: '#555', fontSize: 11, fontStyle: 'italic', marginTop: 2 }}>
+                    「{yokai.quote}」
+                  </Text>
+                  <Text style={{ color: '#444', fontSize: 10, marginTop: 4 }}>
+                    {yokai.features.map((f: string) => (
+                      f === 'consult' ? '相談' : f === 'gratitude' ? '感謝' : f === 'goal' ? '目標' : f === 'review' ? '振り返り' : f === 'focus' ? '集中' : 'アラーム'
+                    )).join(' / ')}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      );
+    }
+
+    return (
+      <ScrollView style={{ flex: 1, padding: 20 }} contentContainerStyle={{ paddingBottom: 40 }}>
+        <View style={{ alignItems: 'center', marginBottom: 32, marginTop: 10 }}>
+          <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: '900', letterSpacing: 4 }}>── 修行の間 ──</Text>
+          <Text style={{ color: '#555', fontSize: 12, marginTop: 8 }}>Lv.{levelInfo.level} {LEVEL_TITLES[levelInfo.level]}</Text>
+        </View>
+
+        <Pressable
+          onPress={() => {
+            playTapSound();
+            if (!isPro && levelInfo.level < 3) {
+              showSaveSuccess('Lv.3「足軽」で解放');
+              return;
+            }
+            setBattleMode('select');
+            setTab('battle');
+          }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#1a0808' : '#0a0a1a',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: (isPro || levelInfo.level >= 3) ? '#8B0000' : '#222',
+            opacity: (isPro || levelInfo.level >= 3) ? 1 : 0.4,
+          }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 14 }}>⚔️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: (isPro || levelInfo.level >= 3) ? '#ef4444' : '#555', fontSize: 18, fontWeight: '900' }}>修行対戦</Text>
+              <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>{(isPro || levelInfo.level >= 3) ? '敵と戦い、己を磨け' : '🔒 Lv.3で解放'}</Text>
+            </View>
+            {(isPro || levelInfo.level >= 3) && <Text style={{ color: '#555', fontSize: 18 }}>›</Text>}
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => { playTapSound(); setInnerWorldView('yokaiDex'); }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#0a0a18' : '#0a0a1a',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: '#333',
+          }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 14 }}>👹</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#ccc', fontSize: 18, fontWeight: '900' }}>妖怪図鑑</Text>
+              <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>出会った妖怪たち</Text>
+            </View>
+            <Text style={{ color: '#555', fontSize: 18 }}>›</Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => { playTapSound(); setTab('character'); }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#0a0a18' : '#0a0a1a',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: '#333',
+          }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 14 }}>🧑‍🎓</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#ccc', fontSize: 18, fontWeight: '900' }}>育成</Text>
+              <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>ステータス・レベル確認</Text>
+            </View>
+            <Text style={{ color: '#555', fontSize: 18 }}>›</Text>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => { playTapSound(); showSaveSuccess('Lv.9以降 解放予定'); }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#0a0a18' : '#0a0a1a',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: '#222',
+            opacity: 0.4,
+          }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 14 }}>🐉</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#555', fontSize: 18, fontWeight: '900' }}>覚醒</Text>
+              <Text style={{ color: '#444', fontSize: 11, marginTop: 2 }}>🔒 Lv.9以降 解放予定</Text>
+            </View>
+          </View>
+        </Pressable>
+
+        <Pressable
+          onPress={() => { playTapSound(); showSaveSuccess('近日実装'); }}
+          style={({ pressed }) => [{
+            backgroundColor: pressed ? '#0a0a18' : '#0a0a1a',
+            borderRadius: 16,
+            padding: 20,
+            marginBottom: 14,
+            borderWidth: 1,
+            borderColor: '#222',
+            opacity: 0.4,
+          }]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={{ fontSize: 28, marginRight: 14 }}>📜</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: '#555', fontSize: 18, fontWeight: '900' }}>戦歴</Text>
+              <Text style={{ color: '#444', fontSize: 11, marginTop: 2 }}>近日実装</Text>
+            </View>
+          </View>
+        </Pressable>
+      </ScrollView>
+    );
+  };
+
   const renderAlarmTab = () => {
     // アラーム発動中の画面
     if (alarmRinging) {
@@ -6092,6 +6273,7 @@ export default function App() {
                       ))}
                       {tab === 'gratitude' && renderGratitudeTab()}
                       {tab === 'settings' && renderSettingsTab()}
+                      {tab === 'innerWorld' && renderInnerWorldTab()}
                       {tab === 'character' && renderCharacterTab()}
                       {tab === 'battle' && ((isPro || getLevelFromXp(totalXp).level >= 3) ? renderBattleTab() : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>

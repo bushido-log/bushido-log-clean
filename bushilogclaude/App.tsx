@@ -2718,15 +2718,37 @@ export default function App() {
       </Pressable>
       
       <Pressable
-        style={styles.startButton}
+        style={[styles.startButton, !isPro && getLevelFromXp(totalXp).level < 5 && { opacity: 0.4 }]}
         onPress={() => {
+          if (!isPro && getLevelFromXp(totalXp).level < 5) {
+            playTapSound();
+            showSaveSuccess('Lv.5「若侍」で解放');
+            return;
+          }
           playEnterSound();
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
           setTab('alarm');
           setShowStartScreen(false);
         }}
       >
-        <Text style={styles.startButtonText}>明日に備える</Text>
+        <Text style={styles.startButtonText}>明日に備える{!isPro && getLevelFromXp(totalXp).level < 5 ? ' 🔒' : ''}</Text>
+      </Pressable>
+      <Pressable
+        style={[styles.startButton, !isPro && getLevelFromXp(totalXp).level < 3 ? { opacity: 0.4 } : { borderColor: '#8B0000', borderWidth: 1 }]}
+        onPress={() => {
+          if (!isPro && getLevelFromXp(totalXp).level < 3) {
+            playTapSound();
+            showSaveSuccess('Lv.3「足軽」で解放');
+            return;
+          }
+          playAttackSound();
+          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+          setBattleMode('select');
+          setTab('battle');
+          setShowStartScreen(false);
+        }}
+      >
+        <Text style={[styles.startButtonText, (isPro || getLevelFromXp(totalXp).level >= 3) && { color: '#ef4444' }]}>⚔️ 修行対戦{!isPro && getLevelFromXp(totalXp).level < 3 ? ' 🔒' : ''}</Text>
       </Pressable>
     </View>
   );
@@ -4500,6 +4522,11 @@ export default function App() {
         {/* Battle Button */}
         <Pressable
           onPress={() => {
+            if (!isPro && getLevelFromXp(totalXp).level < 3) {
+              playTapSound();
+              showSaveSuccess('Lv.3「足軽」で解放');
+              return;
+            }
             playAttackSound();
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setBattleMode('select');
@@ -5651,11 +5678,25 @@ export default function App() {
                       {tab === 'review' && renderReviewTab()}
                       {tab === 'browser' && renderBrowserTab()}
                       {tab === 'focus' && renderFocusTab()}
-                      {tab === 'alarm' && renderAlarmTab()}
+                      {tab === 'alarm' && ((isPro || getLevelFromXp(totalXp).level >= 5) ? renderAlarmTab() : (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                          <Text style={{ fontSize: 48, marginBottom: 16 }}>🔒</Text>
+                          <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>サムライアラーム</Text>
+                          <Text style={{ color: '#888', fontSize: 15, textAlign: 'center' }}>Lv.5「若侍」で解放</Text>
+                          <Text style={{ color: '#555', fontSize: 13, marginTop: 12, textAlign: 'center' }}>修行を積み、己を磨け</Text>
+                        </View>
+                      ))}
                       {tab === 'gratitude' && renderGratitudeTab()}
                       {tab === 'settings' && renderSettingsTab()}
                       {tab === 'character' && renderCharacterTab()}
-                      {tab === 'battle' && renderBattleTab()}
+                      {tab === 'battle' && ((isPro || getLevelFromXp(totalXp).level >= 3) ? renderBattleTab() : (
+                        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+                          <Text style={{ fontSize: 48, marginBottom: 16 }}>🔒</Text>
+                          <Text style={{ color: '#ef4444', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>修行対戦</Text>
+                          <Text style={{ color: '#888', fontSize: 15, textAlign: 'center' }}>Lv.3「足軽」で解放</Text>
+                          <Text style={{ color: '#555', fontSize: 13, marginTop: 12, textAlign: 'center' }}>まずは修行を積め</Text>
+                        </View>
+                      ))}
                     </>
                   )}
                 </View>

@@ -254,6 +254,7 @@ const XP_KEY = 'BUSHIDO_TOTAL_XP_V1';
 const SETTINGS_KEY = 'BUSHIDO_SETTINGS_V1';
 const STATS_KEY = 'BUSHIDO_STATS_V1';
 const KEGARE_KEY = 'BUSHIDO_KEGARE_V1';
+const TUTORIAL_KEY = 'BUSHIDO_TUTORIAL_DONE';
 const BLOCKLIST_KEY = 'BUSHIDO_BLOCKLIST_V1';
 const SAMURAI_TIME_KEY = 'BUSHIDO_SAMURAI_TIME_V1';
 const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
@@ -2132,7 +2133,6 @@ export default function App() {
       playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showSaveSuccess(`修行達成！+${xpGain} XP`);
-      triggerYokaiDefeat('consult', 0);
     }
   };
 
@@ -2150,8 +2150,7 @@ export default function App() {
         saveMissionState({ alarmActive: false });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showSaveSuccess('アラーム解除！今日も頑張ろう');
-        triggerYokaiDefeat('alarm', 25);
-      } else {
+          } else {
         setMissionQuizQuestion(generateMissionQuiz());
         setMissionQuizAnswer('');
         setMissionQuizTimeLeft(10);
@@ -2331,12 +2330,11 @@ export default function App() {
         routineDone: newRoutineDone,
       };
     });
-    // IMINASHI check
-    const goalText = missionInput.trim() + ' ' + (todos || []).map((t: any) => t.text).join(' ');
-    if (checkIminashi(goalText)) return;
-
     showSaveSuccess('目標を刻んだ。今日も斬れ！');
-    triggerYokaiDefeat('goal', 15);
+    // Tutorial: advance after first goal save
+    if (!tutorialDone && tutorialPhase === null) {
+      setTimeout(() => setTutorialPhase(3), 2500);
+    }
   };
   const handleSaveNightReview = async () => {
     // Pro限定機能（3日間は無料トライアル）
@@ -2362,12 +2360,7 @@ export default function App() {
       missionCompleted: prev?.missionCompleted ?? false,
       routineDone: prev?.routineDone ?? [],
     }));
-    // IMINASHI check
-    const reviewText = proudInput.trim() + ' ' + lessonInput.trim() + ' ' + nextActionInput.trim();
-    if (checkIminashi(reviewText)) return;
-
     showSaveSuccess('振り返り完了。明日も斬れ！');
-    triggerYokaiDefeat('review', 20);
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
@@ -3169,7 +3162,6 @@ export default function App() {
 
     return (
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-        {renderYokaiBanner('goal')}
         <View style={styles.goalCard}>
           <Text style={styles.goalTitle}>今日のサムライ目標</Text>
           <Text style={styles.goalSub}>{getTodayStr()} のミッションを 1つだけ決めるのだ。</Text>
@@ -3343,7 +3335,6 @@ export default function App() {
 
   const renderReviewTab = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-        {renderYokaiBanner('review')}
       {onboardingData && (
         <View style={styles.goalCard}>
           <View style={styles.samuraiHeaderTopRow}>
@@ -3993,8 +3984,7 @@ export default function App() {
               '集中完了。次の戦いに備えよ。',
               '時間を制した者が、己を制す。',
             ];
-            triggerYokaiDefeat('focus', 20);
-            Alert.alert('集中完了', messages[Math.floor(Math.random() * messages.length)], [
+                    Alert.alert('集中完了', messages[Math.floor(Math.random() * messages.length)], [
               { text: '道場に戻る', onPress: () => {
                 setShowStartScreen(true);
                 setShowFocusEntry(true);
@@ -4100,6 +4090,52 @@ export default function App() {
 
 
 
+
+
+  // ===== Tutorial Functions =====
+
+  // Start tutorial after onboarding
+  useEffect(() => {
+    if (!isOnboarding && !tutorialDone && tutorialPhase === null) {
+      startTutorial();
+    }
+  }, [isOnboarding]);
+
+  const startTutorial = async () => {
+    const done = await AsyncStorage.getItem(TUTORIAL_KEY);
+    if (done === 'true') {
+      setTutorialDone(true);
+      return;
+    }
+    setTutorialPhase(0);
+  };
+
+  const advanceTutorial = async (phase: number) => {
+    playTapSound();
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    if (phase === 5) {
+      // Tutorial complete
+      setTutorialPhase(null);
+      setTutorialDone(true);
+      await AsyncStorage.setItem(TUTORIAL_KEY, 'true');
+      return;
+    }
+    setTutorialPhase(phase);
+  };
+
+  const skipTutorial = async () => {
+    playTapSound();
+    setTutorialPhase(null);
+    setTutorialDone(true);
+    await AsyncStorage.setItem(TUTORIAL_KEY, 'true');
+  };
+
+  const triggerShadowFlicker = () => {
+    Animated.sequence([
+      Animated.timing(tutorialShadowAnim, { toValue: 0.6, duration: 300, useNativeDriver: true }),
+      Animated.timing(tutorialShadowAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
+    ]).start();
+  };
 
   // ===== Yokai Tab Presence System =====
   const [defeatedYokaiToday, setDefeatedYokaiToday] = useState<string[]>([]);
@@ -4321,30 +4357,46 @@ export default function App() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   };
 
+  const SAMURAI_KING_DEFEAT_QUOTES = [
+    'よくやった。だが、油断するな',
+    'それがお前の力だ',
+    '行動した者だけが、斜れる',
+    '修行は続く。止まるな',
+    '一太刀、見事だ',
+    '弱い心を斜ったのは、お前自身だ',
+  ];
+
   const yokaiAttack = async () => {
     if (yokaiPhase !== 'appear' || !yokaiEncounter) return;
     setYokaiPhase('attack');
     await playAttackSound();
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-
-    // Shake animation
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 100);
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy), 200);
     Animated.sequence([
-      Animated.timing(yokaiShakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 12, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -12, duration: 50, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 8, duration: 40, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: -8, duration: 40, useNativeDriver: true }),
-      Animated.timing(yokaiShakeAnim, { toValue: 0, duration: 40, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 25, duration: 40, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: -25, duration: 40, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 20, duration: 40, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: -20, duration: 40, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 18, duration: 35, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: -18, duration: 35, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 12, duration: 30, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: -12, duration: 30, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 6, duration: 30, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: -6, duration: 30, useNativeDriver: true }),
+      Animated.timing(yokaiShakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
     ]).start();
-
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium), 300);
+    setTimeout(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light), 500);
     setTimeout(() => {
       setYokaiPhase('defeated');
       playWinSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTimeout(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success), 300);
       addXpWithLevelCheck(yokaiXp);
-    }, 1200);
+    }, 1500);
   };
+
 
   const closeYokaiModal = () => {
     setYokaiEncounter(null);
@@ -4845,6 +4897,11 @@ export default function App() {
 
 
 
+
+  // ===== Ritual Tutorial =====
+  const [tutorialPhase, setTutorialPhase] = useState<number | null>(null);
+  const [tutorialDone, setTutorialDone] = useState(false);
+  const tutorialShadowAnim = useRef(new Animated.Value(0)).current;
   // ===== IMINASHI (Anti-cheat Yokai) =====
   const [isIminashiActive, setIsIminashiActive] = useState(false);
   const [iminashiMessage, setIminashiMessage] = useState('');
@@ -5174,7 +5231,6 @@ export default function App() {
 
   const renderFocusTab = () => (
     <View style={{ flex: 1 }}>
-        {renderYokaiBanner('focus')}
       {/* モード選択画面 */}
       {focusType === 'select' && (
         <View style={styles.goalCard}>
@@ -5651,7 +5707,6 @@ export default function App() {
 
   const renderGratitudeTab = () => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-      {renderYokaiBanner('gratitude')}
       <View style={styles.goalCard}>
         <Text style={styles.goalTitle}>感謝</Text>
         <Text style={styles.goalSub}>今日は感謝を10個書けるか？</Text>
@@ -6089,6 +6144,140 @@ export default function App() {
       <>
         {renderStartScreen()}
 
+
+      {/* Ritual Tutorial */}
+      {tutorialPhase !== null && (
+        <Modal visible={true} animationType="fade" transparent={tutorialPhase === 3}>
+
+          {/* Phase 0: Silent opening */}
+          {tutorialPhase === 0 && (
+            <Pressable
+              onPress={() => advanceTutorial(1)}
+              style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Image
+                source={require('./assets/icon.png')}
+                style={{ width: 100, height: 100, borderRadius: 20, marginBottom: 40, opacity: 0.8 }}
+                resizeMode="contain"
+              />
+              <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: '700', letterSpacing: 2 }}>
+                ここは、修行の場だ
+              </Text>
+            </Pressable>
+          )}
+
+          {/* Phase 1: First action */}
+          {tutorialPhase === 1 && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+              <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600', letterSpacing: 3, marginBottom: 16 }}>
+                ── サムライキング ──
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 40, lineHeight: 36 }}>
+                まずは、今日を刻め
+              </Text>
+
+              <Pressable
+                onPress={() => {
+                  advanceTutorial(2);
+                }}
+                style={({ pressed }) => [{
+                  backgroundColor: pressed ? '#1a8a6a' : '#2dd4a8',
+                  paddingVertical: 22,
+                  paddingHorizontal: 60,
+                  borderRadius: 16,
+                  marginBottom: 30,
+                }]}
+              >
+                <Text style={{ color: '#000', fontSize: 20, fontWeight: '900' }}>
+                  今日の目標を書く
+                </Text>
+              </Pressable>
+
+              <Pressable onPress={skipTutorial} style={{ padding: 12 }}>
+                <Text style={{ color: '#444', fontSize: 13 }}>
+                  今はいい
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Phase 2: Go to goal tab */}
+          {tutorialPhase === 2 && (
+            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center', padding: 30 }}>
+              <Text style={{ color: '#D4AF37', fontSize: 18, fontWeight: '700', textAlign: 'center', marginBottom: 30, lineHeight: 30 }}>
+                目標を書いて保存すると{"\n"}妖怪が倒れる
+              </Text>
+              <Pressable
+                onPress={() => {
+                  setTutorialPhase(null);
+                  setShowStartScreen(false);
+                  setTab('goal');
+                  // After goal save, tutorial will continue
+                  setTimeout(() => {
+                    if (tutorialPhase === null && !tutorialDone) {
+                      setTutorialPhase(3);
+                    }
+                  }, 30000);
+                }}
+                style={({ pressed }) => [{
+                  backgroundColor: pressed ? '#8B6914' : '#D4AF37',
+                  paddingVertical: 18,
+                  paddingHorizontal: 50,
+                  borderRadius: 14,
+                }]}
+              >
+                <Text style={{ color: '#000', fontSize: 18, fontWeight: '900' }}>
+                  目標タブへ
+                </Text>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Phase 3: Shadow flicker (transparent overlay) */}
+          {tutorialPhase === 3 && (
+            <Pressable
+              onPress={() => advanceTutorial(4)}
+              style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}
+            >
+              <Animated.View style={{
+                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+                backgroundColor: '#0a0a0a',
+                opacity: tutorialShadowAnim,
+              }} />
+            </Pressable>
+          )}
+
+          {/* Phase 4: Inner world hint */}
+          {tutorialPhase === 4 && (
+            <Pressable
+              onPress={() => advanceTutorial(5)}
+              style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 30 }}
+            >
+              <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600', letterSpacing: 3, marginBottom: 16 }}>
+                ── サムライキング ──
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center', lineHeight: 34, marginBottom: 40 }}>
+                修行には、表と裏がある
+              </Text>
+              <View style={{
+                borderWidth: 1, borderColor: '#D4AF37', borderRadius: 20, padding: 3,
+                shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 15,
+              }}>
+                <Image
+                  source={require('./assets/icon.png')}
+                  style={{ width: 80, height: 80, borderRadius: 18, opacity: 0.9 }}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={{ color: '#555', fontSize: 12, marginTop: 20 }}>
+                タップで続ける
+              </Text>
+            </Pressable>
+          )}
+
+        </Modal>
+      )}
+
       {/* IMINASHI Overlay */}
       {isIminashiActive && (
         <Modal visible={true} animationType="fade" transparent>
@@ -6332,15 +6521,14 @@ export default function App() {
       {/* Yokai Defeat Modal */}
       {yokaiEncounter && (
         <Modal visible={true} animationType="fade" transparent>
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { alignItems: 'center', paddingVertical: 30 }]}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.97)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
 
               {yokaiPhase === 'appear' && (
-                <>
-                  <Text style={{ color: '#ef4444', fontSize: 14, fontWeight: '600', marginBottom: 8 }}>☠️ 妖怪出現！</Text>
-                  <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', marginBottom: 12 }}>{yokaiEncounter.name}</Text>
+                <View style={{ alignItems: 'center', width: '100%' }}>
+                  <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '700', letterSpacing: 3, marginBottom: 12 }}>☠️ 妖怪出現 ☠️</Text>
+                  <Text style={{ color: '#fff', fontSize: 32, fontWeight: '900', marginBottom: 20 }}>{yokaiEncounter.name}</Text>
 
-                  <View style={{ width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#ef4444', backgroundColor: '#1a0a0a', marginBottom: 16 }}>
+                  <View style={{ width: 240, height: 240, borderRadius: 24, overflow: 'hidden', borderWidth: 3, borderColor: '#ef4444', backgroundColor: '#1a0a0a', marginBottom: 24, shadowColor: '#ef4444', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 20 }}>
                     <Video
                       source={YOKAI_VIDEOS[yokaiEncounter.id]}
                       style={{ width: '100%', height: '100%' }}
@@ -6351,25 +6539,39 @@ export default function App() {
                     />
                   </View>
 
-                  <View style={{ backgroundColor: '#1a0a0a', borderRadius: 12, padding: 14, marginBottom: 20, width: '100%', borderLeftWidth: 3, borderLeftColor: '#ef4444' }}>
-                    <Text style={{ color: '#ef4444', fontSize: 16, fontStyle: 'italic', textAlign: 'center' }}>
+                  <View style={{ backgroundColor: '#1a0808', borderRadius: 14, padding: 18, marginBottom: 30, width: '90%', borderLeftWidth: 4, borderLeftColor: '#ef4444' }}>
+                    <Text style={{ color: '#ef4444', fontSize: 18, fontStyle: 'italic', textAlign: 'center', lineHeight: 28 }}>
                       「{yokaiEncounter.quote}」
                     </Text>
                   </View>
 
                   <Pressable
                     onPress={yokaiAttack}
-                    style={({ pressed }) => [{ backgroundColor: pressed ? '#8B6914' : '#D4AF37', paddingVertical: 18, paddingHorizontal: 50, borderRadius: 14 }]}
+                    style={({ pressed }) => [{
+                      backgroundColor: pressed ? '#8B6914' : '#D4AF37',
+                      paddingVertical: 22,
+                      paddingHorizontal: 70,
+                      borderRadius: 16,
+                      shadowColor: '#D4AF37',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: pressed ? 0.3 : 0.7,
+                      shadowRadius: 15,
+                    }]}
                   >
-                    <Text style={{ color: '#000', fontSize: 22, fontWeight: '900' }}>⚔️ 斬る！</Text>
+                    <Text style={{ color: '#000', fontSize: 26, fontWeight: '900' }}>⚔️ 斬る！</Text>
                   </Pressable>
-                </>
+                </View>
               )}
 
               {yokaiPhase === 'attack' && (
-                <>
-                  <Text style={{ color: '#D4AF37', fontSize: 20, fontWeight: '900', marginBottom: 16 }}>⚔️ 一太刀！</Text>
-                  <Animated.View style={{ transform: [{ translateX: yokaiShakeAnim }], width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#ef4444', backgroundColor: '#1a0a0a' }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#D4AF37', fontSize: 36, fontWeight: '900', marginBottom: 24, letterSpacing: 4 }}>⚔️ 一太刀！</Text>
+                  <Animated.View style={{
+                    transform: [{ translateX: yokaiShakeAnim }],
+                    width: 260, height: 260, borderRadius: 24, overflow: 'hidden',
+                    borderWidth: 4, borderColor: '#D4AF37', backgroundColor: '#1a0a0a',
+                    shadowColor: '#D4AF37', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 25,
+                  }}>
                     <Video
                       source={YOKAI_VIDEOS[yokaiEncounter.id]}
                       style={{ width: '100%', height: '100%' }}
@@ -6379,15 +6581,15 @@ export default function App() {
                       isMuted
                     />
                   </Animated.View>
-                </>
+                </View>
               )}
 
               {yokaiPhase === 'defeated' && (
-                <>
-                  <Text style={{ color: '#D4AF37', fontSize: 32, fontWeight: '900', marginBottom: 8 }}>討伐成功！</Text>
-                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 16 }}>{yokaiEncounter.name}を倒した！</Text>
+                <ScrollView contentContainerStyle={{ alignItems: 'center', paddingVertical: 20 }} style={{ width: '100%' }}>
+                  <Text style={{ color: '#D4AF37', fontSize: 40, fontWeight: '900', marginBottom: 6, letterSpacing: 2 }}>討伐成功！</Text>
+                  <Text style={{ color: '#aaa', fontSize: 16, marginBottom: 24 }}>{yokaiEncounter.name}を倒した！</Text>
 
-                  <View style={{ width: 180, height: 180, borderRadius: 20, overflow: 'hidden', borderWidth: 3, borderColor: '#555', backgroundColor: '#1a0a0a', marginBottom: 16 }}>
+                  <View style={{ width: 280, height: 280, borderRadius: 24, overflow: 'hidden', borderWidth: 3, borderColor: '#333', backgroundColor: '#0a0a0a', marginBottom: 24 }}>
                     <Video
                       source={YOKAI_LOSE_VIDEOS[yokaiEncounter.id]}
                       style={{ width: '100%', height: '100%' }}
@@ -6398,25 +6600,41 @@ export default function App() {
                     />
                   </View>
 
-                  <View style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, marginBottom: 16, width: '100%', borderLeftWidth: 3, borderLeftColor: '#D4AF37' }}>
-                    <Text style={{ color: '#888', fontSize: 13, marginBottom: 4 }}>{yokaiEncounter.name}の最期</Text>
-                    <Text style={{ color: '#ccc', fontSize: 16, fontStyle: 'italic', textAlign: 'center' }}>
+                  <View style={{ backgroundColor: '#0a0a1a', borderRadius: 14, padding: 18, marginBottom: 16, width: '90%', borderLeftWidth: 4, borderLeftColor: '#555' }}>
+                    <Text style={{ color: '#555', fontSize: 13, marginBottom: 6 }}>{yokaiEncounter.name}の最期</Text>
+                    <Text style={{ color: '#999', fontSize: 17, fontStyle: 'italic', textAlign: 'center', lineHeight: 26 }}>
                       「{yokaiEncounter.defeatQuote}」
                     </Text>
                   </View>
 
-                  <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: 'bold', marginBottom: 20 }}>+{yokaiXp} XP</Text>
+                  <View style={{ backgroundColor: '#1a1a0a', borderRadius: 14, padding: 18, marginBottom: 20, width: '90%', borderLeftWidth: 4, borderLeftColor: '#D4AF37' }}>
+                    <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600', letterSpacing: 2, marginBottom: 6 }}>── サムライキング ──</Text>
+                    <Text style={{ color: '#ccc', fontSize: 16, fontStyle: 'italic', textAlign: 'center', lineHeight: 26 }}>
+                      「{SAMURAI_KING_DEFEAT_QUOTES[Math.floor(Math.random() * SAMURAI_KING_DEFEAT_QUOTES.length)]}」
+                    </Text>
+                  </View>
+
+                  <Text style={{ color: '#D4AF37', fontSize: 36, fontWeight: '900', marginBottom: 24, textShadowColor: '#D4AF37', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 }}>+{yokaiXp} XP</Text>
 
                   <Pressable
                     onPress={closeYokaiModal}
-                    style={({ pressed }) => [{ backgroundColor: pressed ? '#8B6914' : '#D4AF37', paddingVertical: 16, paddingHorizontal: 40, borderRadius: 14 }]}
+                    style={({ pressed }) => [{
+                      backgroundColor: pressed ? '#8B6914' : '#D4AF37',
+                      paddingVertical: 20,
+                      paddingHorizontal: 60,
+                      borderRadius: 16,
+                      shadowColor: '#D4AF37',
+                      shadowOffset: { width: 0, height: 0 },
+                      shadowOpacity: 0.5,
+                      shadowRadius: 12,
+                      marginBottom: 20,
+                    }]}
                   >
-                    <Text style={{ color: '#000', fontSize: 18, fontWeight: 'bold' }}>続ける</Text>
+                    <Text style={{ color: '#000', fontSize: 20, fontWeight: '900' }}>続ける</Text>
                   </Pressable>
-                </>
+                </ScrollView>
               )}
 
-            </View>
           </View>
         </Modal>
       )}

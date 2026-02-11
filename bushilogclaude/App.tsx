@@ -119,6 +119,15 @@ const YOKAI_IMAGES: { [key: string]: any } = {
 const MIKKABOZU_EYES = require('./assets/yokai/mikkabozu_eyes.png');
 const STORY_SCENE1_IMG = require('./assets/story/mikkabozu_scene1.png');
 const STORY_SCENE2_IMG = require('./assets/story/mikkabozu_scene2.png');
+const ATODEYARU_SCENE1_IMG = require('./assets/story/atodeyaru_scene1.png');
+const ATODEYARU_SCENE2_IMG = require('./assets/story/atodeyaru_scene2.png');
+const ATODEYARU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_atodeyaru.mp4');
+const DEEBU_SCENE1_IMG = require('./assets/story/deebu_scene1.png');
+const DEEBU_SCENE2_IMG = require('./assets/story/deebu_scene2.png');
+const DEEBU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_deebu.mp4');
+const MOUMURI_SCENE1_IMG = require('./assets/story/moumuri_scene1.png');
+const MOUMURI_SCENE2_IMG = require('./assets/story/moumuri_scene2.png');
+const MOUMURI_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_moumuri.mp4');
 const MIKKABOZU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_mikkabozu.mp4');
 const WORLD1_BG = require('./assets/map/bg/world1_bg.png');
 const NODE_FIST = require('./assets/map/nodes/node_fist.png');
@@ -277,6 +286,12 @@ const INTRO_SKIP_KEY = 'BUSHIDO_INTRO_SKIP_V1';
 const FIRST_OPEN_DATE_KEY = 'bushido_first_open_date';
 const MIKKABOZU_DAY_KEY = 'bushido_mikkabozu_day_count';
 const MIKKABOZU_EVENT_KEY = 'bushido_mikkabozu_event_done';
+const ATODEYARU_EVENT_KEY = 'bushido_atodeyaru_event_done';
+const ATODEYARU_ACTIVE_KEY = 'bushido_atodeyaru_active';
+const DEEBU_EVENT_KEY = 'bushido_deebu_event_done';
+const DEEBU_ACTIVE_KEY = 'bushido_deebu_active';
+const MOUMURI_EVENT_KEY = 'bushido_moumuri_event_done';
+const MOUMURI_ACTIVE_KEY = 'bushido_moumuri_active';
 const FREE_TRIAL_DAYS = 3;
 
 const MAX_LEVEL = 10;
@@ -907,6 +922,13 @@ export default function App() {
       // 穢れチェック
       await checkKegare();
       checkMikkabozuEvent();
+      // Atodeyaru state restore
+      AsyncStorage.getItem(ATODEYARU_EVENT_KEY).then(v => { if (v === 'true') { setAtodeyaruEventDone(true); setInnerWorldUnlocked(true); } }).catch(e => {});
+      AsyncStorage.getItem(ATODEYARU_ACTIVE_KEY).then(v => { if (v === 'true') setAtodeyaruActive(true); }).catch(e => {});
+      AsyncStorage.getItem(DEEBU_EVENT_KEY).then(v => { if (v === 'true') { setDeebuEventDone(true); setInnerWorldUnlocked(true); } }).catch(e => {});
+      AsyncStorage.getItem(DEEBU_ACTIVE_KEY).then(v => { if (v === 'true') setDeebuActive(true); }).catch(e => {});
+      AsyncStorage.getItem(MOUMURI_EVENT_KEY).then(v => { if (v === 'true') { setMoumuriEventDone(true); } }).catch(e => {});
+      AsyncStorage.getItem(MOUMURI_ACTIVE_KEY).then(v => { if (v === 'true') setMoumuriActive(true); }).catch(e => {});
       // Introをスキップしていなければ表示
       if (!introSkipped) {
         setShowIntro(true);
@@ -2394,6 +2416,7 @@ export default function App() {
 
     setDailyLogs(newLogs);
     await saveDailyLogsToStorage(newLogs);
+    checkAtodeyaruCondition(newLogs);
   };
 
   const toggleRoutineDone = async (date: string, label: string) => {
@@ -2410,6 +2433,7 @@ export default function App() {
 
     setDailyLogs(newLogs);
     await saveDailyLogsToStorage(newLogs);
+    checkAtodeyaruCondition(newLogs);
   };
 
   const handleGenerateSamuraiMission = async () => {
@@ -4927,9 +4951,34 @@ export default function App() {
   const SQ_TOTAL = 3;
   const [mikkabozuEventDone, setMikkabozuEventDone] = useState(false);
   const [innerWorldUnlocked, setInnerWorldUnlocked] = useState(false);
+  const [atodeyaruEventDone, setAtodeyaruEventDone] = useState(false);
+  const [atodeyaruActive, setAtodeyaruActive] = useState(false);
+  const [storyStage, setStoryStage] = useState<number>(1);
+  const [deebuEventDone, setDeebuEventDone] = useState(false);
+  const [deebuActive, setDeebuActive] = useState(false);
+  const [deebuBattleOpen, setDeebuBattleOpen] = useState(false);
+  const [deebuPhase, setDeebuPhase] = useState<'menu'|'train_select'|'training'|'photo'|'reason'|'done'>('menu');
+  const [deebuHits, setDeebuHits] = useState(0);
+  const [deebuTrainingType, setDeebuTrainingType] = useState<string|null>(null);
+  const [deebuTrainingDone, setDeebuTrainingDone] = useState(false);
+  const [deebuPhotoDone, setDeebuPhotoDone] = useState(false);
+  const [deebuPhotoUri, setDeebuPhotoUri] = useState<string|null>(null);
+  const [deebuReason, setDeebuReason] = useState('');
+  const deebuShakeAnim = useRef(new Animated.Value(0)).current;
+  const [deebuFlash, setDeebuFlash] = useState(false);
+  const [moumuriEventDone, setMoumuriEventDone] = useState(false);
+  const [moumuriActive, setMoumuriActive] = useState(false);
+  const [moumuriBO, setMoumuriBO] = useState(false);
+  const [moumuriPhase, setMoumuriPhase] = useState<'menu'|'zen'|'kansha'|'done'>('menu');
+  const [moumuriZenText, setMoumuriZenText] = useState('');
+  const [moumuriZenDone, setMoumuriZenDone] = useState(false);
+  const [moumuriKanshaList, setMoumuriKanshaList] = useState<string[]>([]);
+  const [moumuriKanshaInput, setMoumuriKanshaInput] = useState('');
+  const moumuriShakeAnim = useRef(new Animated.Value(0)).current;
+  const [moumuriFlash, setMoumuriFlash] = useState(false);
   const [dayCount, setDayCount] = useState(0);
   const [storyActive, setStoryActive] = useState(false);
-  const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'mission'|'quiz'|'defeat'|'victory'|'clear'>('dark');
+  const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'missionBrief'|'mission'|'quiz'|'defeat'|'victory'|'clear'>('dark');
   const [sceneIndex, setSceneIndex] = useState(0);
   const [storyTypeText, setStoryTypeText] = useState('');
   const [storyTypingDone, setStoryTypingDone] = useState(false);
@@ -4950,6 +4999,52 @@ export default function App() {
     { img: 1, text: '試しにやってみ。\n逃げ場はないけど、\nやることは簡単や。' },
     { img: 2, text: '……あ。\n今のは、効いたわ。' },
     { img: 2, text: '勘違いすんなよ。\nまたサボったら、\nすぐ会えるから。' },
+  ];
+
+  const ATODEYARU_SCENES = [
+    { img: 1, text: 'あー...めんどくさ。\nまた明日でいいっしょ。' },
+    { img: 1, text: 'ルーティン？TODO？\n知らんし。' },
+    { img: 1, text: '俺がいる限り、\nお前は何も終わらない。' },
+    { img: 1, text: 'やれるもんなら\n今日中にやってみ？' },
+    { img: 2, text: 'マジかよ...\n今日やっちゃうのかよ...' },
+    { img: 2, text: 'くそ...次の奴は\nもっと手強いから。' },
+  ];
+
+  const DEEBU_SCENES = [
+    { img: 1, text: '\u4ffa\u307f\u305f\u3044\u306b\u306a\u308c\u3088\u3002\n\u98df\u3063\u3066\u5bdd\u3066\u308c\u3070\u3044\u3044\u3058\u3083\u3093\u3002' },
+    { img: 1, text: '\u7b4b\u30c8\u30ec\uff1f\u306f\u3041\uff1f\n\u305d\u3093\u306a\u3053\u3068\u3088\u308a\n\u30c9\u30fc\u30ca\u30c4\u98df\u3079\u3088\u3046\u305c\u3002' },
+    { img: 1, text: '\u4ffa\u304c\u3044\u308b\u9650\u308a\u3001\n\u304a\u524d\u306f\u6c38\u9060\u306b\n\u30c0\u30e9\u30c0\u30e9\u3060\u3002' },
+    { img: 1, text: '\u3067\u304d\u308b\u3082\u3093\u306a\u3089\u3001\n\u4f53\u52d5\u304b\u3057\u3066\u307f\u308d\u3088\u3002\n\u304a\u83d3\u5b50\u3082\u6211\u6162\u3057\u3066\u307f\u308d\u3088\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
+    { img: 2, text: '\u306f\u3041\u2026\u306f\u3041\u2026\n\u304a\u524d\u2026\u52d5\u3051\u308b\u306e\u304b\u3088\u2026' },
+    { img: 2, text: '\u304f\u305d\u2026\u6b21\u306f\n\u3082\u3063\u3068\u5f37\u3044\u5974\u304c\n\u5f85\u3063\u3066\u308b\u304b\u3089\u306a\u2026' },
+  ];
+
+  const MOUMURI_SCENES = [
+    { img: 1, text: '\u3053\u306e\u4eba\u751f\u3082\u3046\u7121\u7406\u3060\u3063\u3066\u3002\n\u4e00\u7dd2\u306b\u30c0\u30e9\u30c0\u30e9\u3057\u3088\u3046\u305c\u3002' },
+    { img: 1, text: '\u611f\u8b1d\uff1f\u512a\u3057\u3055\uff1f\n\u305d\u3093\u306a\u3082\u306e\u306b\n\u610f\u5473\u306a\u3093\u3066\u306a\u3044\u3063\u3066\u3002' },
+    { img: 1, text: '\u4ffa\u304c\u3044\u308b\u9650\u308a\u3001\n\u304a\u524d\u306f\u8ab0\u306b\u3082\n\u611f\u8b1d\u3067\u304d\u306a\u3044\u3002' },
+    { img: 1, text: '\u3067\u304d\u308b\u3082\u3093\u306a\u3089\u3001\n\u4eba\u306b\u512a\u3057\u304f\u3057\u3066\u307f\u308d\u3088\u3002\n\u611f\u8b1d\u3057\u3066\u307f\u308d\u3088\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
+    { img: 2, text: '\u306a\u3093\u3060\u3088\u2026\n\u611f\u8b1d\u3068\u304b\u3067\u304d\u308b\u306e\u304b\u3088\u2026' },
+    { img: 2, text: '\u304f\u305d\u2026\u6b21\u306f\n\u3082\u3063\u3068\u5f37\u3044\u5974\u304c\n\u5f85\u3063\u3066\u308b\u304b\u3089\u306a\u2026' },
+  ];
+
+  const MOUMURI_KANSHA_TARGET = 10;
+
+  const DEEBU_HIT_TARGET = 20;
+
+  const DEEBU_EXERCISES = [
+    { id: 'pushup', label: '\u8155\u7acb\u3066\u3075\u305b', icon: '\u2694\uFE0F' },
+    { id: 'squat', label: '\u30b9\u30af\u30ef\u30c3\u30c8', icon: '\u2B50' },
+    { id: 'situp', label: '\u8179\u7b4b', icon: '\u2604\uFE0F' },
+  ];
+
+  const ATODEYARU_QUIPS = [
+    'まだやってないの？',
+    'あとでやるって言ったよね？',
+    '明日でもいいんじゃない？',
+    'どうせ途中でやめるんでしょ',
+    'ルーティン終わった？',
+    'TODO残ってるよ？',
   ];
 
   const PHYSICAL_MISSIONS = [
@@ -5050,6 +5145,7 @@ export default function App() {
   };
 
   const startStoryEvent = () => {
+    setStoryStage(1);
     setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
     Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
@@ -5066,11 +5162,15 @@ export default function App() {
   };
 
   const advanceScene = () => {
-    if (!storyTypingDone) { setStoryTypeText(STORY_SCENES[sceneIndex].text); setStoryTypingDone(true); return; }
+    const scenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     const next = sceneIndex + 1;
-    if (next === 4) { setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
-    if (next >= STORY_SCENES.length) { setStoryPhase('clear'); return; }
-    setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(STORY_SCENES[next].text);
+    if (storyStage === 1 && next === 4) { setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
+    if (storyStage === 2 && next === 4) { setStoryPhase('missionBrief'); return; }
+    if (storyStage === 3 && next === 4) { setStoryPhase('missionBrief'); return; }
+    if (storyStage === 4 && next === 4) { setStoryPhase('missionBrief'); return; }
+    if (next >= scenes.length) { setStoryPhase('clear'); return; }
+    setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(scenes[next].text);
   };
 
   const selectMission = (missionId: string) => {
@@ -5113,17 +5213,225 @@ export default function App() {
   };
 
   const advanceVictoryScene = () => {
-    if (!storyTypingDone) { setStoryTypeText(STORY_SCENES[sceneIndex].text); setStoryTypingDone(true); return; }
-    if (sceneIndex === 4) { setSceneIndex(5); setSamuraiVoice(''); storyTypewriter(STORY_SCENES[5].text); return; }
+    const scenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
+    if (sceneIndex === 4) { setSceneIndex(5); setSamuraiVoice(''); storyTypewriter(scenes[5].text); return; }
     setStoryPhase('clear');
   };
 
   const completeStoryEvent = async () => {
-    try { await AsyncStorage.setItem(MIKKABOZU_EVENT_KEY, 'true'); } catch(e) {}
-    setMikkabozuEventDone(true); setInnerWorldUnlocked(true); setStoryActive(false);
+    if (storyStage === 4) {
+      try { await AsyncStorage.setItem(MOUMURI_EVENT_KEY, 'true'); } catch(e) {}
+      setMoumuriEventDone(true);
+    } else if (storyStage === 3) {
+      try { await AsyncStorage.setItem(DEEBU_EVENT_KEY, 'true'); } catch(e) {}
+      setDeebuEventDone(true);
+    } else if (storyStage === 2) {
+      try { await AsyncStorage.setItem(ATODEYARU_EVENT_KEY, 'true'); } catch(e) {}
+      setAtodeyaruEventDone(true);
+    } else {
+      try { await AsyncStorage.setItem(MIKKABOZU_EVENT_KEY, 'true'); } catch(e) {}
+      setMikkabozuEventDone(true);
+    }
+    setInnerWorldUnlocked(true); setStoryActive(false);
     setStoryPhase('dark'); storyOverlayOpacity.setValue(0); storyEyesOpacity.setValue(0);
     setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice(''); setMissionCount(0);
   };
+  // === ATODEYARU EVENT / STAGE 2 ===
+  const startAtodeyaruEvent = () => {
+    setStoryStage(2);
+    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    setTimeout(() => {
+      setStoryPhase('eyes');
+      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+    }, 2000);
+    setTimeout(() => {
+      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
+      storyTypewriter(ATODEYARU_SCENES[0].text);
+      speakMikkabozu('明日やればいいじゃん');
+    }, 5000);
+  };
+
+  const triggerAtodeyaruDefeat = async () => {
+    setStoryStage(2);
+    setAtodeyaruActive(false);
+    try { await AsyncStorage.setItem(ATODEYARU_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryActive(true);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    speakSamurai('見事だ'); samuraiSpeak('見事だ');
+    await addXpWithLevelCheck(50);
+    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('負けたくやしいよ'); }, 1500);
+  };
+
+  const checkAtodeyaruCondition = (logs: DailyLog[]) => {
+    if (!atodeyaruActive) return;
+    const today = getTodayStr();
+    const todayLog = logs.find(l => l.date === today);
+    if (!todayLog) return;
+    const routineTotal = todayLog.routines.length;
+    const routineDoneCount = (todayLog.routineDone || []).length;
+    const routineHalf = Math.ceil(routineTotal / 2);
+    if (routineTotal === 0 && todayLog.todos.length === 0) return;
+    const routineOk = routineTotal === 0 || routineDoneCount >= routineHalf;
+    const todoOk = todayLog.todos.length === 0 || todayLog.todos.every(t => t.done);
+    if (routineOk && todoOk) { triggerAtodeyaruDefeat(); }
+  };
+  // === DEEBU EVENT / STAGE 3 ===
+  const startDeebuEvent = () => {
+    setStoryStage(3);
+    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    setTimeout(() => {
+      setStoryPhase('eyes');
+      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+    }, 2000);
+    setTimeout(() => {
+      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
+      storyTypewriter(DEEBU_SCENES[0].text);
+      speakMikkabozu('\u52d5\u304f\u306e\u3060\u308b\u3044');
+    }, 5000);
+  };
+
+  const openDeebuBattle = () => {
+    playTapSound();
+    setDeebuBattleOpen(true);
+    setDeebuPhase(deebuTrainingDone && deebuPhotoDone ? 'done' : 'menu');
+  };
+
+  const triggerDeebuDefeat = async () => {
+    setStoryStage(3);
+    setDeebuActive(false); setDeebuBattleOpen(false);
+    try { await AsyncStorage.setItem(DEEBU_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryActive(true);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
+    await addXpWithLevelCheck(50);
+    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('\u52d5\u3051\u308b\u306e\u304b\u3088'); }, 1500);
+  };
+
+  const deebuTrainingTap = () => {
+    const next = deebuHits + 1;
+    setDeebuHits(next);
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
+    setDeebuFlash(true); setTimeout(() => setDeebuFlash(false), 150);
+    Animated.sequence([
+      Animated.timing(deebuShakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
+      Animated.timing(deebuShakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
+      Animated.timing(deebuShakeAnim, { toValue: 10, duration: 40, useNativeDriver: true }),
+      Animated.timing(deebuShakeAnim, { toValue: -10, duration: 40, useNativeDriver: true }),
+      Animated.timing(deebuShakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
+    ]).start();
+    if (next >= DEEBU_HIT_TARGET) {
+      setDeebuTrainingDone(true);
+      setTimeout(() => { if (deebuPhotoDone) { setDeebuPhase('done'); } else { setDeebuPhase('menu'); } }, 800);
+    }
+  };
+
+  const deebuPickPhoto = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
+      if (!result.canceled && result.assets?.[0]) { setDeebuPhotoUri(result.assets[0].uri); setDeebuPhase('reason'); }
+    } catch(e) { console.log('deebu photo error', e); }
+  };
+
+  const deebuTakePhoto = async () => {
+    try {
+      const perm = await ImagePicker.requestCameraPermissionsAsync();
+      if (!perm.granted) return;
+      const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
+      if (!result.canceled && result.assets?.[0]) { setDeebuPhotoUri(result.assets[0].uri); setDeebuPhase('reason'); }
+    } catch(e) { console.log('deebu camera error', e); }
+  };
+
+  const deebuSubmitReason = () => {
+    if (!deebuReason.trim()) return;
+    playTapSound();
+    setDeebuPhotoDone(true);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    if (deebuTrainingDone) { setDeebuPhase('done'); } else { setDeebuPhase('menu'); showSaveSuccess('\u6b32\u671b\u65ad\u3061\u5207\u308a\uff01\u3042\u3068\u306f\u7b4b\u30c8\u30ec\u3060\uff01'); }
+  };
+  // === END DEEBU EVENT ===
+
+  // === MOUMURI EVENT / STAGE 4 ===
+  const startMoumuriEvent = () => {
+    setStoryStage(4);
+    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    setTimeout(() => {
+      setStoryPhase('eyes');
+      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+    }, 2000);
+    setTimeout(() => {
+      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
+      storyTypewriter(MOUMURI_SCENES[0].text);
+      speakMikkabozu('\u3082\u3046\u7121\u7406\u3060');
+    }, 5000);
+  };
+
+  const openMoumuriBattle = () => {
+    playTapSound();
+    setMoumuriBO(true);
+    setMoumuriPhase(moumuriZenDone && moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? 'done' : 'menu');
+  };
+
+  const triggerMoumuriDefeat = async () => {
+    setStoryStage(4);
+    setMoumuriActive(false); setMoumuriBO(false);
+    try { await AsyncStorage.setItem(MOUMURI_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryActive(true);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
+    await addXpWithLevelCheck(50);
+    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('\u611f\u8b1d\u3067\u304d\u308b\u306e\u304b\u3088'); }, 1500);
+  };
+
+  const moumuriSubmitZen = () => {
+    if (!moumuriZenText.trim()) return;
+    playTapSound();
+    setMoumuriZenDone(true);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    if (moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET) { setMoumuriPhase('done'); }
+    else { setMoumuriPhase('menu'); showSaveSuccess('\u4e00\u65e5\u4e00\u5584\u9054\u6210\uff01\u3042\u3068\u306f\u611f\u8b1d\u3060\uff01'); }
+  };
+
+  const moumuriAddKansha = () => {
+    if (!moumuriKanshaInput.trim()) return;
+    const next = [...moumuriKanshaList, moumuriKanshaInput.trim()];
+    setMoumuriKanshaList(next);
+    setMoumuriKanshaInput('');
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
+    setMoumuriFlash(true); setTimeout(() => setMoumuriFlash(false), 150);
+    Animated.sequence([
+      Animated.timing(moumuriShakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
+      Animated.timing(moumuriShakeAnim, { toValue: -15, duration: 50, useNativeDriver: true }),
+      Animated.timing(moumuriShakeAnim, { toValue: 10, duration: 40, useNativeDriver: true }),
+      Animated.timing(moumuriShakeAnim, { toValue: -10, duration: 40, useNativeDriver: true }),
+      Animated.timing(moumuriShakeAnim, { toValue: 0, duration: 30, useNativeDriver: true }),
+    ]).start();
+    if (next.length >= MOUMURI_KANSHA_TARGET) {
+      if (moumuriZenDone) { setTimeout(() => setMoumuriPhase('done'), 800); }
+      else { setTimeout(() => { setMoumuriPhase('menu'); showSaveSuccess('\u611f\u8b1d10\u500b\u9054\u6210\uff01\u3042\u3068\u306f\u4e00\u65e5\u4e00\u5584\uff01'); }, 800); }
+    }
+  };
+  // === END MOUMURI EVENT ===
+
+  // === END ATODEYARU EVENT ===
+
   // === END MIKKABOZU EVENT ===
   const [tutorialDone, setTutorialDone] = useState(false);
   const tutorialShadowAnim = useRef(new Animated.Value(0)).current;
@@ -5139,9 +5447,9 @@ export default function App() {
     if (innerWorldView === 'stageMap') {
       const W1_STAGES = [
         { id: 1, name: '三日坊主', icon: NODE_FIST, cleared: mikkabozuEventDone, x: 0.5, y: 0.75 },
-        { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: false, x: 0.3, y: 0.60 },
-        { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: false, x: 0.6, y: 0.47 },
-        { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: false, x: 0.35, y: 0.34 },
+        { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: atodeyaruEventDone, x: 0.3, y: 0.60 },
+        { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: deebuEventDone, x: 0.6, y: 0.47 },
+        { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: moumuriEventDone, x: 0.35, y: 0.34 },
         { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: false, x: 0.5, y: 0.21 },
       ];
       return (
@@ -5154,7 +5462,7 @@ export default function App() {
             const isNext = !stage.cleared && W1_STAGES.filter(s => s.id < stage.id).every(s => s.cleared);
             const isLocked = !stage.cleared && !isNext;
             return (
-              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
+              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (stage.cleared && stage.id === 2) { startAtodeyaruEvent(); } else if (isNext && stage.id === 2) { startAtodeyaruEvent(); } else if (stage.cleared && stage.id === 3) { startDeebuEvent(); } else if (isNext && stage.id === 3) { startDeebuEvent(); } else if (stage.cleared && stage.id === 4) { startMoumuriEvent(); } else if (isNext && stage.id === 4) { startMoumuriEvent(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
                 <View style={{ width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: stage.cleared ? '#DAA520' : isNext ? '#fff' : '#555', overflow: 'hidden', backgroundColor: '#000' }}>
                   <Image source={isLocked ? NODE_LOCKED : stage.icon} style={{ width: '100%', height: '100%' }} resizeMode='contain' />
                 </View>
@@ -6411,8 +6719,15 @@ export default function App() {
 
   // === Story Overlay ===
   if (storyActive) {
-    const currentScene = STORY_SCENES[sceneIndex] || STORY_SCENES[0];
-    const sceneImg = currentScene.img === 2 ? STORY_SCENE2_IMG : STORY_SCENE1_IMG;
+    const currentScenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const currentScene = currentScenes[sceneIndex] || currentScenes[0];
+    const sceneImg = storyStage === 4
+      ? (currentScene.img === 2 ? MOUMURI_SCENE2_IMG : MOUMURI_SCENE1_IMG)
+      : storyStage === 3
+      ? (currentScene.img === 2 ? DEEBU_SCENE2_IMG : DEEBU_SCENE1_IMG)
+      : storyStage === 2
+        ? (currentScene.img === 2 ? ATODEYARU_SCENE2_IMG : ATODEYARU_SCENE1_IMG)
+        : (currentScene.img === 2 ? STORY_SCENE2_IMG : STORY_SCENE1_IMG);
     const sqQ = getSqQ();
     return (
       <View style={{ flex: 1, backgroundColor: '#000' }}>
@@ -6425,8 +6740,8 @@ export default function App() {
           {storyPhase === 'scenes' && (
             <TouchableOpacity activeOpacity={1} onPress={advanceScene} style={{ flex: 1 }}>
               <ImageBackground source={sceneImg} style={{ flex: 1 }} resizeMode="cover">
-                <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
+                <View style={{ position: 'absolute', top: storyStage >= 3 ? SCREEN_H * 0.46 : SCREEN_H * 0.50, left: storyStage >= 3 ? 70 : 55, right: storyStage >= 3 ? 70 : 55, justifyContent: 'center', alignItems: 'center' }}>
+                  <Text style={{ color: '#333', fontSize: storyStage >= 3 ? 15 : 17, fontWeight: 'bold', textAlign: 'center', lineHeight: storyStage >= 3 ? 24 : 28, letterSpacing: 1 }}>{storyTypeText}</Text>
                 </View>
                 {storyTypingDone && (<View style={{ position: 'absolute', bottom: 60, width: '100%', alignItems: 'center' }}><Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{'タップして次へ'}</Text></View>)}
               </ImageBackground>
@@ -6446,6 +6761,56 @@ export default function App() {
                 {SQ_MISSIONS.map((m) => (<TouchableOpacity key={m.id} onPress={() => selectMission(m.id)} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1, borderColor: '#4FC3F7', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}><Text style={{ fontSize: 24, marginBottom: 6 }}>{m.icon}</Text><Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{m.label}</Text><Text style={{ color: '#4FC3F7', fontSize: 11, marginTop: 4 }}>{SQ_TOTAL + '問'}</Text></TouchableOpacity>))}
               </View>
               {samuraiVoice.length > 0 && (<View style={{ position: 'absolute', bottom: 80, left: 30, right: 30 }}><Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 }}>{samuraiVoice}</Text></View>)}
+            </View>
+          )}
+
+          {storyPhase === 'missionBrief' && storyStage === 4 && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+              <Image source={YOKAI_IMAGES.moumuri} style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 12 }} resizeMode="contain" />
+              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'\u30e2\u30a6\u30e0\u30ea'}</Text>
+              <Text style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>{'\u8a0e\u4f10\u30df\u30c3\u30b7\u30e7\u30f3'}</Text>
+              <View style={{ backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 16, padding: 20, width: '100%', marginBottom: 12 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>{'\u2694\uFE0F \u4e00\u65e5\u4e00\u5584\u3092\u8a18\u9332\u305b\u3088'}</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1, borderColor: '#4FC3F7', borderRadius: 16, padding: 20, width: '100%', marginBottom: 24 }}>
+                <Text style={{ color: '#4FC3F7', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>{'\u{1f64f} \u611f\u8b1d\u309210\u500b\u66f8\u3051'}</Text>
+              </View>
+              <Text style={{ color: '#555', fontSize: 12, textAlign: 'center', marginBottom: 24 }}>{'\u30e2\u30a6\u30e0\u30ea\u3092\u30bf\u30c3\u30d7\u3057\u3066\u6311\u6226\u958b\u59cb'}</Text>
+              <TouchableOpacity onPress={async () => { setStoryActive(false); storyOverlayOpacity.setValue(0); setMoumuriActive(true); setMoumuriZenText(''); setMoumuriZenDone(false); setMoumuriKanshaList([]); setMoumuriKanshaInput(''); try { await AsyncStorage.setItem(MOUMURI_ACTIVE_KEY, 'true'); } catch(e) {} }} style={{ backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'\u4e86\u89e3'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {storyPhase === 'missionBrief' && storyStage === 3 && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+              <Image source={YOKAI_IMAGES.deebu} style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 12 }} resizeMode="contain" />
+              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'\u30c7\u30fc\u30d6'}</Text>
+              <Text style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>{'\u8a0e\u4f10\u30df\u30c3\u30b7\u30e7\u30f3'}</Text>
+              <View style={{ backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 16, padding: 20, width: '100%', marginBottom: 12 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>{'\u2694\uFE0F \u7b4b\u30c8\u30ec20\u56de\u3067\u653b\u6483'}</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1, borderColor: '#4FC3F7', borderRadius: 16, padding: 20, width: '100%', marginBottom: 24 }}>
+                <Text style={{ color: '#4FC3F7', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>{'\u{1f4f8} \u6b32\u671b\u3092\u65ad\u3061\u5207\u308c'}</Text>
+              </View>
+              <Text style={{ color: '#555', fontSize: 12, textAlign: 'center', marginBottom: 24 }}>{'\u30c7\u30fc\u30d6\u3092\u30bf\u30c3\u30d7\u3057\u3066\u6311\u6226\u958b\u59cb'}</Text>
+              <TouchableOpacity onPress={async () => { setStoryActive(false); storyOverlayOpacity.setValue(0); setDeebuActive(true); setDeebuHits(0); setDeebuTrainingDone(false); setDeebuPhotoDone(false); setDeebuPhotoUri(null); setDeebuReason(''); try { await AsyncStorage.setItem(DEEBU_ACTIVE_KEY, 'true'); } catch(e) {} }} style={{ backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'\u4e86\u89e3'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
+          {storyPhase === 'missionBrief' && storyStage === 2 && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'\u30a2\u30c8\u30c7\u30e4\u30eb'}</Text>
+              <Text style={{ color: '#888', fontSize: 13, marginBottom: 30 }}>{'\u8a0e\u4f10\u30df\u30c3\u30b7\u30e7\u30f3'}</Text>
+              <View style={{ backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 16, padding: 24, width: '100%', marginBottom: 28 }}>
+                <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: '900', textAlign: 'center', lineHeight: 30 }}>{'今日のルーティンを半分こなし\nTODOを全て完了せよ'}</Text>
+              </View>
+              <Text style={{ color: '#555', fontSize: 12, textAlign: 'center', marginBottom: 30 }}>{'\u6761\u4ef6\u3092\u9054\u6210\u3059\u308b\u3068\u30a2\u30c8\u30c7\u30e4\u30eb\u3092\u8a0e\u4f10\u3067\u304d\u308b'}</Text>
+              <TouchableOpacity onPress={async () => { setStoryActive(false); storyOverlayOpacity.setValue(0); setAtodeyaruActive(true); try { await AsyncStorage.setItem(ATODEYARU_ACTIVE_KEY, 'true'); } catch(e) {} }} style={{ backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'\u4e86\u89e3'}</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -6485,14 +6850,14 @@ export default function App() {
 
           {storyPhase === 'defeat' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(STORY_SCENES[4].text); } }} />
+              <Video source={storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(sc[4].text); } }} />
               <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
             </View>
           )}
 
           {storyPhase === 'victory' && (
             <TouchableOpacity activeOpacity={1} onPress={advanceVictoryScene} style={{ flex: 1 }}>
-              <ImageBackground source={STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
+              <ImageBackground source={storyStage === 4 ? MOUMURI_SCENE2_IMG : storyStage === 3 ? DEEBU_SCENE2_IMG : storyStage === 2 ? ATODEYARU_SCENE2_IMG : STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
                 <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
                 </View>
@@ -6505,8 +6870,8 @@ export default function App() {
           {storyPhase === 'clear' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
               <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 3, marginBottom: 8 }}>WORLD 1</Text>
-              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>STAGE 1 CLEAR</Text>
-              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{'三日坊主を討伐'}</Text>
+              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>{storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
+              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
               <Text style={{ color: '#888', fontSize: 12, marginBottom: 4 }}>+50 XP</Text>
               <TouchableOpacity onPress={completeStoryEvent} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
                 <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'修行の間へ'}</Text>
@@ -6896,8 +7261,309 @@ export default function App() {
           </View>
       </KeyboardAvoidingView>
 
+      {/* Floating Moumuri */}
+      {moumuriActive && !storyActive && (
+        <Pressable onPress={openMoumuriBattle} style={{ position: 'absolute', bottom: 130, right: 12, zIndex: 999, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 16, padding: 10, borderWidth: 2, borderColor: '#9b59b6' }}>
+          <Image source={YOKAI_IMAGES.moumuri} style={{ width: 56, height: 56, borderRadius: 28 }} resizeMode="contain" />
+          <Text style={{ color: '#c39bd3', fontSize: 10, fontWeight: '900', marginTop: 3 }}>{'\u30e2\u30a6\u30e0\u30ea'}</Text>
+          <View style={{ backgroundColor: '#9b59b6', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3 }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{'\u6311\u6226\uff01'}</Text>
+          </View>
+        </Pressable>
+      )}
 
+      {/* Moumuri Battle Modal */}
+      {moumuriBO && (
+        <Modal visible={true} animationType="slide" transparent={false}>
+          <View style={{ flex: 1, backgroundColor: '#0a0a1a' }}>
+            <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0d0d20', borderBottomWidth: 1, borderBottomColor: '#222' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => setMoumuriBO(false)}><Text style={{ color: '#888', fontSize: 14 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                <Text style={{ color: '#9b59b6', fontSize: 18, fontWeight: '900', letterSpacing: 2 }}>{'\u30e2\u30a6\u30e0\u30ea\u6226'}</Text>
+                <View style={{ width: 50 }} />
+              </View>
+            </View>
 
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+              {/* Boss */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                  {moumuriFlash && <View style={{ position: 'absolute', width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(155,89,182,0.5)', zIndex: 2 }} />}
+                  <Animated.Image source={YOKAI_IMAGES.moumuri} style={{ width: 100, height: 100, borderRadius: 50, opacity: moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? 0.4 : 1, transform: [{ translateX: moumuriShakeAnim }] }} resizeMode="contain" />
+                </View>
+                <Text style={{ color: '#9b59b6', fontSize: 16, fontWeight: '900', letterSpacing: 2 }}>{'\u30e2\u30a6\u30e0\u30ea'}</Text>
+                <View style={{ width: '60%', height: 8, backgroundColor: '#222', borderRadius: 4, marginTop: 6 }}>
+                  <View style={{ width: (Math.max(0, MOUMURI_KANSHA_TARGET - moumuriKanshaList.length) / MOUMURI_KANSHA_TARGET * 100) + '%', height: 8, backgroundColor: '#9b59b6', borderRadius: 4 }} />
+                </View>
+                <Text style={{ color: '#666', fontSize: 11, marginTop: 4 }}>{'HP ' + Math.max(0, MOUMURI_KANSHA_TARGET - moumuriKanshaList.length) + '/' + MOUMURI_KANSHA_TARGET}</Text>
+              </View>
+
+              {/* Menu */}
+              {moumuriPhase === 'menu' && (
+                <View>
+                  <Pressable onPress={() => { if (!moumuriZenDone) setMoumuriPhase('zen'); }} style={{ backgroundColor: moumuriZenDone ? 'rgba(46,204,113,0.1)' : 'rgba(218,165,32,0.1)', borderWidth: 2, borderColor: moumuriZenDone ? '#2ecc71' : '#DAA520', borderRadius: 16, padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginRight: 14 }}>{moumuriZenDone ? '\u2714\uFE0F' : '\u2694\uFE0F'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: moumuriZenDone ? '#2ecc71' : '#DAA520', fontSize: 17, fontWeight: '900' }}>{moumuriZenDone ? '\u4e00\u65e5\u4e00\u5584\u9054\u6210\uff01' : '\u4e00\u65e5\u4e00\u5584'}</Text>
+                      <Text style={{ color: '#888', fontSize: 12, marginTop: 3 }}>{moumuriZenDone ? moumuriZenText : '\u4eca\u65e5\u306e\u5584\u3044\u884c\u3044\u3092\u66f8\u3051'}</Text>
+                    </View>
+                    {!moumuriZenDone && <Text style={{ color: '#DAA520', fontSize: 20 }}>{'\u203a'}</Text>}
+                  </Pressable>
+
+                  <Pressable onPress={() => { if (moumuriKanshaList.length < MOUMURI_KANSHA_TARGET) setMoumuriPhase('kansha'); }} style={{ backgroundColor: moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? 'rgba(46,204,113,0.1)' : 'rgba(79,195,247,0.1)', borderWidth: 2, borderColor: moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? '#2ecc71' : '#4FC3F7', borderRadius: 16, padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginRight: 14 }}>{moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? '\u2714\uFE0F' : '\u{1f64f}'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? '#2ecc71' : '#4FC3F7', fontSize: 17, fontWeight: '900' }}>{moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? '\u611f\u8b1d10\u500b\u9054\u6210\uff01' : '\u611f\u8b1d\u3092\u66f8\u3051'}</Text>
+                      <Text style={{ color: '#888', fontSize: 12, marginTop: 3 }}>{moumuriKanshaList.length + '/' + MOUMURI_KANSHA_TARGET + ' \u611f\u8b1d\u304c\u30e2\u30a6\u30e0\u30ea\u306b\u30c0\u30e1\u30fc\u30b8'}</Text>
+                    </View>
+                    {moumuriKanshaList.length < MOUMURI_KANSHA_TARGET && <Text style={{ color: '#4FC3F7', fontSize: 20 }}>{'\u203a'}</Text>}
+                  </Pressable>
+
+                  {moumuriZenDone && moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET && (
+                    <TouchableOpacity onPress={() => triggerMoumuriDefeat()} style={{ backgroundColor: '#9b59b6', borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: 10 }}>
+                      <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{'\u3068\u3069\u3081\u3092\u523a\u305b\uff01'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Zen input */}
+              {moumuriPhase === 'zen' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: '900', marginBottom: 8, letterSpacing: 2 }}>{'\u2694\uFE0F \u4e00\u65e5\u4e00\u5584'}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 24, textAlign: 'center', lineHeight: 22 }}>{'\u4eca\u65e5\u4eba\u306b\u3057\u305f\u512a\u3057\u3044\u3053\u3068\u3001\n\u826f\u3044\u884c\u3044\u3092\u66f8\u3051\u3002'}</Text>
+                  <TextInput
+                    style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16, fontSize: 16, color: '#fff', width: '100%', minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#333', marginBottom: 16 }}
+                    placeholder={'\u4f8b\uff1a\u540c\u50da\u306b\u30b3\u30fc\u30d2\u30fc\u3092\u5165\u308c\u305f'}
+                    placeholderTextColor="#555"
+                    multiline
+                    value={moumuriZenText}
+                    onChangeText={setMoumuriZenText}
+                  />
+                  <TouchableOpacity onPress={moumuriSubmitZen} style={{ backgroundColor: moumuriZenText.trim() ? '#DAA520' : '#333', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 50, opacity: moumuriZenText.trim() ? 1 : 0.5 }}>
+                    <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'\u5584\u884c\u3092\u8a18\u9332'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMoumuriPhase('menu')} style={{ padding: 12, marginTop: 8 }}>
+                    <Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Kansha input */}
+              {moumuriPhase === 'kansha' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 8, letterSpacing: 2 }}>{'\u{1f64f} \u611f\u8b1d\u3092\u66f8\u3051'}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>{moumuriKanshaList.length + ' / ' + MOUMURI_KANSHA_TARGET}</Text>
+                  {moumuriKanshaList.map((k, i) => (
+                    <View key={i} style={{ backgroundColor: 'rgba(79,195,247,0.08)', borderRadius: 10, padding: 12, width: '100%', marginBottom: 6, flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ color: '#4FC3F7', fontSize: 14, marginRight: 8 }}>{(i + 1) + '.'}</Text>
+                      <Text style={{ color: '#ccc', fontSize: 14, flex: 1 }}>{k}</Text>
+                    </View>
+                  ))}
+                  {moumuriKanshaList.length < MOUMURI_KANSHA_TARGET && (
+                    <View style={{ flexDirection: 'row', width: '100%', marginTop: 10, marginBottom: 16 }}>
+                      <TextInput
+                        style={{ flex: 1, backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, fontSize: 15, color: '#fff', borderWidth: 1, borderColor: '#333', marginRight: 8 }}
+                        placeholder={'\u611f\u8b1d\u3057\u3066\u3044\u308b\u3053\u3068\u3092\u66f8\u3051'}
+                        placeholderTextColor="#555"
+                        value={moumuriKanshaInput}
+                        onChangeText={setMoumuriKanshaInput}
+                        onSubmitEditing={moumuriAddKansha}
+                        returnKeyType="done"
+                      />
+                      <TouchableOpacity onPress={moumuriAddKansha} style={{ backgroundColor: moumuriKanshaInput.trim() ? '#4FC3F7' : '#333', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center', opacity: moumuriKanshaInput.trim() ? 1 : 0.5 }}>
+                        <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'+'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => setMoumuriPhase('menu')} style={{ padding: 12, marginTop: 4 }}>
+                    <Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Done */}
+              {moumuriPhase === 'done' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#2ecc71', fontSize: 20, fontWeight: '900', letterSpacing: 3, marginBottom: 20 }}>{'\u30df\u30c3\u30b7\u30e7\u30f3\u5168\u9054\u6210\uff01'}</Text>
+                  <TouchableOpacity onPress={() => triggerMoumuriDefeat()} style={{ backgroundColor: '#9b59b6', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 50 }}>
+                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{'\u3068\u3069\u3081\u3092\u523a\u305b\uff01'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
+
+      {/* Floating Deebu */}
+      {deebuActive && !storyActive && (
+        <Pressable onPress={openDeebuBattle} style={{ position: 'absolute', bottom: 130, right: 12, zIndex: 999, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: 16, padding: 10, borderWidth: 2, borderColor: '#e74c3c' }}>
+          <Image source={YOKAI_IMAGES.deebu} style={{ width: 56, height: 56, borderRadius: 28 }} resizeMode="contain" />
+          <Text style={{ color: '#ff6b6b', fontSize: 10, fontWeight: '900', marginTop: 3 }}>{'\u30c7\u30fc\u30d6'}</Text>
+          <View style={{ backgroundColor: '#e74c3c', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3 }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{'\u6311\u6226\uff01'}</Text>
+          </View>
+        </Pressable>
+      )}
+
+      {/* Deebu Battle Modal */}
+      {deebuBattleOpen && (
+        <Modal visible={true} animationType="slide" transparent={false}>
+          <View style={{ flex: 1, backgroundColor: '#0a0a1a' }}>
+            <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0d0d20', borderBottomWidth: 1, borderBottomColor: '#222' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => setDeebuBattleOpen(false)}><Text style={{ color: '#888', fontSize: 14 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                <Text style={{ color: '#e74c3c', fontSize: 18, fontWeight: '900', letterSpacing: 2 }}>{'\u30c7\u30fc\u30d6\u6226'}</Text>
+                <View style={{ width: 50 }} />
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }}>
+              {/* Boss */}
+              <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                  {deebuFlash && <View style={{ position: 'absolute', width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(231,76,60,0.5)', zIndex: 2 }} />}
+                  <Animated.Image source={YOKAI_IMAGES.deebu} style={{ width: 100, height: 100, borderRadius: 50, opacity: deebuTrainingDone ? 0.4 : 1, transform: [{ translateX: deebuShakeAnim }] }} resizeMode="contain" />
+                </View>
+                <Text style={{ color: '#e74c3c', fontSize: 16, fontWeight: '900', letterSpacing: 2 }}>{'\u30c7\u30fc\u30d6'}</Text>
+                <View style={{ width: '60%', height: 8, backgroundColor: '#222', borderRadius: 4, marginTop: 6 }}>
+                  <View style={{ width: (Math.max(0, DEEBU_HIT_TARGET - deebuHits) / DEEBU_HIT_TARGET * 100) + '%', height: 8, backgroundColor: '#e74c3c', borderRadius: 4 }} />
+                </View>
+                <Text style={{ color: '#666', fontSize: 11, marginTop: 4 }}>{'HP ' + Math.max(0, DEEBU_HIT_TARGET - deebuHits) + '/' + DEEBU_HIT_TARGET}</Text>
+              </View>
+
+              {/* Menu */}
+              {deebuPhase === 'menu' && (
+                <View>
+                  <Pressable onPress={() => { if (!deebuTrainingDone) setDeebuPhase('train_select'); }} style={{ backgroundColor: deebuTrainingDone ? 'rgba(46,204,113,0.1)' : 'rgba(218,165,32,0.1)', borderWidth: 2, borderColor: deebuTrainingDone ? '#2ecc71' : '#DAA520', borderRadius: 16, padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginRight: 14 }}>{deebuTrainingDone ? '\u2714\uFE0F' : '\u2694\uFE0F'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: deebuTrainingDone ? '#2ecc71' : '#DAA520', fontSize: 17, fontWeight: '900' }}>{deebuTrainingDone ? '\u7b4b\u30c8\u30ec\u5b8c\u4e86\uff01' : '\u7b4b\u30c8\u30ec\u3067\u653b\u6483'}</Text>
+                      <Text style={{ color: '#888', fontSize: 12, marginTop: 3 }}>{deebuTrainingDone ? deebuHits + '\u56de\u9054\u6210' : '\u7b4b\u30c8\u30ec\u3092\u9078\u3093\u3067' + DEEBU_HIT_TARGET + '\u56de\u30c0\u30e1\u30fc\u30b8\u3092\u4e0e\u3048\u308d'}</Text>
+                    </View>
+                    {!deebuTrainingDone && <Text style={{ color: '#DAA520', fontSize: 20 }}>{'\u203a'}</Text>}
+                  </Pressable>
+
+                  <Pressable onPress={() => { if (!deebuPhotoDone) setDeebuPhase('photo'); }} style={{ backgroundColor: deebuPhotoDone ? 'rgba(46,204,113,0.1)' : 'rgba(79,195,247,0.1)', borderWidth: 2, borderColor: deebuPhotoDone ? '#2ecc71' : '#4FC3F7', borderRadius: 16, padding: 20, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 32, marginRight: 14 }}>{deebuPhotoDone ? '\u2714\uFE0F' : '\u{1f4f8}'}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: deebuPhotoDone ? '#2ecc71' : '#4FC3F7', fontSize: 17, fontWeight: '900' }}>{deebuPhotoDone ? '\u6b32\u671b\u65ad\u3061\u5207\u308a\uff01' : '\u6b32\u671b\u3092\u65ad\u3061\u5207\u308c'}</Text>
+                      <Text style={{ color: '#888', fontSize: 12, marginTop: 3 }}>{deebuPhotoDone ? '\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u5c01\u5370\u3057\u305f' : '\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u64ae\u3063\u3066\u7406\u7531\u3092\u66f8\u3051'}</Text>
+                    </View>
+                    {!deebuPhotoDone && <Text style={{ color: '#4FC3F7', fontSize: 20 }}>{'\u203a'}</Text>}
+                  </Pressable>
+
+                  {deebuTrainingDone && deebuPhotoDone && (
+                    <TouchableOpacity onPress={() => triggerDeebuDefeat()} style={{ backgroundColor: '#e74c3c', borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: 10 }}>
+                      <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{'\u3068\u3069\u3081\u3092\u523a\u305b\uff01'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Train select */}
+              {deebuPhase === 'train_select' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: '900', marginBottom: 16, letterSpacing: 2 }}>{'\u7b4b\u30c8\u30ec\u3092\u9078\u3079'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 16 }}>
+                    {DEEBU_EXERCISES.map((ex) => (
+                      <TouchableOpacity key={ex.id} onPress={() => { setDeebuTrainingType(ex.id); setDeebuPhase('training'); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch(e) {} }} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 2, borderColor: '#DAA520', borderRadius: 14, paddingVertical: 20, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 28, marginBottom: 6 }}>{ex.icon}</Text>
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>{ex.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity onPress={() => setDeebuPhase('menu')} style={{ padding: 12 }}>
+                    <Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Training counter */}
+              {deebuPhase === 'training' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 6 }}>{'\u2694\uFE0F ' + (DEEBU_EXERCISES.find(e => e.id === deebuTrainingType)?.label || '')}</Text>
+                  <Text style={{ color: '#fff', fontSize: 80, fontWeight: '900', marginBottom: 4 }}>{deebuHits}</Text>
+                  <Text style={{ color: '#666', fontSize: 14, marginBottom: 30 }}>{deebuHits + ' / ' + DEEBU_HIT_TARGET}</Text>
+                  {deebuHits < DEEBU_HIT_TARGET ? (
+                    <TouchableOpacity onPress={deebuTrainingTap} style={{ width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 3, borderColor: '#DAA520', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#DAA520', fontSize: 28, fontWeight: '900' }}>{'\u62bc\u305b\uff01'}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ color: '#2ecc71', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 16 }}>{'\u7b4b\u30c8\u30ec\u5b8c\u4e86\uff01'}</Text>
+                      <TouchableOpacity onPress={() => setDeebuPhase('menu')} style={{ backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 }}>
+                        <Text style={{ color: '#DAA520', fontSize: 14, fontWeight: 'bold' }}>{'\u6b21\u3078'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Photo */}
+              {deebuPhase === 'photo' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 8, letterSpacing: 2 }}>{'\u{1f4f8} \u6b32\u671b\u3092\u65ad\u3061\u5207\u308c'}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 24, textAlign: 'center', lineHeight: 22 }}>{'\u4eca\u6211\u6162\u3057\u305f\u3044\u3082\u306e\u3092\u64ae\u308c\u3002\n\u305d\u308c\u304c\u304a\u524d\u306e\u5f31\u3055\u3060\u3002'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
+                    <TouchableOpacity onPress={deebuTakePhoto} style={{ backgroundColor: 'rgba(79,195,247,0.15)', borderWidth: 2, borderColor: '#4FC3F7', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 24, alignItems: 'center', marginRight: 16 }}>
+                      <Text style={{ fontSize: 28, marginBottom: 4 }}>{'\u{1f4f7}'}</Text>
+                      <Text style={{ color: '#4FC3F7', fontSize: 13, fontWeight: 'bold' }}>{'\u64ae\u5f71'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={deebuPickPhoto} style={{ backgroundColor: 'rgba(79,195,247,0.15)', borderWidth: 2, borderColor: '#4FC3F7', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 24, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 28, marginBottom: 4 }}>{'\u{1f5bc}\uFE0F'}</Text>
+                      <Text style={{ color: '#4FC3F7', fontSize: 13, fontWeight: 'bold' }}>{'\u9078\u629e'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity onPress={() => setDeebuPhase('menu')} style={{ padding: 12 }}>
+                    <Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Reason */}
+              {deebuPhase === 'reason' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 16, fontWeight: '900', marginBottom: 12 }}>{'\u306a\u305c\u6211\u6162\u3059\u308b\uff1f'}</Text>
+                  {deebuPhotoUri && <Image source={{ uri: deebuPhotoUri }} style={{ width: 160, height: 160, borderRadius: 12, marginBottom: 16, borderWidth: 2, borderColor: '#333' }} />}
+                  <TextInput
+                    style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16, fontSize: 16, color: '#fff', width: '100%', minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#333', marginBottom: 16 }}
+                    placeholder={'\u6211\u6162\u3059\u308b\u7406\u7531\u3092\u66f8\u3051'}
+                    placeholderTextColor="#555"
+                    multiline
+                    value={deebuReason}
+                    onChangeText={setDeebuReason}
+                  />
+                  <TouchableOpacity onPress={deebuSubmitReason} style={{ backgroundColor: deebuReason.trim() ? '#4FC3F7' : '#333', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 50, opacity: deebuReason.trim() ? 1 : 0.5 }}>
+                    <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'\u6b32\u671b\u3092\u65ad\u3061\u5207\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Done */}
+              {deebuPhase === 'done' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#2ecc71', fontSize: 20, fontWeight: '900', letterSpacing: 3, marginBottom: 20 }}>{'\u30df\u30c3\u30b7\u30e7\u30f3\u5168\u9054\u6210\uff01'}</Text>
+                  <TouchableOpacity onPress={() => triggerDeebuDefeat()} style={{ backgroundColor: '#e74c3c', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 50 }}>
+                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{'\u3068\u3069\u3081\u3092\u523a\u305b\uff01'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
+
+      {/* Floating Atodeyaru */}
+      {atodeyaruActive && !storyActive && (
+        <View style={{ position: 'absolute', bottom: 120, right: 16, zIndex: 999, alignItems: 'center' }}>
+          <Pressable onPress={() => { const quips = ATODEYARU_QUIPS; const q = quips[Math.floor(Math.random() * quips.length)]; showSaveSuccess(q); }}>
+            <Image source={YOKAI_IMAGES.atodeyaru} style={{ width: 60, height: 60, borderRadius: 30 }} resizeMode="contain" />
+            <Text style={{ color: '#e74c3c', fontSize: 9, fontWeight: '900', textAlign: 'center', marginTop: 2 }}>{'アトデヤル'}</Text>
+          </Pressable>
+        </View>
+      )}
 
       {/* Yokai Defeat Modal */}
       {yokaiEncounter && (

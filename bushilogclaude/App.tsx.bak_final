@@ -25,8 +25,6 @@ import {
   Image,
   ImageBackground,
   View,
-  TouchableOpacity,
-  Dimensions,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { initializePurchases, checkProStatus, getOffering, purchasePro, restorePurchases, getMonthlyPrice, getAnnualPrice, purchaseAnnual } from './src/services/purchaseService';
@@ -116,17 +114,6 @@ const YOKAI_IMAGES: { [key: string]: any } = {
   moumuri: require('./assets/yokai/yokai_moumuri.png'),
   atamadekkachi: require('./assets/yokai/yokai_atamadekkachi.png'),
 };
-const MIKKABOZU_EYES = require('./assets/yokai/mikkabozu_eyes.png');
-const STORY_SCENE1_IMG = require('./assets/story/mikkabozu_scene1.png');
-const STORY_SCENE2_IMG = require('./assets/story/mikkabozu_scene2.png');
-const MIKKABOZU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_mikkabozu.mp4');
-const WORLD1_BG = require('./assets/map/bg/world1_bg.png');
-const NODE_FIST = require('./assets/map/nodes/node_fist.png');
-const NODE_KATANA = require('./assets/map/nodes/node_katana.png');
-const NODE_SCROLL = require('./assets/map/nodes/node_scroll.png');
-const NODE_BRAIN = require('./assets/map/nodes/node_brain.png');
-const NODE_BOSS = require('./assets/map/nodes/node_boss.png');
-const NODE_LOCKED = require('./assets/map/nodes/node_locked.png');
 
 const YOKAI_LOSE_IMAGES: { [key: string]: any } = {
   mikkabozu: require('./assets/yokai/loseyokai_mikkabozu.png'),
@@ -274,9 +261,6 @@ const SAMURAI_KING_USES_KEY = 'SAMURAI_KING_USES_V1';
 const SAMURAI_MISSION_KEY = 'SAMURAI_MISSION_V1';
 const FIRST_LAUNCH_KEY = 'BUSHIDO_FIRST_LAUNCH_V1';
 const INTRO_SKIP_KEY = 'BUSHIDO_INTRO_SKIP_V1';
-const FIRST_OPEN_DATE_KEY = 'bushido_first_open_date';
-const MIKKABOZU_DAY_KEY = 'bushido_mikkabozu_day_count';
-const MIKKABOZU_EVENT_KEY = 'bushido_mikkabozu_event_done';
 const FREE_TRIAL_DAYS = 3;
 
 const MAX_LEVEL = 10;
@@ -906,7 +890,6 @@ export default function App() {
       setShowDojoGate(false);
       // 穢れチェック
       await checkKegare();
-      checkMikkabozuEvent();
       // Introをスキップしていなければ表示
       if (!introSkipped) {
         setShowIntro(true);
@@ -1232,7 +1215,7 @@ export default function App() {
 
 
   // ===== Inner World (修行の間) =====
-  const [innerWorldView, setInnerWorldView] = useState<'menu' | 'yokaiDex' | 'stageMap'>('menu');
+  const [innerWorldView, setInnerWorldView] = useState<'menu' | 'yokaiDex'>('menu');
   // ===== Kegare (Katana Polishing) System =====
   const [showKatanaPolish, setShowKatanaPolish] = useState(false);
   const [polishCount, setPolishCount] = useState(0);
@@ -2780,7 +2763,7 @@ export default function App() {
           if (levelInfo.level >= 1) { 
             setShowStartScreen(false); 
             setInnerWorldView('menu');
-            if (mikkabozuEventDone || innerWorldUnlocked) { setTab('innerWorld'); setShowStartScreen(false); } // gated by mikkabozu
+            setTab('innerWorld'); 
           } else { 
             showSaveSuccess('修行の成果は、やがて姿を持つ'); 
           } 
@@ -4917,214 +4900,6 @@ export default function App() {
 
   // ===== Ritual Tutorial =====
   const [tutorialPhase, setTutorialPhase] = useState<number | null>(null);
-
-  // ============================================================
-  // === MIKKABOZU EVENT / STORY + MISSION SYSTEM ===
-  // ============================================================
-  const SCREEN_W = Dimensions.get('window').width;
-  const SCREEN_H = Dimensions.get('window').height;
-  const MISSION_TARGET = 10;
-  const SQ_TOTAL = 3;
-  const [mikkabozuEventDone, setMikkabozuEventDone] = useState(false);
-  const [innerWorldUnlocked, setInnerWorldUnlocked] = useState(false);
-  const [dayCount, setDayCount] = useState(0);
-  const [storyActive, setStoryActive] = useState(false);
-  const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'mission'|'quiz'|'defeat'|'victory'|'clear'>('dark');
-  const [sceneIndex, setSceneIndex] = useState(0);
-  const [storyTypeText, setStoryTypeText] = useState('');
-  const [storyTypingDone, setStoryTypingDone] = useState(false);
-  const [missionCount, setMissionCount] = useState(0);
-  const [storyOverlayOpacity] = useState(new Animated.Value(0));
-  const [storyEyesOpacity] = useState(new Animated.Value(0));
-  const [samuraiVoice, setSamuraiVoice] = useState('');
-  const [selectedMission, setSelectedMission] = useState<string|null>(null);
-  const [sqIdx, setSqIdx] = useState(0);
-  const [sqScore, setSqScore] = useState(0);
-  const [sqAnswered, setSqAnswered] = useState(false);
-  const [sqCorrect, setSqCorrect] = useState(false);
-
-  const STORY_SCENES = [
-    { img: 1, text: 'ようこそ。\nここは“続かなかった奴ら”が\n山ほど来る場所。' },
-    { img: 1, text: 'ここではな、\n行動したら、敵が消える。\nそれだけ。' },
-    { img: 1, text: '俺は“三日坊主”。\nお前が続かない限り、\n何回でも出てくる。' },
-    { img: 1, text: '試しにやってみ。\n逃げ場はないけど、\nやることは簡単や。' },
-    { img: 2, text: '……あ。\n今のは、効いたわ。' },
-    { img: 2, text: '勘違いすんなよ。\nまたサボったら、\nすぐ会えるから。' },
-  ];
-
-  const PHYSICAL_MISSIONS = [
-    { id: 'pushup', label: '腕立てふせ', icon: '⚔️', count: MISSION_TARGET },
-    { id: 'squat', label: 'スクワット', icon: '⭐', count: MISSION_TARGET },
-    { id: 'situp', label: '腹筋', icon: '☄️', count: MISSION_TARGET },
-  ];
-  const SQ_MISSIONS = [
-    { id: 'english', label: '英単語クイズ', icon: 'EN' },
-    { id: 'kotowaza', label: 'ことわざクイズ', icon: '✂️' },
-    { id: 'trivia', label: '雑学クイズ', icon: '❓' },
-  ];
-
-  const SQ_DATA: { [key: string]: { q: string; choices: string[]; answer: number }[] } = {
-    english: [
-      { q: '"apple" の意味は？', choices: ['りんご', 'みかん', 'ぶどう', 'もも'], answer: 0 },
-      { q: '"strong" の意味は？', choices: ['弱い', '強い', '早い', '遅い'], answer: 1 },
-      { q: '"continue" の意味は？', choices: ['止める', '始める', '続ける', '終わる'], answer: 2 },
-    ],
-    kotowaza: [
-      { q: '「石の上にも___」', choices: ['三年', '五年', '十年', '百年'], answer: 0 },
-      { q: '「継続は___なり」', choices: ['金', '力', '夢', '技'], answer: 1 },
-      { q: '「千里の道も___から」', choices: ['三歩', '百歩', '一歩', '十歩'], answer: 2 },
-    ],
-    trivia: [
-      { q: '人間の骨の数は約何本？', choices: ['106本', '206本', '306本', '406本'], answer: 1 },
-      { q: '日本で一番高い山は？', choices: ['富士山', '北岳', '様が岳', '立山'], answer: 0 },
-      { q: '太陽系で一番大きい惑星は？', choices: ['土星', '木星', '天王星', '海王星'], answer: 1 },
-    ],
-  };
-
-  const getSqQ = () => {
-    const qs = SQ_DATA[selectedMission || 'english'] || SQ_DATA.english;
-    return qs[sqIdx] || qs[0];
-  };
-
-  const speakMikkabozu = async (text: string) => {
-    try {
-      if (!settings.autoVoice) return;
-      const url = `${SAMURAI_TTS_URL}?text=${encodeURIComponent(text)}`;
-      const { sound } = await Audio.Sound.createAsync({ uri: url });
-      await sound.setVolumeAsync(MASTER_VOLUME);
-      await sound.setRateAsync(1.8, false);
-      await sound.playAsync();
-    } catch(e) { console.log('mikkabozu voice error', e); }
-  };
-
-  const storyTypewriter = (text: string, onDone?: () => void) => {
-    let i = 0;
-    setStoryTypeText('');
-    setStoryTypingDone(false);
-    const interval = setInterval(() => {
-      i++;
-      setStoryTypeText(text.substring(0, i));
-      if (i >= text.length) {
-        clearInterval(interval);
-        setStoryTypingDone(true);
-        if (onDone) onDone();
-      }
-    }, 80);
-  };
-
-  const samuraiSpeak = (text: string) => {
-    let i = 0;
-    setSamuraiVoice('');
-    const interval = setInterval(() => {
-      i++;
-      setSamuraiVoice(text.substring(0, i));
-      if (i >= text.length) clearInterval(interval);
-    }, 100);
-  };
-
-  const checkMikkabozuEvent = async () => {
-    try {
-      // TEMP_TEST
-      setTimeout(() => startStoryEvent(), 500); return;
-      const done = await AsyncStorage.getItem(MIKKABOZU_EVENT_KEY);
-      if (done === 'true') { setMikkabozuEventDone(true); setInnerWorldUnlocked(true); return; }
-      const today = new Date().toISOString().split('T')[0];
-      const firstOpen = await AsyncStorage.getItem(FIRST_OPEN_DATE_KEY);
-      if (!firstOpen) {
-        await AsyncStorage.setItem(FIRST_OPEN_DATE_KEY, today);
-        await AsyncStorage.setItem(MIKKABOZU_DAY_KEY, '1');
-        await AsyncStorage.setItem('last_open_date', today);
-        setDayCount(1); return;
-      }
-      const storedCount = await AsyncStorage.getItem(MIKKABOZU_DAY_KEY);
-      let count = parseInt(storedCount || '1', 10);
-      const lastDay = await AsyncStorage.getItem('last_open_date');
-      if (lastDay !== today) {
-        count += 1;
-        await AsyncStorage.setItem(MIKKABOZU_DAY_KEY, String(count));
-        await AsyncStorage.setItem('last_open_date', today);
-      }
-      setDayCount(count);
-      if (count >= 3) { setTimeout(() => startStoryEvent(), 1000); }
-    } catch (e) { console.log('Mikkabozu check error:', e); }
-  };
-
-  const startStoryEvent = () => {
-    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
-    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
-    setTimeout(() => {
-      setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
-      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
-    }, 2000);
-    setTimeout(() => {
-      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
-      storyTypewriter(STORY_SCENES[0].text);
-      speakMikkabozu('どうせ三日で終わりでしょ');
-    }, 5000);
-  };
-
-  const advanceScene = () => {
-    if (!storyTypingDone) { setStoryTypeText(STORY_SCENES[sceneIndex].text); setStoryTypingDone(true); return; }
-    const next = sceneIndex + 1;
-    if (next === 4) { setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
-    if (next >= STORY_SCENES.length) { setStoryPhase('clear'); return; }
-    setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(STORY_SCENES[next].text);
-  };
-
-  const selectMission = (missionId: string) => {
-    setSelectedMission(missionId);
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch(e) {}
-    if (['pushup','squat','situp'].includes(missionId)) {
-      setMissionCount(0); setStoryPhase('mission');
-      const label = PHYSICAL_MISSIONS.find(m => m.id === missionId)?.label || '';
-      samuraiSpeak(label + '、やれ。');
-    } else {
-      setSqIdx(0); setSqScore(0); setSqAnswered(false); setSqCorrect(false);
-      setStoryPhase('quiz'); samuraiSpeak('頭を使え。');
-    }
-  };
-
-  const onMissionComplete = async () => {
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
-    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('見事だ'); samuraiSpeak('見事だ');
-    await addXpWithLevelCheck(50);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('負けたくやしいよ'); }, 1500);
-  };
-
-  const countMissionTap = async () => {
-    const next = missionCount + 1; setMissionCount(next);
-    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
-    if (next >= MISSION_TARGET) { await onMissionComplete(); }
-    else { try { const { sound } = await Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {} }
-  };
-
-  const answerQuiz = (choiceIndex: number) => {
-    if (sqAnswered) return;
-    setSqAnswered(true);
-    const q = getSqQ();
-    const correct = q.answer === choiceIndex;
-    setSqCorrect(correct);
-    if (correct) { setSqScore(sqScore + 1); try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {} try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {} }
-    else { try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error); } catch(e) {} }
-    setTimeout(() => { if (sqIdx + 1 >= SQ_TOTAL) { onMissionComplete(); } else { setSqIdx(sqIdx + 1); setSqAnswered(false); setSqCorrect(false); } }, 1200);
-  };
-
-  const advanceVictoryScene = () => {
-    if (!storyTypingDone) { setStoryTypeText(STORY_SCENES[sceneIndex].text); setStoryTypingDone(true); return; }
-    if (sceneIndex === 4) { setSceneIndex(5); setSamuraiVoice(''); storyTypewriter(STORY_SCENES[5].text); return; }
-    setStoryPhase('clear');
-  };
-
-  const completeStoryEvent = async () => {
-    try { await AsyncStorage.setItem(MIKKABOZU_EVENT_KEY, 'true'); } catch(e) {}
-    setMikkabozuEventDone(true); setInnerWorldUnlocked(true); setStoryActive(false);
-    setStoryPhase('dark'); storyOverlayOpacity.setValue(0); storyEyesOpacity.setValue(0);
-    setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice(''); setMissionCount(0);
-  };
-  // === END MIKKABOZU EVENT ===
   const [tutorialDone, setTutorialDone] = useState(false);
   const tutorialShadowAnim = useRef(new Animated.Value(0)).current;
   // ===== IMINASHI (Anti-cheat Yokai) =====
@@ -5135,38 +4910,6 @@ export default function App() {
   // ===== Inner World (修行の間) =====
   const renderInnerWorldTab = () => {
     const levelInfo = getLevelFromXp(totalXp);
-
-    if (innerWorldView === 'stageMap') {
-      const W1_STAGES = [
-        { id: 1, name: '三日坊主', icon: NODE_FIST, cleared: mikkabozuEventDone, x: 0.5, y: 0.75 },
-        { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: false, x: 0.3, y: 0.60 },
-        { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: false, x: 0.6, y: 0.47 },
-        { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: false, x: 0.35, y: 0.34 },
-        { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: false, x: 0.5, y: 0.21 },
-      ];
-      return (
-        <ImageBackground source={WORLD1_BG} style={{ flex: 1 }} resizeMode="cover">
-          <View style={{ position: 'absolute', top: 54, left: 0, right: 0, alignItems: 'center', zIndex: 10 }}>
-            <Text style={{ color: '#DAA520', fontSize: 13, fontWeight: '900', letterSpacing: 3, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 6 }}>WORLD 1</Text>
-            <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 6, marginTop: 2 }}>{'「目覚め」'}</Text>
-          </View>
-          {W1_STAGES.map((stage) => {
-            const isNext = !stage.cleared && W1_STAGES.filter(s => s.id < stage.id).every(s => s.cleared);
-            const isLocked = !stage.cleared && !isNext;
-            return (
-              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
-                <View style={{ width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: stage.cleared ? '#DAA520' : isNext ? '#fff' : '#555', overflow: 'hidden', backgroundColor: '#000' }}>
-                  <Image source={isLocked ? NODE_LOCKED : stage.icon} style={{ width: '100%', height: '100%' }} resizeMode='contain' />
-                </View>
-                <Text style={{ color: stage.cleared ? '#DAA520' : isNext ? '#fff' : '#888', fontSize: 11, fontWeight: '900', marginTop: 4, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 4 }}>{stage.id + '. ' + stage.name}</Text>
-                {stage.cleared && <Text style={{ color: '#DAA520', fontSize: 9, fontWeight: 'bold' }}>{'✔ CLEAR'}</Text>}
-                {stage.id === 5 && <Text style={{ color: '#e74c3c', fontSize: 9, fontWeight: '900', marginTop: 1 }}>BOSS</Text>}
-              </Pressable>
-            );
-          })}
-        </ImageBackground>
-      );
-    }
 
     if (innerWorldView === 'yokaiDex') {
       return (
@@ -5222,20 +4965,6 @@ export default function App() {
           <Text style={{ color: '#D4AF37', fontSize: 24, fontWeight: '900', letterSpacing: 4 }}>── 修行の間 ──</Text>
           <Text style={{ color: '#555', fontSize: 12, marginTop: 8 }}>Lv.{levelInfo.level} {LEVEL_TITLES[levelInfo.level]}</Text>
         </View>
-
-        <Pressable
-          onPress={() => { playTapSound(); setInnerWorldView('stageMap'); }}
-          style={({ pressed }) => [{ backgroundColor: pressed ? '#0a1a0a' : '#0a0a1a', borderRadius: 16, padding: 20, marginBottom: 14, borderWidth: 1, borderColor: '#DAA520' }]}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Text style={{ fontSize: 28, marginRight: 14 }}>{'⚔️'}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: '900' }}>{'ステージマップ'}</Text>
-              <Text style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{'World 1 「目覚め」'}</Text>
-            </View>
-            <Text style={{ color: '#DAA520', fontSize: 18 }}>{'›'}</Text>
-          </View>
-        </Pressable>
 
         <Pressable
           onPress={() => {
@@ -6407,116 +6136,6 @@ export default function App() {
   // Intro画面表示
   if (showIntro) {
     return renderIntroScreen();
-  }
-
-  // === Story Overlay ===
-  if (storyActive) {
-    const currentScene = STORY_SCENES[sceneIndex] || STORY_SCENES[0];
-    const sceneImg = currentScene.img === 2 ? STORY_SCENE2_IMG : STORY_SCENE1_IMG;
-    const sqQ = getSqQ();
-    return (
-      <View style={{ flex: 1, backgroundColor: '#000' }}>
-        <Animated.View style={{ flex: 1, opacity: storyOverlayOpacity }}>
-
-          {storyPhase === 'dark' && (<View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: '#555', fontSize: 14 }}>{'…'}</Text></View>)}
-
-          {storyPhase === 'eyes' && (<View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}><Animated.View style={{ opacity: storyEyesOpacity }}><Image source={MIKKABOZU_EYES} style={{ width: 200, height: 200, resizeMode: 'contain' }} /></Animated.View></View>)}
-
-          {storyPhase === 'scenes' && (
-            <TouchableOpacity activeOpacity={1} onPress={advanceScene} style={{ flex: 1 }}>
-              <ImageBackground source={sceneImg} style={{ flex: 1 }} resizeMode="cover">
-                <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
-                </View>
-                {storyTypingDone && (<View style={{ position: 'absolute', bottom: 60, width: '100%', alignItems: 'center' }}><Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{'タップして次へ'}</Text></View>)}
-              </ImageBackground>
-            </TouchableOpacity>
-          )}
-
-          {storyPhase === 'missionSelect' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
-              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'三日坊主'}</Text>
-              <Text style={{ color: '#888', fontSize: 13, marginBottom: 30 }}>{'ミッションを選べ'}</Text>
-              <Text style={{ color: '#DAA520', fontSize: 14, fontWeight: '900', letterSpacing: 2, marginBottom: 12, alignSelf: 'flex-start' }}>{'⚔️ 体を動かす'}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 24 }}>
-                {PHYSICAL_MISSIONS.map((m) => (<TouchableOpacity key={m.id} onPress={() => selectMission(m.id)} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}><Text style={{ fontSize: 24, marginBottom: 6 }}>{m.icon}</Text><Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{m.label}</Text><Text style={{ color: '#DAA520', fontSize: 11, marginTop: 4 }}>{m.count + '回'}</Text></TouchableOpacity>))}
-              </View>
-              <Text style={{ color: '#4FC3F7', fontSize: 14, fontWeight: '900', letterSpacing: 2, marginBottom: 12, alignSelf: 'flex-start' }}>{'✏️ 頭を使う'}</Text>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 24 }}>
-                {SQ_MISSIONS.map((m) => (<TouchableOpacity key={m.id} onPress={() => selectMission(m.id)} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1, borderColor: '#4FC3F7', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}><Text style={{ fontSize: 24, marginBottom: 6 }}>{m.icon}</Text><Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{m.label}</Text><Text style={{ color: '#4FC3F7', fontSize: 11, marginTop: 4 }}>{SQ_TOTAL + '問'}</Text></TouchableOpacity>))}
-              </View>
-              {samuraiVoice.length > 0 && (<View style={{ position: 'absolute', bottom: 80, left: 30, right: 30 }}><Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 }}>{samuraiVoice}</Text></View>)}
-            </View>
-          )}
-
-          {storyPhase === 'mission' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: '#e74c3c', fontSize: 22, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'三日坊主'}</Text>
-              <Text style={{ color: '#888', fontSize: 13, marginBottom: 20 }}>{'⚔️ ' + (PHYSICAL_MISSIONS.find(m => m.id === selectedMission)?.label || '') + ' ' + MISSION_TARGET + '回で討伐！'}</Text>
-              <Text style={{ color: '#fff', fontSize: 72, fontWeight: '900', marginBottom: 6 }}>{missionCount}</Text>
-              <Text style={{ color: '#666', fontSize: 14, marginBottom: 30 }}>{missionCount + ' / ' + MISSION_TARGET}</Text>
-              {missionCount < MISSION_TARGET ? (
-                <TouchableOpacity onPress={countMissionTap} style={{ width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 3, borderColor: '#DAA520', justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ color: '#DAA520', fontSize: 24, fontWeight: '900' }}>{'押せ'}</Text>
-                </TouchableOpacity>
-              ) : (<Text style={{ color: '#DAA520', fontSize: 22, fontWeight: '900', letterSpacing: 3 }}>{'討伐完了'}</Text>)}
-              {samuraiVoice.length > 0 && (<View style={{ position: 'absolute', bottom: 100, left: 30, right: 30 }}><Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 }}>{samuraiVoice}</Text></View>)}
-            </View>
-          )}
-
-          {storyPhase === 'quiz' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 28 }}>
-              <Text style={{ color: '#4FC3F7', fontSize: 13, letterSpacing: 2, marginBottom: 6 }}>{SQ_MISSIONS.find(m => m.id === (selectedMission || 'english'))?.label || ''}</Text>
-              <Text style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>{'Q' + (sqIdx + 1) + ' / ' + SQ_TOTAL}</Text>
-              <View style={{ backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, padding: 24, width: '100%', marginBottom: 28, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' }}>
-                <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', textAlign: 'center', lineHeight: 30 }}>{sqQ.q}</Text>
-              </View>
-              {sqQ.choices.map((choice: string, idx: number) => (
-                <TouchableOpacity key={idx} onPress={() => answerQuiz(idx)} disabled={sqAnswered} style={{ backgroundColor: sqAnswered && idx === sqQ.answer ? 'rgba(46,204,113,0.3)' : 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: sqAnswered && idx === sqQ.answer ? '#2ecc71' : 'rgba(255,255,255,0.2)', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 20, marginBottom: 10, width: '100%' }}>
-                  <Text style={{ color: sqAnswered && idx === sqQ.answer ? '#2ecc71' : '#fff', fontSize: 17, fontWeight: 'bold', textAlign: 'center' }}>{choice}</Text>
-                </TouchableOpacity>
-              ))}
-              {sqAnswered && (<Text style={{ color: sqCorrect ? '#2ecc71' : '#e74c3c', fontSize: 22, fontWeight: '900', marginTop: 10, letterSpacing: 2 }}>{sqCorrect ? '⭕ 正解！' : '❌ 不正解'}</Text>)}
-              <View style={{ position: 'absolute', bottom: 40, flexDirection: 'row', justifyContent: 'center' }}>
-                {Array.from({ length: SQ_TOTAL }).map((_, i) => (<View key={i} style={{ width: 12, height: 12, borderRadius: 6, marginHorizontal: 4, backgroundColor: i < sqIdx ? '#2ecc71' : i === sqIdx ? '#4FC3F7' : '#333' }} />))}
-              </View>
-            </View>
-          )}
-
-          {storyPhase === 'defeat' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(STORY_SCENES[4].text); } }} />
-              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
-            </View>
-          )}
-
-          {storyPhase === 'victory' && (
-            <TouchableOpacity activeOpacity={1} onPress={advanceVictoryScene} style={{ flex: 1 }}>
-              <ImageBackground source={STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
-                <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
-                  <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
-                </View>
-                {samuraiVoice.length > 0 && (<View style={{ position: 'absolute', bottom: 120, left: 30, right: 30 }}><Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 }}>{samuraiVoice}</Text></View>)}
-                {storyTypingDone && (<View style={{ position: 'absolute', bottom: 60, width: '100%', alignItems: 'center' }}><Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>{'タップして次へ'}</Text></View>)}
-              </ImageBackground>
-            </TouchableOpacity>
-          )}
-
-          {storyPhase === 'clear' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 3, marginBottom: 8 }}>WORLD 1</Text>
-              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>STAGE 1 CLEAR</Text>
-              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{'三日坊主を討伐'}</Text>
-              <Text style={{ color: '#888', fontSize: 12, marginBottom: 4 }}>+50 XP</Text>
-              <TouchableOpacity onPress={completeStoryEvent} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
-                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'修行の間へ'}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-        </Animated.View>
-      </View>
-    );
   }
 
   // スタート画面表示（オンボーディング完了後）

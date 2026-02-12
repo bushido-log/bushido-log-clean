@@ -128,6 +128,9 @@ const DEEBU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_deebu.mp4');
 const MOUMURI_SCENE1_IMG = require('./assets/story/moumuri_scene1.png');
 const MOUMURI_SCENE2_IMG = require('./assets/story/moumuri_scene2.png');
 const MOUMURI_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_moumuri.mp4');
+const TETSUYA_SILHOUETTE = require('./assets/yokai/tetsuya_silhouette.png');
+const SFX_FOOTSTEP = require('./sounds/sfx_footstep.mp3');
+const SFX_EYE_GLOW = require('./sounds/sfx_eye_glow.mp3');
 const MIKKABOZU_DEFEAT_VIDEO = require('./assets/yokai/loseyokai_mikkabozu.mp4');
 const WORLD1_BG = require('./assets/map/bg/world1_bg.png');
 const NODE_FIST = require('./assets/map/nodes/node_fist.png');
@@ -292,6 +295,9 @@ const DEEBU_EVENT_KEY = 'bushido_deebu_event_done';
 const DEEBU_ACTIVE_KEY = 'bushido_deebu_active';
 const MOUMURI_EVENT_KEY = 'bushido_moumuri_event_done';
 const MOUMURI_ACTIVE_KEY = 'bushido_moumuri_active';
+const MK2_EVENT_KEY = 'bushido_mk2_event_done';
+const MK2_ACTIVE_KEY = 'bushido_mk2_active';
+const MK2_PROGRESS_KEY = 'bushido_mk2_progress';
 const FREE_TRIAL_DAYS = 3;
 
 const MAX_LEVEL = 10;
@@ -929,6 +935,8 @@ export default function App() {
       AsyncStorage.getItem(DEEBU_ACTIVE_KEY).then(v => { if (v === 'true') setDeebuActive(true); }).catch(e => {});
       AsyncStorage.getItem(MOUMURI_EVENT_KEY).then(v => { if (v === 'true') { setMoumuriEventDone(true); } }).catch(e => {});
       AsyncStorage.getItem(MOUMURI_ACTIVE_KEY).then(v => { if (v === 'true') setMoumuriActive(true); }).catch(e => {});
+      AsyncStorage.getItem(MK2_EVENT_KEY).then(v => { if (v === 'true') setMk2EventDone(true); }).catch(e => {});
+      AsyncStorage.getItem(MK2_ACTIVE_KEY).then(v => { if (v === 'true') setMk2Active(true); }).catch(e => {});
       // Introをスキップしていなければ表示
       if (!introSkipped) {
         setShowIntro(true);
@@ -4976,9 +4984,36 @@ export default function App() {
   const [moumuriKanshaInput, setMoumuriKanshaInput] = useState('');
   const moumuriShakeAnim = useRef(new Animated.Value(0)).current;
   const [moumuriFlash, setMoumuriFlash] = useState(false);
+  const [mk2EventDone, setMk2EventDone] = useState(false);
+  const [mk2Active, setMk2Active] = useState(false);
+  const [mk2BO, setMk2BO] = useState(false);
+  const [mk2Phase, setMk2Phase] = useState<string>('menu');
+  const [mk2Day, setMk2Day] = useState(1);
+  const [mk2Done, setMk2Done] = useState<string[]>([]);
+  const [mk2CM, setMk2CM] = useState('');
+  const [mk2WasReset, setMk2WasReset] = useState(false);
+  const [mk2TextVal, setMk2TextVal] = useState('');
+  const [mk2ListItems, setMk2ListItems] = useState<string[]>([]);
+  const [mk2ListInput, setMk2ListInput] = useState('');
+  const [mk2Hits, setMk2Hits] = useState(0);
+  const [mk2TT, setMk2TT] = useState<string|null>(null);
+  const [mk2PhotoUri, setMk2PhotoUri] = useState<string|null>(null);
+  const [mk2ReasonVal, setMk2ReasonVal] = useState('');
+  const [mk2FocusLeft, setMk2FocusLeft] = useState(30);
+  const mk2Shake = useRef(new Animated.Value(0)).current;
+  const [mk2Flash, setMk2Flash] = useState(false);
+  const endingSilhouetteOp = useRef(new Animated.Value(0)).current;
+  const endingStarted = useRef(false);
+  const endingSounds = useRef<any[]>([]);
+  const endingTimers = useRef<any[]>([]);
+  const endingActive = useRef(false);
+  const endingW1Op = useRef(new Animated.Value(0)).current;
+  const endingW2Op = useRef(new Animated.Value(0)).current;
+  const [mk2SamuraiReply, setMk2SamuraiReply] = useState('');
+  const [mk2ConsultLoading, setMk2ConsultLoading] = useState(false);
   const [dayCount, setDayCount] = useState(0);
   const [storyActive, setStoryActive] = useState(false);
-  const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'missionBrief'|'mission'|'quiz'|'defeat'|'victory'|'clear'>('dark');
+  const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'missionBrief'|'mission'|'quiz'|'defeat'|'victory'|'clear'|'ending1'|'ending2'|'ending3'|'ending4'>('dark');
   const [sceneIndex, setSceneIndex] = useState(0);
   const [storyTypeText, setStoryTypeText] = useState('');
   const [storyTypingDone, setStoryTypingDone] = useState(false);
@@ -5027,6 +5062,47 @@ export default function App() {
     { img: 2, text: '\u306a\u3093\u3060\u3088\u2026\n\u611f\u8b1d\u3068\u304b\u3067\u304d\u308b\u306e\u304b\u3088\u2026' },
     { img: 2, text: '\u304f\u305d\u2026\u6b21\u306f\n\u3082\u3063\u3068\u5f37\u3044\u5974\u304c\n\u5f85\u3063\u3066\u308b\u304b\u3089\u306a\u2026' },
   ];
+
+  const MK2_SCENES = [
+    { img: 1, text: '\u3075\u3063\u2026\u307e\u305f\u4f1a\u3063\u305f\u306a\u3002\n\u304a\u524d\u306f\u307e\u3060\u4e09\u65e5\u574a\u4e3b\u3060\u3002' },
+    { img: 1, text: '3\u65e5\u9593\u3001\u5168\u529b\u3067\u4ffa\u306b\u6311\u3081\u3002\n1\u65e5\u3067\u3082\u30b5\u30dc\u3063\u305f\u3089\n\u30ea\u30bb\u30c3\u30c8\u3060\u3002' },
+    { img: 1, text: '\u4eca\u307e\u3067\u306e\u6575\u306f\u524d\u5ea7\u306b\u904e\u304e\u306a\u3044\u3002\n\u4ffa\u3053\u305d\u304c\u672c\u7269\u306e\u58c1\u3060\u3002' },
+    { img: 1, text: '3\u65e5\u7d9a\u3051\u3066\u307f\u308d\u3002\n\u4f53\u3082\u5fc3\u3082\u7fd2\u6163\u3082\n\u5168\u3066\u3067\u52dd\u3063\u3066\u307f\u308d\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
+    { img: 2, text: '\u99ac\u9e7f\u306a\u2026\n3\u65e5\u7d9a\u3051\u3084\u304c\u3063\u305f\u2026' },
+    { img: 2, text: '\u304f\u305d\u2026\u304a\u524d\u306f\u3082\u3046\n\u4e09\u65e5\u574a\u4e3b\u3058\u3083\u306a\u3044\u2026' },
+  ];
+
+  // TEST MODE: all missions in 1 day
+  const MK2_DAY1 = ['goal', 'alarm', 'training', 'photo', 'focus', 'consult', 'kansha', 'zen', 'diary', 'routines', 'todos', 'training3'];
+  const MK2_DAY2 = ['goal'];
+  const MK2_DAY3 = ['goal'];
+
+  const MK2_MISSIONS: { [k: string]: { icon: string; title: string; sub: string; phase: string } } = {
+    goal: { icon: '\u{1f3af}', title: '\u76ee\u6a19\u8a2d\u5b9a', sub: '\u4eca\u65e5\u306e\u76ee\u6a19\u3092\u66f8\u3051', phase: 'mk2_text' },
+    alarm: { icon: '\u23f0', title: '\u65e9\u8d77\u304d\u5ba3\u8a00', sub: '\u660e\u65e5\u4f55\u6642\u306b\u8d77\u304d\u308b\u304b\u5ba3\u8a00\u3057\u308d', phase: 'mk2_text' },
+    training: { icon: '\u2694\uFE0F', title: '\u7b4b\u30c8\u30ec3\u56de', sub: '\u7b4b\u30c8\u30ec\u306730\u56de\u30c0\u30e1\u30fc\u30b8', phase: 'mk2_ts' },
+    photo: { icon: '\u{1f4f8}', title: '\u6b32\u671b\u3092\u65ad\u3066', sub: '\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u64ae\u3063\u3066\u7406\u7531\u3092\u66f8\u3051', phase: 'mk2_photo' },
+    focus: { icon: '\u{1f9d8}', title: '\u96c6\u4e2d5\u79d2', sub: '\u96d1\u5ff5\u3092\u6368\u306630\u79d2\u96c6\u4e2d\u305b\u3088', phase: 'mk2_focus' },
+    consult: { icon: '\u{1f3ef}', title: '\u4f8d\u30ad\u30f3\u30b0\u306b\u76f8\u8ac7', sub: '\u60a9\u307f\u3092\u4f8d\u306b\u6253\u3061\u660e\u3051\u308d', phase: 'mk2_text' },
+    kansha: { icon: '\u{1f64f}', title: '\u611f\u8b1d15\u500b', sub: '\u611f\u8b1d\u304c\u30c0\u30e1\u30fc\u30b8\u306b\u306a\u308b', phase: 'mk2_list' },
+    zen: { icon: '\u2728', title: '\u4e00\u65e5\u4e09\u5584', sub: '\u5584\u3044\u884c\u3044\u30923\u3064\u8a18\u9332\u3057\u308d', phase: 'mk2_list' },
+    diary: { icon: '\u{1f4d6}', title: '\u65e5\u8a18', sub: '\u4eca\u65e5\u306e\u632f\u308a\u8fd4\u308a\u3092\u66f8\u3051', phase: 'mk2_text' },
+    routines: { icon: '\u{1f4cb}', title: '\u30eb\u30fc\u30c6\u30a3\u30f3\u5168\u5b8c\u4e86', sub: '\u30eb\u30fc\u30c6\u30a3\u30f3\u3092\u5168\u3066\u3053\u306a\u305b', phase: 'mk2_check' },
+    todos: { icon: '\u2705', title: 'TODO\u5168\u5b8c\u4e86', sub: 'TODO\u3092\u5168\u3066\u5b8c\u4e86\u3057\u308d', phase: 'mk2_check' },
+    training3: { icon: '\u{1f525}', title: '\u7b4b\u30c8\u30ec5\u56de', sub: '\u6700\u5f8c\u306e\u8a66\u7df4\u3060', phase: 'mk2_ts' },
+  };
+
+  const MK2_TEXT_CFG: { [k: string]: { title: string; prompt: string; ph: string; btn: string } } = {
+    goal: { title: '\u{1f3af} \u76ee\u6a19\u8a2d\u5b9a', prompt: '\u4eca\u65e5\u306e\u76ee\u6a19\u3092\u66f8\u3051', ph: '\u4f8b\uff1a\u8155\u7acb\u3066100\u56de\u3067\u304d\u308b\u3088\u3046\u306b\u306a\u308b', btn: '\u76ee\u6a19\u3092\u8a2d\u5b9a' },
+    alarm: { title: '\u23f0 \u65e9\u8d77\u304d\u5ba3\u8a00', prompt: '\u660e\u65e5\u4f55\u6642\u306b\u8d77\u304d\u308b\uff1f', ph: '\u4f8b\uff1a6:00\u306b\u8d77\u304d\u308b', btn: '\u5ba3\u8a00\u3059\u308b' },
+    consult: { title: '\u{1f3ef} \u4f8d\u30ad\u30f3\u30b0\u306b\u76f8\u8ac7', prompt: '\u60a9\u307f\u3084\u8ab2\u984c\u3092\u4f8d\u306b\u6253\u3061\u660e\u3051\u308d', ph: '\u4f8b\uff1a\u6700\u8fd1\u3084\u308b\u6c17\u304c\u51fa\u306a\u3044...', btn: '\u76f8\u8ac7\u3059\u308b' },
+    diary: { title: '\u{1f4d6} \u65e5\u8a18', prompt: '\u4eca\u65e5\u3092\u632f\u308a\u8fd4\u308c', ph: '\u4eca\u65e5\u3042\u3063\u305f\u3053\u3068\u3001\u611f\u3058\u305f\u3053\u3068\u3001\u5b66\u3093\u3060\u3053\u3068...', btn: '\u8a18\u9332\u3059\u308b' },
+  };
+
+  const MK2_LIST_CFG: { [k: string]: { title: string; target: number; ph: string } } = {
+    kansha: { title: '\u{1f64f} \u611f\u8b1d\u3092\u66f8\u3051', target: 3, ph: '\u611f\u8b1d\u3057\u3066\u3044\u308b\u3053\u3068\u3092\u66f8\u3051' },
+    zen: { title: '\u2728 \u4e00\u65e5\u4e09\u5584', target: 3, ph: '\u5584\u3044\u884c\u3044\u3092\u66f8\u3051' },
+  };
 
   const MOUMURI_KANSHA_TARGET = 10;
 
@@ -5162,13 +5238,14 @@ export default function App() {
   };
 
   const advanceScene = () => {
-    const scenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const scenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     const next = sceneIndex + 1;
     if (storyStage === 1 && next === 4) { setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
     if (storyStage === 2 && next === 4) { setStoryPhase('missionBrief'); return; }
     if (storyStage === 3 && next === 4) { setStoryPhase('missionBrief'); return; }
     if (storyStage === 4 && next === 4) { setStoryPhase('missionBrief'); return; }
+    if (storyStage === 5 && next === 4) { setStoryPhase('missionBrief'); return; }
     if (next >= scenes.length) { setStoryPhase('clear'); return; }
     setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(scenes[next].text);
   };
@@ -5213,14 +5290,17 @@ export default function App() {
   };
 
   const advanceVictoryScene = () => {
-    const scenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const scenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     if (sceneIndex === 4) { setSceneIndex(5); setSamuraiVoice(''); storyTypewriter(scenes[5].text); return; }
     setStoryPhase('clear');
   };
 
   const completeStoryEvent = async () => {
-    if (storyStage === 4) {
+    if (storyStage === 5) {
+      try { await AsyncStorage.setItem(MK2_EVENT_KEY, 'true'); } catch(e) {}
+      setMk2EventDone(true);
+    } else if (storyStage === 4) {
       try { await AsyncStorage.setItem(MOUMURI_EVENT_KEY, 'true'); } catch(e) {}
       setMoumuriEventDone(true);
     } else if (storyStage === 3) {
@@ -5430,6 +5510,178 @@ export default function App() {
   };
   // === END MOUMURI EVENT ===
 
+  // === MK2 EVENT / STAGE 5 ===
+  const mk2LocalDate = () => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+  const mk2Yesterday = () => { const d = new Date(); d.setDate(d.getDate()-1); return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); };
+
+  const startMk2Event = () => {
+    setStoryStage(5);
+    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    setTimeout(() => {
+      setStoryPhase('eyes');
+      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+    }, 2000);
+    setTimeout(() => {
+      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
+      storyTypewriter(MK2_SCENES[0].text);
+      speakMikkabozu('\u307e\u305f\u4f1a\u3063\u305f\u306a');
+    }, 5000);
+  };
+
+  const openMk2Battle = async () => {
+    playTapSound();
+    let raw = null; try { raw = await AsyncStorage.getItem(MK2_PROGRESS_KEY); } catch(e) {}
+    const prog = raw ? JSON.parse(raw) : { day1: null, day2: null, day3: null };
+    const today = mk2LocalDate(); const yday = mk2Yesterday();
+    setMk2Done([]); setMk2TextVal(''); setMk2ListItems([]); setMk2ListInput(''); setMk2Hits(0); setMk2PhotoUri(null); setMk2ReasonVal(''); setMk2FocusLeft(5); setMk2WasReset(false);
+    if (prog.day3) { setMk2Day(3); setMk2Phase('done'); }
+    else if (prog.day2) {
+      if (prog.day2 === today) { setMk2Day(2); setMk2Phase('day_clear'); }
+      else if (prog.day2 === yday) { setMk2Day(3); setMk2Phase('menu'); }
+      else { await AsyncStorage.setItem(MK2_PROGRESS_KEY, JSON.stringify({day1:null,day2:null,day3:null})); setMk2Day(1); setMk2Phase('menu'); setMk2WasReset(true); }
+    } else if (prog.day1) {
+      if (prog.day1 === today) { setMk2Day(1); setMk2Phase('day_clear'); }
+      else if (prog.day1 === yday) { setMk2Day(2); setMk2Phase('menu'); }
+      else { await AsyncStorage.setItem(MK2_PROGRESS_KEY, JSON.stringify({day1:null,day2:null,day3:null})); setMk2Day(1); setMk2Phase('menu'); setMk2WasReset(true); }
+    } else { setMk2Day(1); setMk2Phase('menu'); }
+    setMk2BO(true);
+  };
+
+  const mk2CompleteDay = async () => {
+    const today = mk2LocalDate();
+    let raw = null; try { raw = await AsyncStorage.getItem(MK2_PROGRESS_KEY); } catch(e) {}
+    const prog = raw ? JSON.parse(raw) : { day1: null, day2: null, day3: null };
+    if (mk2Day === 1) prog.day1 = today;
+    else if (mk2Day === 2) prog.day2 = today;
+    else if (mk2Day === 3) prog.day3 = today;
+    try { await AsyncStorage.setItem(MK2_PROGRESS_KEY, JSON.stringify(prog)); } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    // TEST MODE: defeat immediately
+    triggerMk2Defeat();
+  };
+
+  const triggerMk2Defeat = async () => {
+    setStoryStage(5); setMk2Active(false); setMk2BO(false);
+    try { await AsyncStorage.setItem(MK2_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryActive(true);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
+    await addXpWithLevelCheck(100);
+    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('3\u65e5\u7d9a\u3051\u3084\u304c\u3063\u305f'); }, 1500);
+  };
+
+  const mk2SubmitText = async () => {
+    if (!mk2TextVal.trim()) return;
+    playTapSound();
+    // Save to dailyLogs
+    const tagMap: { [k: string]: string } = { goal: '\u76ee\u6a19', alarm: '\u65e9\u8d77\u304d', consult: '\u76f8\u8ac7', diary: '\u65e5\u8a18' };
+    const tag = tagMap[mk2CM] || mk2CM;
+    const deedText = '\u3010' + tag + '\u3011' + mk2TextVal.trim();
+    upsertTodayLog(prev => ({
+      date: getTodayStr(), mission: prev?.mission || '', routines: prev?.routines || [],
+      todos: prev?.todos || [], samuraiMission: prev?.samuraiMission,
+      missionCompleted: prev?.missionCompleted, routineDone: prev?.routineDone || [],
+      review: prev?.review, goodDeeds: [...(prev?.goodDeeds || []), deedText],
+    }));
+    // Consult: send to samurai king
+    if (mk2CM === 'consult') {
+      setMk2ConsultLoading(true); setMk2SamuraiReply('');
+      setMk2Phase('mk2_consult_reply');
+      try {
+        const reply = await callSamuraiKing(mk2TextVal.trim());
+        setMk2SamuraiReply(reply);
+      } catch(e) {
+        setMk2SamuraiReply('\u901a\u4fe1\u30a8\u30e9\u30fc\u3067\u3054\u3056\u308b\u3002\u3057\u304b\u3057\u60a9\u307f\u3092\u66f8\u3044\u305f\u3053\u3068\u306f\u7acb\u6d3e\u3067\u3054\u3056\u308b\u3002');
+      }
+      setMk2ConsultLoading(false);
+      return;
+    }
+    // Other text missions: complete immediately
+    setMk2Done(prev => [...prev, mk2CM]);
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+    setMk2TextVal(''); setMk2Phase('menu');
+  };
+
+  const mk2AddListItem = () => {
+    if (!mk2ListInput.trim()) return;
+    const itemText = mk2ListInput.trim();
+    const next = [...mk2ListItems, itemText];
+    setMk2ListItems(next); setMk2ListInput('');
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    // Save to dailyLogs
+    const listTag = mk2CM === 'kansha' ? '\u611f\u8b1d' : '\u5584\u884c';
+    const deed = '\u3010' + listTag + '\u3011' + itemText;
+    upsertTodayLog(prev => ({
+      date: getTodayStr(), mission: prev?.mission || '', routines: prev?.routines || [],
+      todos: prev?.todos || [], samuraiMission: prev?.samuraiMission,
+      missionCompleted: prev?.missionCompleted, routineDone: prev?.routineDone || [],
+      review: prev?.review, goodDeeds: [...(prev?.goodDeeds || []), deed],
+    }));
+    try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
+    mk2DamageEffect();
+    const target = MK2_LIST_CFG[mk2CM]?.target || 10;
+    if (next.length >= target) {
+      setMk2Done(prev => [...prev, mk2CM]);
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+      setTimeout(() => { setMk2Phase('menu'); setMk2ListItems([]); }, 800);
+    }
+  };
+
+  const mk2DamageEffect = () => {
+    setMk2Flash(true); setTimeout(() => setMk2Flash(false), 150);
+    Animated.sequence([
+      Animated.timing(mk2Shake, { toValue: 15, duration: 50, useNativeDriver: true }),
+      Animated.timing(mk2Shake, { toValue: -15, duration: 50, useNativeDriver: true }),
+      Animated.timing(mk2Shake, { toValue: 10, duration: 40, useNativeDriver: true }),
+      Animated.timing(mk2Shake, { toValue: -10, duration: 40, useNativeDriver: true }),
+      Animated.timing(mk2Shake, { toValue: 0, duration: 30, useNativeDriver: true }),
+    ]).start();
+  };
+
+  const mk2TrainTap = () => {
+    const next = mk2Hits + 1; setMk2Hits(next);
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
+    mk2DamageEffect();
+    const target = mk2CM === 'training3' ? 5 : 3;
+    if (next >= target) {
+      setMk2Done(prev => [...prev, mk2CM]);
+      try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+      setTimeout(() => { setMk2Phase('menu'); setMk2Hits(0); }, 800);
+    }
+  };
+
+  const mk2PickPhoto = async () => {
+    try { const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 }); if (!r.canceled && r.assets?.[0]) { setMk2PhotoUri(r.assets[0].uri); setMk2Phase('mk2_reason'); } } catch(e) {}
+  };
+  const mk2TakePhoto = async () => {
+    try { const p = await ImagePicker.requestCameraPermissionsAsync(); if (!p.granted) return; const r = await ImagePicker.launchCameraAsync({ quality: 0.7 }); if (!r.canceled && r.assets?.[0]) { setMk2PhotoUri(r.assets[0].uri); setMk2Phase('mk2_reason'); } } catch(e) {}
+  };
+  const mk2SubmitReason = () => {
+    if (!mk2ReasonVal.trim()) return; playTapSound();
+    setMk2Done(prev => [...prev, 'photo']); setMk2ReasonVal(''); setMk2Phase('menu');
+    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+  };
+
+  const mk2StartFocus = () => {
+    let sec = 5; setMk2FocusLeft(5);
+    const id = setInterval(() => {
+      sec--; setMk2FocusLeft(sec);
+      if (sec <= 0) {
+        clearInterval(id);
+        setMk2Done(prev => [...prev, 'focus']);
+        try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+        mk2DamageEffect();
+      }
+    }, 1000);
+  };
+  // === END MK2 EVENT ===
+
   // === END ATODEYARU EVENT ===
 
   // === END MIKKABOZU EVENT ===
@@ -5450,7 +5702,7 @@ export default function App() {
         { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: atodeyaruEventDone, x: 0.3, y: 0.60 },
         { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: deebuEventDone, x: 0.6, y: 0.47 },
         { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: moumuriEventDone, x: 0.35, y: 0.34 },
-        { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: false, x: 0.5, y: 0.21 },
+        { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: mk2EventDone, x: 0.5, y: 0.21 },
       ];
       return (
         <ImageBackground source={WORLD1_BG} style={{ flex: 1 }} resizeMode="cover">
@@ -5462,7 +5714,7 @@ export default function App() {
             const isNext = !stage.cleared && W1_STAGES.filter(s => s.id < stage.id).every(s => s.cleared);
             const isLocked = !stage.cleared && !isNext;
             return (
-              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (stage.cleared && stage.id === 2) { startAtodeyaruEvent(); } else if (isNext && stage.id === 2) { startAtodeyaruEvent(); } else if (stage.cleared && stage.id === 3) { startDeebuEvent(); } else if (isNext && stage.id === 3) { startDeebuEvent(); } else if (stage.cleared && stage.id === 4) { startMoumuriEvent(); } else if (isNext && stage.id === 4) { startMoumuriEvent(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
+              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (stage.cleared && stage.id === 2) { startAtodeyaruEvent(); } else if (isNext && stage.id === 2) { startAtodeyaruEvent(); } else if (stage.cleared && stage.id === 3) { startDeebuEvent(); } else if (isNext && stage.id === 3) { startDeebuEvent(); } else if (stage.cleared && stage.id === 4) { startMoumuriEvent(); } else if (isNext && stage.id === 4) { startMoumuriEvent(); } else if (stage.cleared && stage.id === 5) { startMk2Event(); } else if (isNext && stage.id === 5) { startMk2Event(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
                 <View style={{ width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: stage.cleared ? '#DAA520' : isNext ? '#fff' : '#555', overflow: 'hidden', backgroundColor: '#000' }}>
                   <Image source={isLocked ? NODE_LOCKED : stage.icon} style={{ width: '100%', height: '100%' }} resizeMode='contain' />
                 </View>
@@ -6719,9 +6971,11 @@ export default function App() {
 
   // === Story Overlay ===
   if (storyActive) {
-    const currentScenes = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const currentScenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     const currentScene = currentScenes[sceneIndex] || currentScenes[0];
-    const sceneImg = storyStage === 4
+    const sceneImg = storyStage === 5
+      ? (currentScene.img === 2 ? STORY_SCENE2_IMG : STORY_SCENE1_IMG)
+      : storyStage === 4
       ? (currentScene.img === 2 ? MOUMURI_SCENE2_IMG : MOUMURI_SCENE1_IMG)
       : storyStage === 3
       ? (currentScene.img === 2 ? DEEBU_SCENE2_IMG : DEEBU_SCENE1_IMG)
@@ -6761,6 +7015,30 @@ export default function App() {
                 {SQ_MISSIONS.map((m) => (<TouchableOpacity key={m.id} onPress={() => selectMission(m.id)} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(79,195,247,0.1)', borderWidth: 1, borderColor: '#4FC3F7', borderRadius: 12, paddingVertical: 16, alignItems: 'center' }}><Text style={{ fontSize: 24, marginBottom: 6 }}>{m.icon}</Text><Text style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{m.label}</Text><Text style={{ color: '#4FC3F7', fontSize: 11, marginTop: 4 }}>{SQ_TOTAL + '問'}</Text></TouchableOpacity>))}
               </View>
               {samuraiVoice.length > 0 && (<View style={{ position: 'absolute', bottom: 80, left: 30, right: 30 }}><Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', textAlign: 'center', letterSpacing: 2 }}>{samuraiVoice}</Text></View>)}
+            </View>
+          )}
+
+          {storyPhase === 'missionBrief' && storyStage === 5 && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', paddingHorizontal: 24 }}>
+              <Image source={YOKAI_IMAGES.mikkabozu} style={{ width: 100, height: 100, borderRadius: 50, marginBottom: 12 }} resizeMode="contain" />
+              <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 6 }}>{'\u4e09\u65e5\u574a\u4e3bII'}</Text>
+              <Text style={{ color: '#888', fontSize: 13, marginBottom: 24 }}>{'\u6700\u7d42\u6c7a\u6226'}</Text>
+              <View style={{ backgroundColor: 'rgba(231,76,60,0.15)', borderWidth: 1, borderColor: '#e74c3c', borderRadius: 16, padding: 20, width: '100%', marginBottom: 12 }}>
+                <Text style={{ color: '#e74c3c', fontSize: 16, fontWeight: '900', textAlign: 'center' }}>{'\u{1f525} 3\u65e5\u9593\u9023\u7d9a\u3067\u5168\u30df\u30c3\u30b7\u30e7\u30f3\u9054\u6210'}</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(218,165,32,0.1)', borderRadius: 12, padding: 14, width: '100%', marginBottom: 8 }}>
+                <Text style={{ color: '#DAA520', fontSize: 13, textAlign: 'center' }}>{'DAY1: \u76ee\u6a19 + \u65e9\u8d77\u304d + \u7b4b\u30c8\u30ec30 + \u6b32\u671b\u65ad\u3061'}</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(79,195,247,0.1)', borderRadius: 12, padding: 14, width: '100%', marginBottom: 8 }}>
+                <Text style={{ color: '#4FC3F7', fontSize: 13, textAlign: 'center' }}>{'DAY2: \u96c6\u4e2d + \u76f8\u8ac7 + \u611f\u8b1d15 + \u4e09\u5584'}</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(155,89,182,0.1)', borderRadius: 12, padding: 14, width: '100%', marginBottom: 16 }}>
+                <Text style={{ color: '#c39bd3', fontSize: 13, textAlign: 'center' }}>{'DAY3: \u65e5\u8a18 + \u30eb\u30fc\u30c6\u30a3\u30f3\u5168 + TODO\u5168 + \u7b4b\u30c8\u30ec50'}</Text>
+              </View>
+              <Text style={{ color: '#e74c3c', fontSize: 11, textAlign: 'center', marginBottom: 24 }}>{'\u203b 1\u65e5\u3067\u3082\u30b5\u30dc\u308b\u3068\u30ea\u30bb\u30c3\u30c8'}</Text>
+              <TouchableOpacity onPress={async () => { setStoryActive(false); storyOverlayOpacity.setValue(0); setMk2Active(true); try { await AsyncStorage.setItem(MK2_ACTIVE_KEY, 'true'); await AsyncStorage.setItem(MK2_PROGRESS_KEY, JSON.stringify({day1:null,day2:null,day3:null})); } catch(e) {} }} style={{ backgroundColor: 'rgba(231,76,60,0.2)', borderWidth: 1, borderColor: '#e74c3c', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#e74c3c', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'\u53d7\u3051\u3066\u7acb\u3064'}</Text>
+              </TouchableOpacity>
             </View>
           )}
 
@@ -6850,14 +7128,14 @@ export default function App() {
 
           {storyPhase === 'defeat' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(sc[4].text); } }} />
+              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(sc[4].text); } }} />
               <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
             </View>
           )}
 
           {storyPhase === 'victory' && (
             <TouchableOpacity activeOpacity={1} onPress={advanceVictoryScene} style={{ flex: 1 }}>
-              <ImageBackground source={storyStage === 4 ? MOUMURI_SCENE2_IMG : storyStage === 3 ? DEEBU_SCENE2_IMG : storyStage === 2 ? ATODEYARU_SCENE2_IMG : STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
+              <ImageBackground source={storyStage === 5 ? STORY_SCENE2_IMG : storyStage === 4 ? MOUMURI_SCENE2_IMG : storyStage === 3 ? DEEBU_SCENE2_IMG : storyStage === 2 ? ATODEYARU_SCENE2_IMG : STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
                 <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
                 </View>
@@ -6867,14 +7145,82 @@ export default function App() {
             </TouchableOpacity>
           )}
 
+          {storyPhase === 'ending1' && (
+            <Pressable onPress={() => { if (storyTypingDone && !endingStarted.current) {
+              endingStarted.current = true;
+              endingW1Op.setValue(0);
+              setStoryPhase('ending2');
+              Animated.timing(endingW1Op, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+              Audio.Sound.createAsync(WIN_SOUND).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())).catch(e => {});
+              setTimeout(() => {
+                setStoryTypeText(''); setStoryTypingDone(false);
+                setStoryPhase('ending3');
+                endingSilhouetteOp.setValue(0);
+                endingActive.current = true;
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.8).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 1500));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(1.0).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 3000));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return;
+                  Animated.timing(endingSilhouetteOp, { toValue: 1, duration: 2000, useNativeDriver: true }).start();
+                  Audio.Sound.createAsync(SFX_EYE_GLOW).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.6).then(() => sound.playAsync()); }).catch(e => {});
+                }, 4000));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; storyTypewriter('三日坊主が負けたか。\n\n俺はテツヤ。\n夜を支配する者だ。\n\n……面白い。'); }, 5500));
+              }, 4000);
+            } }} style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Text style={{ color: '#DAA520', fontSize: 28, fontWeight: '900', letterSpacing: 6, textAlign: 'center' }}>{storyTypeText}</Text>
+              {storyTypingDone && (
+                <Text style={{ color: '#555', fontSize: 12, marginTop: 40 }}>{'タップで次へ'}</Text>
+              )}
+            </Pressable>
+          )}
+
+          {storyPhase === 'ending2' && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Animated.View style={{ opacity: endingW1Op, alignItems: 'center' }}>
+                <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 5, marginBottom: 12 }}>{'WORLD 1'}</Text>
+                <Text style={{ color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 6, marginBottom: 16 }}>{'COMPLETE'}</Text>
+                <View style={{ width: 60, height: 2, backgroundColor: '#DAA520', marginBottom: 16 }} />
+                <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 2 }}>{'三日坊主を倒した。'}</Text>
+              </Animated.View>
+            </View>
+          )}
+
+          {storyPhase === 'ending3' && (
+            <Pressable onPress={() => { if (storyTypingDone) {
+              endingActive.current = false;
+              endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = [];
+              endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = [];
+              endingW2Op.setValue(0);
+              setStoryPhase('ending4');
+              Animated.timing(endingW2Op, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+            } }} style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Animated.Image source={TETSUYA_SILHOUETTE} style={{ width: 200, height: 200, opacity: endingSilhouetteOp, marginBottom: 30 }} resizeMode="contain" />
+              <Text style={{ color: '#9b59b6', fontSize: 20, fontWeight: '900', letterSpacing: 3, textAlign: 'center', lineHeight: 32 }}>{storyTypeText}</Text>
+              {storyTypingDone && (
+                <Text style={{ color: '#555', fontSize: 12, marginTop: 40 }}>{'タップで次へ'}</Text>
+              )}
+            </Pressable>
+          )}
+
+          {storyPhase === 'ending4' && (
+            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+              <Animated.View style={{ opacity: endingW2Op, alignItems: 'center' }}>
+                <Text style={{ color: '#9b59b6', fontSize: 14, letterSpacing: 5, marginBottom: 12 }}>{'WORLD 2'}</Text>
+                <Text style={{ color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 4, marginBottom: 30 }}>{'―― 近日実装 ――'}</Text>
+              </Animated.View>
+              <TouchableOpacity onPress={completeStoryEvent} style={{ marginTop: 40, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'修行の間へ'}</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           {storyPhase === 'clear' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
               <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 3, marginBottom: 8 }}>WORLD 1</Text>
-              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>{storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
-              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
+              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>{storyStage === 5 ? 'FINAL STAGE CLEAR' : storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
+              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 5 ? '三日坊主IIを討伐' : storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
               <Text style={{ color: '#888', fontSize: 12, marginBottom: 4 }}>+50 XP</Text>
-              <TouchableOpacity onPress={completeStoryEvent} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
-                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'修行の間へ'}</Text>
+              <TouchableOpacity onPress={() => { if (storyStage === 5) { endingStarted.current = false; endingStarted.current = false; endingActive.current = false; endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = []; endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = []; setStoryPhase('ending1'); setTimeout(() => storyTypewriter('お前はもう\n三日坊主ではない。'), 800); } else { completeStoryEvent(); } }} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{storyStage === 5 ? '次へ' : '修行の間へ'}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -7260,6 +7606,318 @@ export default function App() {
             )}
           </View>
       </KeyboardAvoidingView>
+
+      {/* Floating MK2 */}
+      {mk2Active && !storyActive && (
+        <Pressable onPress={openMk2Battle} style={{ position: 'absolute', bottom: 130, right: 12, zIndex: 999, alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.8)', borderRadius: 16, padding: 10, borderWidth: 2, borderColor: '#e74c3c' }}>
+          <Image source={YOKAI_IMAGES.mikkabozu} style={{ width: 56, height: 56, borderRadius: 28 }} resizeMode="contain" />
+          <Text style={{ color: '#ff6b6b', fontSize: 9, fontWeight: '900', marginTop: 3 }}>{'\u4e09\u65e5\u574a\u4e3bII'}</Text>
+          <View style={{ backgroundColor: '#e74c3c', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3 }}>
+            <Text style={{ color: '#fff', fontSize: 10, fontWeight: '900' }}>{'\u6700\u7d42\u6c7a\u6226'}</Text>
+          </View>
+        </Pressable>
+      )}
+
+      {/* MK2 Battle Modal */}
+      {mk2BO && (
+        <Modal visible={true} animationType="slide" transparent={false}>
+          <View style={{ flex: 1, backgroundColor: '#0a0a1a' }}>
+            <View style={{ paddingTop: 60, paddingHorizontal: 20, paddingBottom: 12, backgroundColor: '#0d0d20', borderBottomWidth: 1, borderBottomColor: '#222' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <TouchableOpacity onPress={() => setMk2BO(false)}><Text style={{ color: '#888', fontSize: 14 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                <Text style={{ color: '#e74c3c', fontSize: 18, fontWeight: '900', letterSpacing: 2 }}>{'\u4e09\u65e5\u574a\u4e3bII'}</Text>
+                <View style={{ width: 50 }} />
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
+              {/* Day tabs */}
+              <View style={{ flexDirection: 'row', marginBottom: 16 }}>
+                {[1,2,3].map(d => (
+                  <View key={d} style={{ flex: 1, marginHorizontal: 3, backgroundColor: mk2Day === d ? (d === 1 ? 'rgba(218,165,32,0.2)' : d === 2 ? 'rgba(79,195,247,0.2)' : 'rgba(155,89,182,0.2)') : '#111', borderRadius: 10, paddingVertical: 10, alignItems: 'center', borderWidth: mk2Day === d ? 2 : 1, borderColor: mk2Day === d ? (d === 1 ? '#DAA520' : d === 2 ? '#4FC3F7' : '#9b59b6') : '#333' }}>
+                    <Text style={{ color: mk2Day === d ? '#fff' : '#555', fontSize: 12, fontWeight: '900' }}>{'DAY ' + d}</Text>
+                    <Text style={{ color: mk2Day === d ? '#888' : '#333', fontSize: 10 }}>{d === 1 ? '\u4f53' : d === 2 ? '\u5fc3' : '\u7fd2\u6163'}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Boss */}
+              <View style={{ alignItems: 'center', marginBottom: 16 }}>
+                <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                  {mk2Flash && <View style={{ position: 'absolute', width: 90, height: 90, borderRadius: 45, backgroundColor: 'rgba(231,76,60,0.5)', zIndex: 2 }} />}
+                  <Animated.Image source={YOKAI_IMAGES.mikkabozu} style={{ width: 80, height: 80, borderRadius: 40, transform: [{ translateX: mk2Shake }] }} resizeMode="contain" />
+                </View>
+                <View style={{ width: '70%', height: 8, backgroundColor: '#222', borderRadius: 4, marginTop: 4 }}>
+                  <View style={{ width: (Math.max(0, 3 - (mk2Day - 1)) / 3 * 100) + '%', height: 8, backgroundColor: '#e74c3c', borderRadius: 4 }} />
+                </View>
+                <Text style={{ color: '#666', fontSize: 11, marginTop: 4 }}>{'HP ' + Math.max(0, 3 - (mk2Day - 1)) + '/3'}</Text>
+              </View>
+
+              {/* Reset warning */}
+              {mk2WasReset && mk2Phase === 'menu' && (
+                <View style={{ backgroundColor: 'rgba(231,76,60,0.15)', borderWidth: 1, borderColor: '#e74c3c', borderRadius: 12, padding: 14, marginBottom: 14 }}>
+                  <Text style={{ color: '#e74c3c', fontSize: 14, fontWeight: '900', textAlign: 'center' }}>{'\u3084\u3063\u3071\u308a\u4e09\u65e5\u574a\u4e3b\u3060\u306a\u3002\n\u6700\u521d\u304b\u3089\u3084\u308a\u76f4\u3057\u3060\u3002'}</Text>
+                </View>
+              )}
+
+              {/* Menu - mission cards */}
+              {mk2Phase === 'menu' && (
+                <View>
+                  {(mk2Day === 1 ? MK2_DAY1 : mk2Day === 2 ? MK2_DAY2 : MK2_DAY3).map(id => {
+                    const m = MK2_MISSIONS[id]; if (!m) return null;
+                    const done = mk2Done.includes(id);
+                    return (
+                      <Pressable key={id} onPress={() => { if (!done) { setMk2CM(id); if (m.phase === 'mk2_text') setMk2TextVal(''); if (m.phase === 'mk2_list') { setMk2ListItems([]); setMk2ListInput(''); } if (m.phase === 'mk2_ts') setMk2Hits(0); if (m.phase === 'mk2_focus') setMk2FocusLeft(5); setMk2Phase(m.phase); if (id === 'routines' || id === 'todos') { const tl = dailyLogs.find(l => l.date === getTodayStr()); if (id === 'routines' && tl && tl.routines.length > 0 && (tl.routineDone||[]).length >= tl.routines.length) { setMk2Done(prev => [...prev,'routines']); } if (id === 'todos' && tl && (tl.todos.length === 0 || tl.todos.every(t => t.done))) { setMk2Done(prev => [...prev,'todos']); } } } }} style={{ backgroundColor: done ? 'rgba(46,204,113,0.1)' : 'rgba(255,255,255,0.03)', borderWidth: 2, borderColor: done ? '#2ecc71' : '#333', borderRadius: 16, padding: 18, marginBottom: 10, flexDirection: 'row', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 28, marginRight: 12 }}>{done ? '\u2714\uFE0F' : m.icon}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: done ? '#2ecc71' : '#fff', fontSize: 15, fontWeight: '900' }}>{done ? m.title + '\u9054\u6210\uff01' : m.title}</Text>
+                          <Text style={{ color: '#888', fontSize: 11, marginTop: 2 }}>{m.sub}</Text>
+                        </View>
+                        {!done && <Text style={{ color: '#555', fontSize: 18 }}>{'\u203a'}</Text>}
+                      </Pressable>
+                    );
+                  })}
+                  {(mk2Day === 1 ? MK2_DAY1 : mk2Day === 2 ? MK2_DAY2 : MK2_DAY3).every(id => mk2Done.includes(id)) && (
+                    <TouchableOpacity onPress={mk2CompleteDay} style={{ backgroundColor: '#e74c3c', borderRadius: 16, paddingVertical: 18, alignItems: 'center', marginTop: 10 }}>
+                      <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{mk2Day === 3 ? '\u3068\u3069\u3081\u3092\u523a\u305b\uff01' : 'DAY ' + mk2Day + ' CLEAR!'}</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
+
+              {/* Text input phase */}
+              {mk2Phase === 'mk2_text' && MK2_TEXT_CFG[mk2CM] && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: '900', marginBottom: 8 }}>{MK2_TEXT_CFG[mk2CM].title}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 20, textAlign: 'center' }}>{MK2_TEXT_CFG[mk2CM].prompt}</Text>
+                  <TextInput style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16, fontSize: 16, color: '#fff', width: '100%', minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#333', marginBottom: 16 }} placeholder={MK2_TEXT_CFG[mk2CM].ph} placeholderTextColor="#555" multiline value={mk2TextVal} onChangeText={setMk2TextVal} />
+                  <TouchableOpacity onPress={mk2SubmitText} style={{ backgroundColor: mk2TextVal.trim() ? '#DAA520' : '#333', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 50, opacity: mk2TextVal.trim() ? 1 : 0.5 }}>
+                    <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{MK2_TEXT_CFG[mk2CM].btn}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12, marginTop: 8 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* List input phase */}
+              {mk2Phase === 'mk2_list' && MK2_LIST_CFG[mk2CM] && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 8 }}>{MK2_LIST_CFG[mk2CM].title}</Text>
+                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 16 }}>{mk2ListItems.length + ' / ' + MK2_LIST_CFG[mk2CM].target}</Text>
+                  {mk2ListItems.map((k, i) => (
+                    <View key={i} style={{ backgroundColor: 'rgba(79,195,247,0.08)', borderRadius: 10, padding: 12, width: '100%', marginBottom: 6, flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ color: '#4FC3F7', fontSize: 14, marginRight: 8 }}>{(i+1) + '.'}</Text>
+                      <Text style={{ color: '#ccc', fontSize: 14, flex: 1 }}>{k}</Text>
+                    </View>
+                  ))}
+                  {mk2ListItems.length < MK2_LIST_CFG[mk2CM].target && (
+                    <View style={{ flexDirection: 'row', width: '100%', marginTop: 10, marginBottom: 16 }}>
+                      <TextInput style={{ flex: 1, backgroundColor: '#1a1a2e', borderRadius: 12, padding: 14, fontSize: 15, color: '#fff', borderWidth: 1, borderColor: '#333', marginRight: 8 }} placeholder={MK2_LIST_CFG[mk2CM].ph} placeholderTextColor="#555" value={mk2ListInput} onChangeText={setMk2ListInput} onSubmitEditing={mk2AddListItem} returnKeyType="done" />
+                      <TouchableOpacity onPress={mk2AddListItem} style={{ backgroundColor: mk2ListInput.trim() ? '#4FC3F7' : '#333', borderRadius: 12, paddingHorizontal: 16, justifyContent: 'center', opacity: mk2ListInput.trim() ? 1 : 0.5 }}>
+                        <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'+'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* Consult reply */}
+              {mk2Phase === 'mk2_consult_reply' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#DAA520', fontSize: 18, fontWeight: '900', marginBottom: 16, letterSpacing: 2 }}>{'\u{1f3ef} \u4f8d\u30ad\u30f3\u30b0\u306e\u8a00\u8449'}</Text>
+                  {mk2ConsultLoading ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                      <ActivityIndicator size="large" color="#DAA520" />
+                      <Text style={{ color: '#888', fontSize: 13, marginTop: 12 }}>{'\u4f8d\u304c\u8003\u3048\u4e2d...'}</Text>
+                    </View>
+                  ) : (
+                    <View style={{ width: '100%' }}>
+                      <View style={{ backgroundColor: 'rgba(218,165,32,0.1)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 16, padding: 20, marginBottom: 20 }}>
+                        <Text style={{ color: '#ddd', fontSize: 15, lineHeight: 24 }}>{mk2SamuraiReply}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => { setMk2Done(prev => [...prev, 'consult']); try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {} setMk2TextVal(''); setMk2Phase('menu'); }} style={{ backgroundColor: '#DAA520', borderRadius: 14, paddingVertical: 16, alignItems: 'center' }}>
+                        <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'\u627f\u77e5\uff01'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Training select */}
+              {mk2Phase === 'mk2_ts' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: '900', marginBottom: 16, letterSpacing: 2 }}>{'\u7b4b\u30c8\u30ec\u3092\u9078\u3079'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 16 }}>
+                    {DEEBU_EXERCISES.map((ex) => (
+                      <TouchableOpacity key={ex.id} onPress={() => { setMk2TT(ex.id); setMk2Hits(0); setMk2Phase('mk2_training'); }} style={{ flex: 1, marginHorizontal: 4, backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 2, borderColor: '#DAA520', borderRadius: 14, paddingVertical: 20, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 28, marginBottom: 6 }}>{ex.icon}</Text>
+                        <Text style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>{ex.label}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* Training counter */}
+              {mk2Phase === 'mk2_training' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#888', fontSize: 14, marginBottom: 6 }}>{'\u2694\uFE0F ' + (DEEBU_EXERCISES.find(e => e.id === mk2TT)?.label || '')}</Text>
+                  <Text style={{ color: '#fff', fontSize: 80, fontWeight: '900', marginBottom: 4 }}>{mk2Hits}</Text>
+                  <Text style={{ color: '#666', fontSize: 14, marginBottom: 30 }}>{mk2Hits + ' / ' + (mk2CM === 'training3' ? 50 : 30)}</Text>
+                  {!mk2Done.includes(mk2CM) ? (
+                    <TouchableOpacity onPress={mk2TrainTap} style={{ width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(218,165,32,0.15)', borderWidth: 3, borderColor: '#DAA520', justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ color: '#DAA520', fontSize: 28, fontWeight: '900' }}>{'\u62bc\u305b\uff01'}</Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ color: '#2ecc71', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 16 }}>{'\u7b4b\u30c8\u30ec\u5b8c\u4e86\uff01'}</Text>
+                      <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 }}>
+                        <Text style={{ color: '#DAA520', fontSize: 14, fontWeight: 'bold' }}>{'\u6b21\u3078'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Photo */}
+              {mk2Phase === 'mk2_photo' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 8 }}>{'\u{1f4f8} \u6b32\u671b\u3092\u65ad\u3066'}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 24, textAlign: 'center' }}>{'\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u64ae\u308c'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 16 }}>
+                    <TouchableOpacity onPress={mk2TakePhoto} style={{ backgroundColor: 'rgba(79,195,247,0.15)', borderWidth: 2, borderColor: '#4FC3F7', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 24, alignItems: 'center', marginRight: 16 }}>
+                      <Text style={{ fontSize: 28, marginBottom: 4 }}>{'\u{1f4f7}'}</Text>
+                      <Text style={{ color: '#4FC3F7', fontSize: 13, fontWeight: 'bold' }}>{'\u64ae\u5f71'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={mk2PickPhoto} style={{ backgroundColor: 'rgba(79,195,247,0.15)', borderWidth: 2, borderColor: '#4FC3F7', borderRadius: 14, paddingVertical: 18, paddingHorizontal: 24, alignItems: 'center' }}>
+                      <Text style={{ fontSize: 28, marginBottom: 4 }}>{'\u{1f5bc}\uFE0F'}</Text>
+                      <Text style={{ color: '#4FC3F7', fontSize: 13, fontWeight: 'bold' }}>{'\u9078\u629e'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* Reason */}
+              {mk2Phase === 'mk2_reason' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#4FC3F7', fontSize: 16, fontWeight: '900', marginBottom: 12 }}>{'\u306a\u305c\u6211\u6162\u3059\u308b\uff1f'}</Text>
+                  {mk2PhotoUri && <Image source={{ uri: mk2PhotoUri }} style={{ width: 160, height: 160, borderRadius: 12, marginBottom: 16, borderWidth: 2, borderColor: '#333' }} />}
+                  <TextInput style={{ backgroundColor: '#1a1a2e', borderRadius: 12, padding: 16, fontSize: 16, color: '#fff', width: '100%', minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: '#333', marginBottom: 16 }} placeholder={'\u6211\u6162\u3059\u308b\u7406\u7531\u3092\u66f8\u3051'} placeholderTextColor="#555" multiline value={mk2ReasonVal} onChangeText={setMk2ReasonVal} />
+                  <TouchableOpacity onPress={mk2SubmitReason} style={{ backgroundColor: mk2ReasonVal.trim() ? '#4FC3F7' : '#333', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 50, opacity: mk2ReasonVal.trim() ? 1 : 0.5 }}>
+                    <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'\u6b32\u671b\u3092\u65ad\u3061\u5207\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Focus */}
+              {mk2Phase === 'mk2_focus' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#9b59b6', fontSize: 18, fontWeight: '900', marginBottom: 16, letterSpacing: 2 }}>{'\u{1f9d8} \u96c6\u4e2d\u305b\u3088'}</Text>
+                  {mk2FocusLeft > 0 && !mk2Done.includes('focus') ? (
+                    <View style={{ alignItems: 'center' }}>
+                      {mk2FocusLeft === 5 ? (
+                        <TouchableOpacity onPress={mk2StartFocus} style={{ width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(155,89,182,0.15)', borderWidth: 3, borderColor: '#9b59b6', justifyContent: 'center', alignItems: 'center' }}>
+                          <Text style={{ color: '#9b59b6', fontSize: 24, fontWeight: '900' }}>{'START'}</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <View style={{ alignItems: 'center' }}>
+                          <Text style={{ color: '#fff', fontSize: 80, fontWeight: '900' }}>{mk2FocusLeft}</Text>
+                          <View style={{ width: 200, height: 8, backgroundColor: '#222', borderRadius: 4, marginTop: 12 }}>
+                            <View style={{ width: ((5 - mk2FocusLeft) / 5 * 100) + '%', height: 8, backgroundColor: '#9b59b6', borderRadius: 4 }} />
+                          </View>
+                          <Text style={{ color: '#888', fontSize: 13, marginTop: 12 }}>{'\u96d1\u5ff5\u3092\u6368\u3066\u308d'}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ) : (
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={{ color: '#2ecc71', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 16 }}>{'\u96c6\u4e2d\u5b8c\u4e86\uff01'}</Text>
+                      <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ backgroundColor: 'rgba(155,89,182,0.2)', borderWidth: 1, borderColor: '#9b59b6', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 }}>
+                        <Text style={{ color: '#9b59b6', fontSize: 14, fontWeight: 'bold' }}>{'\u6b21\u3078'}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12, marginTop: 16 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* Check routines/todos */}
+              {mk2Phase === 'mk2_check' && (
+                <View style={{ alignItems: 'center' }}>
+                  {(() => {
+                    const tl = dailyLogs.find(l => l.date === getTodayStr());
+                    if (mk2CM === 'routines') {
+                      const total = tl?.routines?.length || 0;
+                      const doneC = (tl?.routineDone || []).length;
+                      const ok = total > 0 && doneC >= total;
+                      return (
+                        <View style={{ alignItems: 'center' }}>
+                          <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 12 }}>{'\u{1f4cb} \u30eb\u30fc\u30c6\u30a3\u30f3\u30c1\u30a7\u30c3\u30af'}</Text>
+                          <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900', marginBottom: 4 }}>{doneC + '/' + total}</Text>
+                          {ok || mk2Done.includes('routines') ? (
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ color: '#2ecc71', fontSize: 20, fontWeight: '900', marginBottom: 16 }}>{'\u5168\u5b8c\u4e86\uff01'}</Text>
+                              <TouchableOpacity onPress={() => { if (!mk2Done.includes('routines')) setMk2Done(prev => [...prev,'routines']); setMk2Phase('menu'); }} style={{ backgroundColor: 'rgba(46,204,113,0.2)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 }}>
+                                <Text style={{ color: '#2ecc71', fontSize: 14, fontWeight: 'bold' }}>{'\u78ba\u8a8d'}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <Text style={{ color: '#e74c3c', fontSize: 14, marginTop: 12, textAlign: 'center' }}>{'\u30eb\u30fc\u30c6\u30a3\u30f3\u3092\u5168\u3066\u3053\u306a\u3057\u3066\u304b\u3089\u623b\u308c'}</Text>
+                          )}
+                        </View>
+                      );
+                    } else {
+                      const total = tl?.todos?.length || 0;
+                      const doneC = tl?.todos?.filter(t => t.done)?.length || 0;
+                      const ok = total === 0 || doneC >= total;
+                      return (
+                        <View style={{ alignItems: 'center' }}>
+                          <Text style={{ color: '#4FC3F7', fontSize: 18, fontWeight: '900', marginBottom: 12 }}>{'\u2705 TODO\u30c1\u30a7\u30c3\u30af'}</Text>
+                          <Text style={{ color: '#fff', fontSize: 40, fontWeight: '900', marginBottom: 4 }}>{doneC + '/' + total}</Text>
+                          {ok || mk2Done.includes('todos') ? (
+                            <View style={{ alignItems: 'center' }}>
+                              <Text style={{ color: '#2ecc71', fontSize: 20, fontWeight: '900', marginBottom: 16 }}>{'\u5168\u5b8c\u4e86\uff01'}</Text>
+                              <TouchableOpacity onPress={() => { if (!mk2Done.includes('todos')) setMk2Done(prev => [...prev,'todos']); setMk2Phase('menu'); }} style={{ backgroundColor: 'rgba(46,204,113,0.2)', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 40 }}>
+                                <Text style={{ color: '#2ecc71', fontSize: 14, fontWeight: 'bold' }}>{'\u78ba\u8a8d'}</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <Text style={{ color: '#e74c3c', fontSize: 14, marginTop: 12, textAlign: 'center' }}>{'TODO\u3092\u5168\u3066\u5b8c\u4e86\u3057\u3066\u304b\u3089\u623b\u308c'}</Text>
+                          )}
+                        </View>
+                      );
+                    }
+                  })()}
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12, marginTop: 16 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {/* Day clear */}
+              {mk2Phase === 'day_clear' && (
+                <View style={{ alignItems: 'center', paddingTop: 30 }}>
+                  <Text style={{ color: '#2ecc71', fontSize: 28, fontWeight: '900', letterSpacing: 3, marginBottom: 12 }}>{'DAY ' + mk2Day + ' CLEAR!'}</Text>
+                  <Text style={{ color: '#888', fontSize: 14, textAlign: 'center', lineHeight: 24, marginBottom: 30 }}>{'\u660e\u65e5\u307e\u305f\u6765\u3044\u3002\n\u30b5\u30dc\u3063\u305f\u3089\u30ea\u30bb\u30c3\u30c8\u3060\u305e\u3002'}</Text>
+                  <TouchableOpacity onPress={() => setMk2BO(false)} style={{ backgroundColor: 'rgba(46,204,113,0.2)', borderWidth: 1, borderColor: '#2ecc71', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+                    <Text style={{ color: '#2ecc71', fontSize: 16, fontWeight: 'bold' }}>{'\u9589\u3058\u308b'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* All done */}
+              {mk2Phase === 'done' && (
+                <View style={{ alignItems: 'center', paddingTop: 30 }}>
+                  <Text style={{ color: '#2ecc71', fontSize: 24, fontWeight: '900', letterSpacing: 3, marginBottom: 20 }}>{'3\u65e5\u9593\u5168\u9054\u6210\uff01'}</Text>
+                  <TouchableOpacity onPress={() => triggerMk2Defeat()} style={{ backgroundColor: '#e74c3c', borderRadius: 16, paddingVertical: 18, paddingHorizontal: 50 }}>
+                    <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', letterSpacing: 3 }}>{'\u3068\u3069\u3081\u3092\u523a\u305b\uff01'}</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
+      )}
 
       {/* Floating Moumuri */}
       {moumuriActive && !storyActive && (

@@ -82,6 +82,13 @@ import { callSamuraiKing, callSamuraiMissionGPT } from './src/utils/api';
 import { styles } from './src/styles';
 import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from './src/data/texts';
 import { SamuraiAvatar } from './src/components/SamuraiAvatar';
+import { STORY_SCENES, ATODEYARU_SCENES, DEEBU_SCENES, MOUMURI_SCENES, MK2_SCENES } from './src/data/storyScenes';
+import {
+  MISSION_TARGET, SQ_TOTAL, MOUMURI_KANSHA_TARGET, DEEBU_HIT_TARGET,
+  MK2_DAY1, MK2_DAY2, MK2_DAY3, MK2_MISSIONS, MK2_TEXT_CFG, MK2_LIST_CFG,
+  DEEBU_EXERCISES, ATODEYARU_QUIPS, PHYSICAL_MISSIONS, SQ_MISSIONS, SQ_DATA,
+  IMINASHI_MESSAGES, SAMURAI_KING_DEFEAT_QUOTES,
+} from './src/data/gameData';
 
 
 // =========================
@@ -3566,11 +3573,6 @@ export default function App() {
   };
 
   // ===== IMINASHI Functions =====
-  const IMINASHI_MESSAGES = [
-    '……それ、本当に意味あったか？',
-    '虚無が立ちはだかった',
-    '形だけの修行は、力にならない',
-  ];
 
   const checkIminashi = (text: string): boolean => {
     const trimmed = text.trim();
@@ -3737,14 +3739,6 @@ export default function App() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
   };
 
-  const SAMURAI_KING_DEFEAT_QUOTES = [
-    'よくやった。だが、油断するな',
-    'それがお前の力だ',
-    '行動した者だけが、斜れる',
-    '修行は続く。止まるな',
-    '一太刀、見事だ',
-    '弱い心を斜ったのは、お前自身だ',
-  ];
 
   const yokaiAttack = async () => {
     if (yokaiPhase !== 'appear' || !yokaiEncounter) return;
@@ -4286,8 +4280,6 @@ export default function App() {
   // ============================================================
   const SCREEN_W = Dimensions.get('window').width;
   const SCREEN_H = Dimensions.get('window').height;
-  const MISSION_TARGET = 10;
-  const SQ_TOTAL = 3;
   const [mikkabozuEventDone, setMikkabozuEventDone] = useState(false);
   const [innerWorldUnlocked, setInnerWorldUnlocked] = useState(false);
   const [atodeyaruEventDone, setAtodeyaruEventDone] = useState(false);
@@ -4358,130 +4350,20 @@ export default function App() {
   const [sqAnswered, setSqAnswered] = useState(false);
   const [sqCorrect, setSqCorrect] = useState(false);
 
-  const STORY_SCENES = [
-    { img: 1, text: 'ようこそ。\nここは“続かなかった奴ら”が\n山ほど来る場所。' },
-    { img: 1, text: 'ここではな、\n行動したら、敵が消える。\nそれだけ。' },
-    { img: 1, text: '俺は“三日坊主”。\nお前が続かない限り、\n何回でも出てくる。' },
-    { img: 1, text: '試しにやってみ。\n逃げ場はないけど、\nやることは簡単や。' },
-    { img: 2, text: '……あ。\n今のは、効いたわ。' },
-    { img: 2, text: '勘違いすんなよ。\nまたサボったら、\nすぐ会えるから。' },
-  ];
 
-  const ATODEYARU_SCENES = [
-    { img: 1, text: 'あー...めんどくさ。\nまた明日でいいっしょ。' },
-    { img: 1, text: 'ルーティン？TODO？\n知らんし。' },
-    { img: 1, text: '俺がいる限り、\nお前は何も終わらない。' },
-    { img: 1, text: 'やれるもんなら\n今日中にやってみ？' },
-    { img: 2, text: 'マジかよ...\n今日やっちゃうのかよ...' },
-    { img: 2, text: 'くそ...次の奴は\nもっと手強いから。' },
-  ];
 
-  const DEEBU_SCENES = [
-    { img: 1, text: '\u4ffa\u307f\u305f\u3044\u306b\u306a\u308c\u3088\u3002\n\u98df\u3063\u3066\u5bdd\u3066\u308c\u3070\u3044\u3044\u3058\u3083\u3093\u3002' },
-    { img: 1, text: '\u7b4b\u30c8\u30ec\uff1f\u306f\u3041\uff1f\n\u305d\u3093\u306a\u3053\u3068\u3088\u308a\n\u30c9\u30fc\u30ca\u30c4\u98df\u3079\u3088\u3046\u305c\u3002' },
-    { img: 1, text: '\u4ffa\u304c\u3044\u308b\u9650\u308a\u3001\n\u304a\u524d\u306f\u6c38\u9060\u306b\n\u30c0\u30e9\u30c0\u30e9\u3060\u3002' },
-    { img: 1, text: '\u3067\u304d\u308b\u3082\u3093\u306a\u3089\u3001\n\u4f53\u52d5\u304b\u3057\u3066\u307f\u308d\u3088\u3002\n\u304a\u83d3\u5b50\u3082\u6211\u6162\u3057\u3066\u307f\u308d\u3088\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
-    { img: 2, text: '\u306f\u3041\u2026\u306f\u3041\u2026\n\u304a\u524d\u2026\u52d5\u3051\u308b\u306e\u304b\u3088\u2026' },
-    { img: 2, text: '\u304f\u305d\u2026\u6b21\u306f\n\u3082\u3063\u3068\u5f37\u3044\u5974\u304c\n\u5f85\u3063\u3066\u308b\u304b\u3089\u306a\u2026' },
-  ];
 
-  const MOUMURI_SCENES = [
-    { img: 1, text: '\u3053\u306e\u4eba\u751f\u3082\u3046\u7121\u7406\u3060\u3063\u3066\u3002\n\u4e00\u7dd2\u306b\u30c0\u30e9\u30c0\u30e9\u3057\u3088\u3046\u305c\u3002' },
-    { img: 1, text: '\u611f\u8b1d\uff1f\u512a\u3057\u3055\uff1f\n\u305d\u3093\u306a\u3082\u306e\u306b\n\u610f\u5473\u306a\u3093\u3066\u306a\u3044\u3063\u3066\u3002' },
-    { img: 1, text: '\u4ffa\u304c\u3044\u308b\u9650\u308a\u3001\n\u304a\u524d\u306f\u8ab0\u306b\u3082\n\u611f\u8b1d\u3067\u304d\u306a\u3044\u3002' },
-    { img: 1, text: '\u3067\u304d\u308b\u3082\u3093\u306a\u3089\u3001\n\u4eba\u306b\u512a\u3057\u304f\u3057\u3066\u307f\u308d\u3088\u3002\n\u611f\u8b1d\u3057\u3066\u307f\u308d\u3088\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
-    { img: 2, text: '\u306a\u3093\u3060\u3088\u2026\n\u611f\u8b1d\u3068\u304b\u3067\u304d\u308b\u306e\u304b\u3088\u2026' },
-    { img: 2, text: '\u304f\u305d\u2026\u6b21\u306f\n\u3082\u3063\u3068\u5f37\u3044\u5974\u304c\n\u5f85\u3063\u3066\u308b\u304b\u3089\u306a\u2026' },
-  ];
 
-  const MK2_SCENES = [
-    { img: 1, text: '\u3075\u3063\u2026\u307e\u305f\u4f1a\u3063\u305f\u306a\u3002\n\u304a\u524d\u306f\u307e\u3060\u4e09\u65e5\u574a\u4e3b\u3060\u3002' },
-    { img: 1, text: '3\u65e5\u9593\u3001\u5168\u529b\u3067\u4ffa\u306b\u6311\u3081\u3002\n1\u65e5\u3067\u3082\u30b5\u30dc\u3063\u305f\u3089\n\u30ea\u30bb\u30c3\u30c8\u3060\u3002' },
-    { img: 1, text: '\u4eca\u307e\u3067\u306e\u6575\u306f\u524d\u5ea7\u306b\u904e\u304e\u306a\u3044\u3002\n\u4ffa\u3053\u305d\u304c\u672c\u7269\u306e\u58c1\u3060\u3002' },
-    { img: 1, text: '3\u65e5\u7d9a\u3051\u3066\u307f\u308d\u3002\n\u4f53\u3082\u5fc3\u3082\u7fd2\u6163\u3082\n\u5168\u3066\u3067\u52dd\u3063\u3066\u307f\u308d\u3002\n\u3069\u3046\u305b\u7121\u7406\u3060\u308d\uff1f' },
-    { img: 2, text: '\u99ac\u9e7f\u306a\u2026\n3\u65e5\u7d9a\u3051\u3084\u304c\u3063\u305f\u2026' },
-    { img: 2, text: '\u304f\u305d\u2026\u304a\u524d\u306f\u3082\u3046\n\u4e09\u65e5\u574a\u4e3b\u3058\u3083\u306a\u3044\u2026' },
-  ];
 
-  // TEST MODE: all missions in 1 day
-  const MK2_DAY1 = ['goal', 'alarm', 'training', 'photo', 'focus', 'consult', 'kansha', 'zen', 'diary', 'routines', 'todos', 'training3'];
-  const MK2_DAY2 = ['goal'];
-  const MK2_DAY3 = ['goal'];
 
-  const MK2_MISSIONS: { [k: string]: { icon: string; title: string; sub: string; phase: string } } = {
-    goal: { icon: '\u{1f3af}', title: '\u76ee\u6a19\u8a2d\u5b9a', sub: '\u4eca\u65e5\u306e\u76ee\u6a19\u3092\u66f8\u3051', phase: 'mk2_text' },
-    alarm: { icon: '\u23f0', title: '\u65e9\u8d77\u304d\u5ba3\u8a00', sub: '\u660e\u65e5\u4f55\u6642\u306b\u8d77\u304d\u308b\u304b\u5ba3\u8a00\u3057\u308d', phase: 'mk2_text' },
-    training: { icon: '\u2694\uFE0F', title: '\u7b4b\u30c8\u30ec3\u56de', sub: '\u7b4b\u30c8\u30ec\u306730\u56de\u30c0\u30e1\u30fc\u30b8', phase: 'mk2_ts' },
-    photo: { icon: '\u{1f4f8}', title: '\u6b32\u671b\u3092\u65ad\u3066', sub: '\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u64ae\u3063\u3066\u7406\u7531\u3092\u66f8\u3051', phase: 'mk2_photo' },
-    focus: { icon: '\u{1f9d8}', title: '\u96c6\u4e2d5\u79d2', sub: '\u96d1\u5ff5\u3092\u6368\u306630\u79d2\u96c6\u4e2d\u305b\u3088', phase: 'mk2_focus' },
-    consult: { icon: '\u{1f3ef}', title: '\u4f8d\u30ad\u30f3\u30b0\u306b\u76f8\u8ac7', sub: '\u60a9\u307f\u3092\u4f8d\u306b\u6253\u3061\u660e\u3051\u308d', phase: 'mk2_text' },
-    kansha: { icon: '\u{1f64f}', title: '\u611f\u8b1d15\u500b', sub: '\u611f\u8b1d\u304c\u30c0\u30e1\u30fc\u30b8\u306b\u306a\u308b', phase: 'mk2_list' },
-    zen: { icon: '\u2728', title: '\u4e00\u65e5\u4e09\u5584', sub: '\u5584\u3044\u884c\u3044\u30923\u3064\u8a18\u9332\u3057\u308d', phase: 'mk2_list' },
-    diary: { icon: '\u{1f4d6}', title: '\u65e5\u8a18', sub: '\u4eca\u65e5\u306e\u632f\u308a\u8fd4\u308a\u3092\u66f8\u3051', phase: 'mk2_text' },
-    routines: { icon: '\u{1f4cb}', title: '\u30eb\u30fc\u30c6\u30a3\u30f3\u5168\u5b8c\u4e86', sub: '\u30eb\u30fc\u30c6\u30a3\u30f3\u3092\u5168\u3066\u3053\u306a\u305b', phase: 'mk2_check' },
-    todos: { icon: '\u2705', title: 'TODO\u5168\u5b8c\u4e86', sub: 'TODO\u3092\u5168\u3066\u5b8c\u4e86\u3057\u308d', phase: 'mk2_check' },
-    training3: { icon: '\u{1f525}', title: '\u7b4b\u30c8\u30ec5\u56de', sub: '\u6700\u5f8c\u306e\u8a66\u7df4\u3060', phase: 'mk2_ts' },
-  };
 
-  const MK2_TEXT_CFG: { [k: string]: { title: string; prompt: string; ph: string; btn: string } } = {
-    goal: { title: '\u{1f3af} \u76ee\u6a19\u8a2d\u5b9a', prompt: '\u4eca\u65e5\u306e\u76ee\u6a19\u3092\u66f8\u3051', ph: '\u4f8b\uff1a\u8155\u7acb\u3066100\u56de\u3067\u304d\u308b\u3088\u3046\u306b\u306a\u308b', btn: '\u76ee\u6a19\u3092\u8a2d\u5b9a' },
-    alarm: { title: '\u23f0 \u65e9\u8d77\u304d\u5ba3\u8a00', prompt: '\u660e\u65e5\u4f55\u6642\u306b\u8d77\u304d\u308b\uff1f', ph: '\u4f8b\uff1a6:00\u306b\u8d77\u304d\u308b', btn: '\u5ba3\u8a00\u3059\u308b' },
-    consult: { title: '\u{1f3ef} \u4f8d\u30ad\u30f3\u30b0\u306b\u76f8\u8ac7', prompt: '\u60a9\u307f\u3084\u8ab2\u984c\u3092\u4f8d\u306b\u6253\u3061\u660e\u3051\u308d', ph: '\u4f8b\uff1a\u6700\u8fd1\u3084\u308b\u6c17\u304c\u51fa\u306a\u3044...', btn: '\u76f8\u8ac7\u3059\u308b' },
-    diary: { title: '\u{1f4d6} \u65e5\u8a18', prompt: '\u4eca\u65e5\u3092\u632f\u308a\u8fd4\u308c', ph: '\u4eca\u65e5\u3042\u3063\u305f\u3053\u3068\u3001\u611f\u3058\u305f\u3053\u3068\u3001\u5b66\u3093\u3060\u3053\u3068...', btn: '\u8a18\u9332\u3059\u308b' },
-  };
 
-  const MK2_LIST_CFG: { [k: string]: { title: string; target: number; ph: string } } = {
-    kansha: { title: '\u{1f64f} \u611f\u8b1d\u3092\u66f8\u3051', target: 3, ph: '\u611f\u8b1d\u3057\u3066\u3044\u308b\u3053\u3068\u3092\u66f8\u3051' },
-    zen: { title: '\u2728 \u4e00\u65e5\u4e09\u5584', target: 3, ph: '\u5584\u3044\u884c\u3044\u3092\u66f8\u3051' },
-  };
 
-  const MOUMURI_KANSHA_TARGET = 10;
 
-  const DEEBU_HIT_TARGET = 20;
 
-  const DEEBU_EXERCISES = [
-    { id: 'pushup', label: '\u8155\u7acb\u3066\u3075\u305b', icon: '\u2694\uFE0F' },
-    { id: 'squat', label: '\u30b9\u30af\u30ef\u30c3\u30c8', icon: '\u2B50' },
-    { id: 'situp', label: '\u8179\u7b4b', icon: '\u2604\uFE0F' },
-  ];
 
-  const ATODEYARU_QUIPS = [
-    'まだやってないの？',
-    'あとでやるって言ったよね？',
-    '明日でもいいんじゃない？',
-    'どうせ途中でやめるんでしょ',
-    'ルーティン終わった？',
-    'TODO残ってるよ？',
-  ];
 
-  const PHYSICAL_MISSIONS = [
-    { id: 'pushup', label: '腕立てふせ', icon: '⚔️', count: MISSION_TARGET },
-    { id: 'squat', label: 'スクワット', icon: '⭐', count: MISSION_TARGET },
-    { id: 'situp', label: '腹筋', icon: '☄️', count: MISSION_TARGET },
-  ];
-  const SQ_MISSIONS = [
-    { id: 'english', label: '英単語クイズ', icon: 'EN' },
-    { id: 'kotowaza', label: 'ことわざクイズ', icon: '✂️' },
-    { id: 'trivia', label: '雑学クイズ', icon: '❓' },
-  ];
 
-  const SQ_DATA: { [key: string]: { q: string; choices: string[]; answer: number }[] } = {
-    english: [
-      { q: '"apple" の意味は？', choices: ['りんご', 'みかん', 'ぶどう', 'もも'], answer: 0 },
-      { q: '"strong" の意味は？', choices: ['弱い', '強い', '早い', '遅い'], answer: 1 },
-      { q: '"continue" の意味は？', choices: ['止める', '始める', '続ける', '終わる'], answer: 2 },
-    ],
-    kotowaza: [
-      { q: '「石の上にも___」', choices: ['三年', '五年', '十年', '百年'], answer: 0 },
-      { q: '「継続は___なり」', choices: ['金', '力', '夢', '技'], answer: 1 },
-      { q: '「千里の道も___から」', choices: ['三歩', '百歩', '一歩', '十歩'], answer: 2 },
-    ],
-    trivia: [
-      { q: '人間の骨の数は約何本？', choices: ['106本', '206本', '306本', '406本'], answer: 1 },
-      { q: '日本で一番高い山は？', choices: ['富士山', '北岳', '様が岳', '立山'], answer: 0 },
-      { q: '太陽系で一番大きい惑星は？', choices: ['土星', '木星', '天王星', '海王星'], answer: 1 },
-    ],
-  };
 
   const getSqQ = () => {
     const qs = SQ_DATA[selectedMission || 'english'] || SQ_DATA.english;

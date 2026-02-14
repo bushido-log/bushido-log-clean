@@ -219,7 +219,7 @@ export default function App() {
         setMonthlyPrice(monthly);
         setAnnualPrice(annual);
       } catch (e) {
-        console.log('RevenueCat init error', e);
+       
       }
     })();
   }, []);
@@ -229,7 +229,7 @@ export default function App() {
     (async () => {
       const { status } = await Notifications.requestPermissionsAsync();
       if (status !== 'granted') {
-        console.log('Notification permission not granted');
+       
       }
     })();
   }, []);
@@ -262,7 +262,7 @@ export default function App() {
         if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
       });
     } catch (e) {
-      console.log('katana sound error', e);
+     
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     // 150ms後に遷移
@@ -670,7 +670,7 @@ export default function App() {
           if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
         });
       } catch (e) {
-        console.log('start sound error', e);
+       
       }
     })();
   }, []);
@@ -833,7 +833,7 @@ export default function App() {
         if (json) {
           const data = JSON.parse(json);
           if (data.date !== today) {
-            console.log('Mission: New day, resetting...');
+           
             setMissionStatus('none');
             setDailyMissionUsed(false);
             setAmnestyUsedToday(false);
@@ -852,7 +852,7 @@ export default function App() {
             setDailyMissionUsed(data.dailyUsed || false);
             setAmnestyUsedToday(data.amnestyUsed || false);
             setMissionAlarmActive(data.alarmActive || false);
-            console.log('Mission: Restored state:', data.status);
+           
           }
         }
       } catch (e) {
@@ -896,7 +896,7 @@ export default function App() {
     const interval = setInterval(() => {
       const now = Date.now();
       if (now > missionDeadlineAt && !missionStarted) {
-        console.log('Mission: Deadline exceeded, alarm triggered!');
+       
         setMissionStatus('expired');
         setMissionAlarmActive(true);
         setShowMissionAlarm(true);
@@ -1081,7 +1081,7 @@ export default function App() {
         if (status.isLoaded && status.didJustFinish) sound.unloadAsync();
       });
     } catch (e) {
-      console.log('[TTS] error', e);
+     
     }
   };
 
@@ -1265,13 +1265,13 @@ export default function App() {
       }
       
       // 相談内容を保持（ミッション生成用）- 自動提案はしない
-      console.log("Mission button check:", { isPro, dailyMissionUsed, missionStatus }); if (isPro && !dailyMissionUsed && missionStatus === 'none') {
+      if (isPro && !dailyMissionUsed && missionStatus === 'none') {
         setLastConsultText(userText);
         setLastConsultReply(replyText);
         setCanCreateMission(true);
       }
     } catch (error) {
-      console.log('SamuraiKing error', error);
+     
       setMessages(prev => [
         ...prev,
         {
@@ -1464,13 +1464,13 @@ export default function App() {
     playTapSound();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     Alert.alert('契約成立！', `${missionDeadlineMinutes}分以内に行動を開始せよ`);
-    console.log('Mission: Accepted, deadline:', new Date(deadline).toLocaleTimeString());
+   
   };
 
   // ミッション開始を記録
   const markMissionStarted = async () => {
     if (missionStatus === 'accepted' && !missionStarted) {
-      console.log('Mission: Started!');
+     
       setMissionStarted(true);
       setMissionStatus('started');
       await saveMissionState({ started: true, status: 'started' });
@@ -1506,7 +1506,7 @@ export default function App() {
   // ミッション完了
   const completeMission = async () => {
     if (missionStatus === 'started' || missionStatus === 'accepted') {
-      console.log('Mission: Completed!');
+     
       setMissionStatus('completed');
       setMissionCompletedToday(true);
       await saveMissionState({ status: 'completed' });
@@ -3653,7 +3653,7 @@ export default function App() {
       setShowKatanaPolish(true);
       setKegareQuote(KEGARE_QUOTES[Math.floor(Math.random() * KEGARE_QUOTES.length)]);
     } catch (e) {
-      console.log('Kegare check error', e);
+     
     }
   };
 
@@ -3780,7 +3780,7 @@ export default function App() {
       await AsyncStorage.setItem(STATS_KEY, JSON.stringify({
         stats, allocated, lastRealloc: realloc
       }));
-    } catch (e) { console.log('Stats save error', e); }
+    } catch (e) { }
   };
 
   const confirmStatsAllocation = async () => {
@@ -4389,7 +4389,7 @@ export default function App() {
       await sound.setVolumeAsync(MASTER_VOLUME);
       await sound.setRateAsync(1.8, false);
       await sound.playAsync();
-    } catch(e) { console.log('mikkabozu voice error', e); }
+    } catch(e) { }
   };
 
   const storyTypewriter = (text: string, onDone?: () => void) => {
@@ -4441,7 +4441,7 @@ export default function App() {
       }
       setDayCount(count);
       if (count >= 3) { setTimeout(() => startStoryEvent(), 1000); }
-    } catch (e) { console.log('Mikkabozu check error:', e); }
+    } catch (e) { }
   };
 
   const startStoryEvent = () => {
@@ -4653,7 +4653,7 @@ export default function App() {
     try {
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.7 });
       if (!result.canceled && result.assets?.[0]) { setDeebuPhotoUri(result.assets[0].uri); setDeebuPhase('reason'); }
-    } catch(e) { console.log('deebu photo error', e); }
+    } catch(e) { }
   };
 
   const deebuTakePhoto = async () => {
@@ -4662,7 +4662,7 @@ export default function App() {
       if (!perm.granted) return;
       const result = await ImagePicker.launchCameraAsync({ quality: 0.7 });
       if (!result.canceled && result.assets?.[0]) { setDeebuPhotoUri(result.assets[0].uri); setDeebuPhase('reason'); }
-    } catch(e) { console.log('deebu camera error', e); }
+    } catch(e) { }
   };
 
   const deebuSubmitReason = () => {

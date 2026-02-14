@@ -178,3 +178,5 @@ export const SCREAM_VOICES = [
 ];
 export const ENDING_CLEAR_BG = require('../../assets/ending_clear_bg.png');
 export const ENDING_W1_COMPLETE_BG = require('../../assets/ending_w1_complete_bg.png');
+
+export const CONSULT_SELECT_IMG = require('../../assets/consult_select.png');

@@ -68,7 +68,7 @@ import {
   VOICE_MK2_APPEAR, VOICE_MK2_DEFEAT, VOICE_TETSUYA_APPEAR,
   BGM_MONSTER_APPEAR, SFX_TETSUYA_APPEAR, SCREAM_VOICES,
   ENDING_CLEAR_BG, ENDING_W1_COMPLETE_BG,
-  DOJO_GATE_DIM, DOJO_GATE_LIGHT, CONSULT_BG, INTRO_VIDEO,
+  DOJO_GATE_DIM, DOJO_GATE_LIGHT, CONSULT_BG, CONSULT_SELECT_IMG, INTRO_VIDEO,
   CHARACTER_IMAGES, KATANA_RUSTY, KATANA_CLEAN,
   YOKAI_IMAGES, YOKAI_LOSE_IMAGES, YOKAI_VIDEOS, YOKAI_LOSE_VIDEOS,
   MIKKABOZU_EYES, STORY_SCENE1_IMG, STORY_SCENE2_IMG,
@@ -2295,29 +2295,19 @@ export default function App() {
     // 選択画面
     if (consultMode === 'select') {
       return (
-        <ImageBackground source={CONSULT_BG} style={styles.consultSelectBg} resizeMode="cover">
-          <View style={styles.consultSelectContainer}>
-            {/* タイトル */}
-            <View style={styles.consultTitleBox}>
-              <Text style={styles.consultTitle}>サムライ相談所</Text>
-              <Text style={styles.consultSubtitle}>〜欲望を一刀両断〜</Text>
-            </View>
-            
-            <Pressable
-              style={styles.consultSelectButton}
-              onPress={() => { playEnterSound(); setConsultMode('text'); setIsSummoned(true); }}
-            >
-              <Text style={styles.consultSelectButtonText}>君の欲望を話してみろ</Text>
-            </Pressable>
-            
-            <Pressable
-              style={styles.consultSelectButton}
-              onPress={() => { playEnterSound(); setConsultMode('visualize'); }}
-            >
-              <Text style={styles.consultSelectButtonText}>君の欲望を見せてみろ</Text>
-            </Pressable>
-          </View>
-        </ImageBackground>
+        <View style={{ flex: 1, backgroundColor: '#000' }}>
+          <Image source={CONSULT_SELECT_IMG} style={{ width: '100%', height: '100%', resizeMode: 'cover' }} />
+          {/* 上ボタン: サムライキングに相談する */}
+          <Pressable
+            onPress={() => { playEnterSound(); setConsultMode('text'); setIsSummoned(true); }}
+            style={{ position: 'absolute', top: '30%', left: '10%', right: '10%', height: '16%', borderRadius: 28 }}
+          />
+          {/* 下ボタン: サムライキングに欲望を見せろ */}
+          <Pressable
+            onPress={() => { playEnterSound(); setConsultMode('visualize'); }}
+            style={{ position: 'absolute', top: '56%', left: '10%', right: '10%', height: '16%', borderRadius: 28 }}
+          />
+        </View>
       );
     }
 

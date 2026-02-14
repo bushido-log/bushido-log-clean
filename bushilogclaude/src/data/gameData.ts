@@ -58,7 +58,7 @@ export const SAMURAI_KING_DEFEAT_QUOTES = [
 
 export const MK2_MISSIONS: { [k: string]: { icon: string; title: string; sub: string; phase: string } } = {
     goal: { icon: '\u{1f3af}', title: '\u76ee\u6a19\u8a2d\u5b9a', sub: '\u4eca\u65e5\u306e\u76ee\u6a19\u3092\u66f8\u3051', phase: 'mk2_text' },
-    alarm: { icon: '\u23f0', title: '\u65e9\u8d77\u304d\u5ba3\u8a00', sub: '\u660e\u65e5\u4f55\u6642\u306b\u8d77\u304d\u308b\u304b\u5ba3\u8a00\u3057\u308d', phase: 'mk2_text' },
+    alarm: { icon: '\u23f0', title: '\u65e9\u8d77\u304d\u5ba3\u8a00', sub: '\u30a2\u30e9\u30fc\u30e0\u3092\u30bb\u30c3\u30c8\u3057\u308d', phase: 'mk2_alarm' },
     training: { icon: '\u2694\uFE0F', title: '\u7b4b\u30c8\u30ec3\u56de', sub: '\u7b4b\u30c8\u30ec\u306730\u56de\u30c0\u30e1\u30fc\u30b8', phase: 'mk2_ts' },
     photo: { icon: '\u{1f4f8}', title: '\u6b32\u671b\u3092\u65ad\u3066', sub: '\u6211\u6162\u3059\u308b\u3082\u306e\u3092\u64ae\u3063\u3066\u7406\u7531\u3092\u66f8\u3051', phase: 'mk2_photo' },
     focus: { icon: '\u{1f9d8}', title: '\u96c6\u4e2d5\u79d2', sub: '\u96d1\u5ff5\u3092\u6368\u306630\u79d2\u96c6\u4e2d\u305b\u3088', phase: 'mk2_focus' },

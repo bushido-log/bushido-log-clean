@@ -63,6 +63,11 @@ import {
   CORRECT_SOUND, WRONG_SOUND, LEVELUP_SOUND, EXP_SOUND, EVOLUTION_SOUND,
   WIN_SOUND, FAIL_SOUND, ATTACK_SOUND, ENTER_SOUND, FOCUS_START_SOUND,
   KATANA_SOUND, SFX_POLISH, SFX_KATANA_SHINE, SFX_FOOTSTEP, SFX_EYE_GLOW,
+  VOICE_MK_APPEAR, VOICE_MK_DEFEAT, VOICE_ATO_APPEAR, VOICE_ATO_DEFEAT,
+  VOICE_DEEBU_APPEAR, VOICE_DEEBU_DEFEAT, VOICE_MOUMURI_APPEAR, VOICE_MOUMURI_DEFEAT,
+  VOICE_MK2_APPEAR, VOICE_MK2_DEFEAT, VOICE_TETSUYA_APPEAR,
+  BGM_MONSTER_APPEAR, SFX_TETSUYA_APPEAR, SCREAM_VOICES,
+  ENDING_CLEAR_BG, ENDING_W1_COMPLETE_BG,
   DOJO_GATE_DIM, DOJO_GATE_LIGHT, CONSULT_BG, INTRO_VIDEO,
   CHARACTER_IMAGES, KATANA_RUSTY, KATANA_CLEAN,
   YOKAI_IMAGES, YOKAI_LOSE_IMAGES, YOKAI_VIDEOS, YOKAI_LOSE_VIDEOS,
@@ -4336,6 +4341,7 @@ export default function App() {
   const [mk2ConsultLoading, setMk2ConsultLoading] = useState(false);
   const [dayCount, setDayCount] = useState(0);
   const [storyActive, setStoryActive] = useState(false);
+  const monsterBgmRef = useRef<any>(null);
   const [storyPhase, setStoryPhase] = useState<'dark'|'eyes'|'scenes'|'missionSelect'|'missionBrief'|'mission'|'quiz'|'defeat'|'victory'|'clear'|'ending1'|'ending2'|'ending3'|'ending4'>('dark');
   const [sceneIndex, setSceneIndex] = useState(0);
   const [storyTypeText, setStoryTypeText] = useState('');
@@ -4368,6 +4374,21 @@ export default function App() {
   const getSqQ = () => {
     const qs = SQ_DATA[selectedMission || 'english'] || SQ_DATA.english;
     return qs[sqIdx] || qs[0];
+  };
+
+  const playVoice = async (voiceAsset: any, volume: number = 1.0) => {
+    try {
+      const { sound } = await Audio.Sound.createAsync(voiceAsset);
+      await sound.setVolumeAsync(Math.min(volume, MASTER_VOLUME));
+      await sound.playAsync();
+    } catch(e) {}
+  };
+
+  const playRandomScream = async () => {
+    try {
+      const asset = SCREAM_VOICES[Math.floor(Math.random() * SCREAM_VOICES.length)];
+      await playVoice(asset, 0.7);
+    } catch(e) {}
   };
 
   const speakMikkabozu = async (text: string) => {
@@ -4440,13 +4461,13 @@ export default function App() {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     setTimeout(() => {
       setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      
       Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
     }, 2000);
     setTimeout(() => {
       storyEyesOpacity.setValue(0); setStoryPhase('scenes');
       storyTypewriter(STORY_SCENES[0].text);
-      speakMikkabozu('どうせ三日で終わりでしょ');
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_MK_APPEAR), 1500);
     }, 5000);
   };
 
@@ -4454,11 +4475,11 @@ export default function App() {
     const scenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     const next = sceneIndex + 1;
-    if (storyStage === 1 && next === 4) { setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
-    if (storyStage === 2 && next === 4) { setStoryPhase('missionBrief'); return; }
-    if (storyStage === 3 && next === 4) { setStoryPhase('missionBrief'); return; }
-    if (storyStage === 4 && next === 4) { setStoryPhase('missionBrief'); return; }
-    if (storyStage === 5 && next === 4) { setStoryPhase('missionBrief'); return; }
+    if (storyStage === 1 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
+    if (storyStage === 2 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
+    if (storyStage === 3 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
+    if (storyStage === 4 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
+    if (storyStage === 5 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
     if (next >= scenes.length) { setStoryPhase('clear'); return; }
     setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(scenes[next].text);
   };
@@ -4476,16 +4497,19 @@ export default function App() {
     }
   };
 
+  const missionCompletingRef = useRef(false);
   const onMissionComplete = async () => {
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    if (missionCompletingRef.current) return;
+    missionCompletingRef.current = true;
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('見事だ'); samuraiSpeak('見事だ');
     await addXpWithLevelCheck(50);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('負けたくやしいよ'); }, 1500);
+    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_MK_DEFEAT); }, 1500);
   };
 
   const countMissionTap = async () => {
     const next = missionCount + 1; setMissionCount(next);
+    if (next % 3 === 0) playRandomScream();
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     if (next >= MISSION_TARGET) { await onMissionComplete(); }
     else { try { const { sound } = await Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {} }
@@ -4510,6 +4534,7 @@ export default function App() {
   };
 
   const completeStoryEvent = async () => {
+    if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; }
     if (storyStage === 5) {
       try { await AsyncStorage.setItem(MK2_EVENT_KEY, 'true'); } catch(e) {}
       setMk2EventDone(true);
@@ -4538,13 +4563,13 @@ export default function App() {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     setTimeout(() => {
       setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      
       Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
     }, 2000);
     setTimeout(() => {
       storyEyesOpacity.setValue(0); setStoryPhase('scenes');
       storyTypewriter(ATODEYARU_SCENES[0].text);
-      speakMikkabozu('明日やればいいじゃん');
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_ATO_APPEAR), 1500);
     }, 5000);
   };
 
@@ -4552,13 +4577,13 @@ export default function App() {
     setStoryStage(2);
     setAtodeyaruActive(false);
     try { await AsyncStorage.setItem(ATODEYARU_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryPhase('dark'); setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice('');
     setStoryActive(true);
     Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('見事だ'); samuraiSpeak('見事だ');
     await addXpWithLevelCheck(50);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('負けたくやしいよ'); }, 1500);
+    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_ATO_DEFEAT); }, 1500);
   };
 
   const checkAtodeyaruCondition = (logs: DailyLog[]) => {
@@ -4582,13 +4607,13 @@ export default function App() {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     setTimeout(() => {
       setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      
       Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
     }, 2000);
     setTimeout(() => {
       storyEyesOpacity.setValue(0); setStoryPhase('scenes');
       storyTypewriter(DEEBU_SCENES[0].text);
-      speakMikkabozu('\u52d5\u304f\u306e\u3060\u308b\u3044');
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_DEEBU_APPEAR), 1500);
     }, 5000);
   };
 
@@ -4598,17 +4623,20 @@ export default function App() {
     setDeebuPhase(deebuTrainingDone && deebuPhotoDone ? 'done' : 'menu');
   };
 
+  const deebuDefeatingRef = useRef(false);
   const triggerDeebuDefeat = async () => {
+    if (deebuDefeatingRef.current) return;
+    deebuDefeatingRef.current = true;
     setStoryStage(3);
     setDeebuActive(false); setDeebuBattleOpen(false);
     try { await AsyncStorage.setItem(DEEBU_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryPhase('dark'); setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice('');
     setStoryActive(true);
     Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
     await addXpWithLevelCheck(50);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('\u52d5\u3051\u308b\u306e\u304b\u3088'); }, 1500);
+    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_DEEBU_DEFEAT); }, 1500);
   };
 
   const deebuTrainingTap = () => {
@@ -4616,6 +4644,7 @@ export default function App() {
     setDeebuHits(next);
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
+    if (next % 4 === 0) playRandomScream();
     setDeebuFlash(true); setTimeout(() => setDeebuFlash(false), 150);
     Animated.sequence([
       Animated.timing(deebuShakeAnim, { toValue: 15, duration: 50, useNativeDriver: true }),
@@ -4663,13 +4692,13 @@ export default function App() {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     setTimeout(() => {
       setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      
       Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
     }, 2000);
     setTimeout(() => {
       storyEyesOpacity.setValue(0); setStoryPhase('scenes');
       storyTypewriter(MOUMURI_SCENES[0].text);
-      speakMikkabozu('\u3082\u3046\u7121\u7406\u3060');
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_MOUMURI_APPEAR), 1500);
     }, 5000);
   };
 
@@ -4679,17 +4708,20 @@ export default function App() {
     setMoumuriPhase(moumuriZenDone && moumuriKanshaList.length >= MOUMURI_KANSHA_TARGET ? 'done' : 'menu');
   };
 
+  const moumuriDefeatingRef = useRef(false);
   const triggerMoumuriDefeat = async () => {
+    if (moumuriDefeatingRef.current) return;
+    moumuriDefeatingRef.current = true;
     setStoryStage(4);
     setMoumuriActive(false); setMoumuriBO(false);
     try { await AsyncStorage.setItem(MOUMURI_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryPhase('dark'); setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice('');
     setStoryActive(true);
     Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
     await addXpWithLevelCheck(50);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('\u611f\u8b1d\u3067\u304d\u308b\u306e\u304b\u3088'); }, 1500);
+    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_MOUMURI_DEFEAT); }, 1500);
   };
 
   const moumuriSubmitZen = () => {
@@ -4734,13 +4766,13 @@ export default function App() {
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     setTimeout(() => {
       setStoryPhase('eyes');
-      Audio.Sound.createAsync(require('./sounds/sfx_eyes.mp3')).then(({sound}) => sound.setVolumeAsync(0.5).then(() => sound.playAsync())).catch(e => {});
+      
       Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
     }, 2000);
     setTimeout(() => {
       storyEyesOpacity.setValue(0); setStoryPhase('scenes');
       storyTypewriter(MK2_SCENES[0].text);
-      speakMikkabozu('\u307e\u305f\u4f1a\u3063\u305f\u306a');
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_MK2_APPEAR), 1500);
     }, 5000);
   };
 
@@ -4776,16 +4808,19 @@ export default function App() {
     triggerMk2Defeat();
   };
 
+  const mk2DefeatingRef = useRef(false);
   const triggerMk2Defeat = async () => {
+    if (mk2DefeatingRef.current) return;
+    mk2DefeatingRef.current = true;
     setStoryStage(5); setMk2Active(false); setMk2BO(false);
     try { await AsyncStorage.setItem(MK2_ACTIVE_KEY, 'false'); } catch(e) {}
+    setStoryPhase('dark'); setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice('');
     setStoryActive(true);
     Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); } catch(e) {}
+    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
     try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    speakSamurai('\u898b\u4e8b\u3060'); samuraiSpeak('\u898b\u4e8b\u3060');
     await addXpWithLevelCheck(100);
-    setTimeout(() => { setStoryPhase('defeat'); speakMikkabozu('3\u65e5\u7d9a\u3051\u3084\u304c\u3063\u305f'); }, 1500);
+    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_MK2_DEFEAT); }, 1500);
   };
 
   const mk2SubmitText = async () => {
@@ -4858,6 +4893,7 @@ export default function App() {
 
   const mk2TrainTap = () => {
     const next = mk2Hits + 1; setMk2Hits(next);
+    if (next % 4 === 0) playRandomScream();
     try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
     try { Audio.Sound.createAsync(require('./sounds/taiko-hit.mp3')).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())); } catch(e) {}
     mk2DamageEffect();
@@ -6341,7 +6377,7 @@ export default function App() {
 
           {storyPhase === 'defeat' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); samuraiSpeak('……見事だ。'); storyTypewriter(sc[4].text); } }} />
+              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); storyTypewriter(sc[4].text); } }} />
               <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
             </View>
           )}
@@ -6364,22 +6400,22 @@ export default function App() {
               endingW1Op.setValue(0);
               setStoryPhase('ending2');
               Animated.timing(endingW1Op, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
-              Audio.Sound.createAsync(WIN_SOUND).then(({sound}) => sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync())).catch(e => {});
+              Audio.Sound.createAsync(WIN_SOUND).then(({sound}) => { sound.setVolumeAsync(MASTER_VOLUME).then(() => sound.playAsync()); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); }).catch(e => {});
               setTimeout(() => {
                 setStoryTypeText(''); setStoryTypingDone(false);
                 setStoryPhase('ending3');
                 endingSilhouetteOp.setValue(0);
                 endingActive.current = true;
-                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.8).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 1500));
-                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(1.0).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 3000));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 2500));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; Audio.Sound.createAsync(SFX_FOOTSTEP).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.6).then(() => sound.playAsync()); }).catch(e => {}); try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {} }, 5500));
                 endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return;
                   Animated.timing(endingSilhouetteOp, { toValue: 1, duration: 2000, useNativeDriver: true }).start();
-                  Audio.Sound.createAsync(SFX_EYE_GLOW).then(({sound}) => { endingSounds.current.push(sound); sound.setVolumeAsync(0.6).then(() => sound.playAsync()); }).catch(e => {});
-                }, 4000));
-                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; storyTypewriter('三日坊主が負けたか。\n\n俺はテツヤ。\n夜を支配する者だ。\n\n……面白い。'); }, 5500));
-              }, 4000);
+                  Audio.Sound.createAsync(SFX_TETSUYA_APPEAR).then(({sound}) => { sound.setVolumeAsync(0.8).then(() => sound.playAsync()); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 10000); }).catch(e => {});
+                }, 7500));
+                endingTimers.current.push(setTimeout(() => { if (!endingActive.current) return; playVoice(VOICE_TETSUYA_APPEAR); storyTypewriter('……ほう。\n三日坊主を倒したか。\n\nだが、夜はまだ長い。\n俺はテツヤ。\n\nお前が寝ない限り、\n俺は消えない。\n\n……楽しみにしてろ。'); }, 9500));
+              }, 6000);
             } }} style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
-              <Text style={{ color: '#DAA520', fontSize: 28, fontWeight: '900', letterSpacing: 6, textAlign: 'center' }}>{storyTypeText}</Text>
+              <Text style={{ color: '#DAA520', fontSize: 20, fontWeight: '900', letterSpacing: 2, textAlign: 'center', lineHeight: 34 }}>{storyTypeText}</Text>
               {storyTypingDone && (
                 <Text style={{ color: '#555', fontSize: 12, marginTop: 40 }}>{'タップで次へ'}</Text>
               )}
@@ -6387,14 +6423,15 @@ export default function App() {
           )}
 
           {storyPhase === 'ending2' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+            <ImageBackground source={ENDING_W1_COMPLETE_BG} style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }} resizeMode="cover">
+              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.75)' }} />
               <Animated.View style={{ opacity: endingW1Op, alignItems: 'center' }}>
                 <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 5, marginBottom: 12 }}>{'WORLD 1'}</Text>
                 <Text style={{ color: '#fff', fontSize: 32, fontWeight: '900', letterSpacing: 6, marginBottom: 16 }}>{'COMPLETE'}</Text>
                 <View style={{ width: 60, height: 2, backgroundColor: '#DAA520', marginBottom: 16 }} />
-                <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 2 }}>{'三日坊主を倒した。'}</Text>
+                <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 2 }}>{'── 三日坊主殺し ──'}</Text>
               </Animated.View>
-            </View>
+            </ImageBackground>
           )}
 
           {storyPhase === 'ending3' && (
@@ -6407,7 +6444,7 @@ export default function App() {
               Animated.timing(endingW2Op, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
             } }} style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
               <Animated.Image source={TETSUYA_SILHOUETTE} style={{ width: 200, height: 200, opacity: endingSilhouetteOp, marginBottom: 30 }} resizeMode="contain" />
-              <Text style={{ color: '#9b59b6', fontSize: 20, fontWeight: '900', letterSpacing: 3, textAlign: 'center', lineHeight: 32 }}>{storyTypeText}</Text>
+              <Text style={{ color: '#9b59b6', fontSize: 18, fontWeight: '900', letterSpacing: 2, textAlign: 'center', lineHeight: 30 }}>{storyTypeText}</Text>
               {storyTypingDone && (
                 <Text style={{ color: '#555', fontSize: 12, marginTop: 40 }}>{'タップで次へ'}</Text>
               )}
@@ -6418,7 +6455,8 @@ export default function App() {
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center', padding: 24 }}>
               <Animated.View style={{ opacity: endingW2Op, alignItems: 'center' }}>
                 <Text style={{ color: '#9b59b6', fontSize: 14, letterSpacing: 5, marginBottom: 12 }}>{'WORLD 2'}</Text>
-                <Text style={{ color: '#fff', fontSize: 24, fontWeight: '900', letterSpacing: 4, marginBottom: 30 }}>{'―― 近日実装 ――'}</Text>
+                <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 30, textAlign: 'center' }}>{'── 夜の支配者 ──'}</Text>
+                <Text style={{ color: '#888', fontSize: 15, letterSpacing: 2, marginTop: 16, fontStyle: 'italic' }}>{'「逃げるなよ。」'}</Text>
               </Animated.View>
               <TouchableOpacity onPress={completeStoryEvent} style={{ marginTop: 40, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
                 <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{'修行の間へ'}</Text>
@@ -6427,15 +6465,16 @@ export default function App() {
           )}
 
           {storyPhase === 'clear' && (
-            <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
+            <ImageBackground source={storyStage === 5 ? ENDING_CLEAR_BG : undefined} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} resizeMode="cover">
+              {storyStage === 5 && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }} />}
               <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 3, marginBottom: 8 }}>WORLD 1</Text>
-              <Text style={{ color: '#fff', fontSize: 28, fontWeight: '900', letterSpacing: 4, marginBottom: 12 }}>{storyStage === 5 ? 'FINAL STAGE CLEAR' : storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
+              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 4, marginBottom: 12, textAlign: 'center' }}>{storyStage === 5 ? 'FINAL STAGE CLEAR' : storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
               <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 5 ? '三日坊主IIを討伐' : storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
               <Text style={{ color: '#888', fontSize: 12, marginBottom: 4 }}>+50 XP</Text>
-              <TouchableOpacity onPress={() => { if (storyStage === 5) { endingStarted.current = false; endingStarted.current = false; endingActive.current = false; endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = []; endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = []; setStoryPhase('ending1'); setTimeout(() => storyTypewriter('お前はもう\n三日坊主ではない。'), 800); } else { completeStoryEvent(); } }} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+              <TouchableOpacity onPress={() => { if (storyStage === 5) { endingStarted.current = false; endingStarted.current = false; endingActive.current = false; endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = []; endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = []; if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('ending1'); setTimeout(() => storyTypewriter('三日。\nたった三日。\n\n「どうせ続かない」\n「お前には無理だ」\n「また明日でいい」\n\n全部、斬った。\n\nお前は──侍だ。'), 800); } else { completeStoryEvent(); } }} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
                 <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{storyStage === 5 ? '次へ' : '修行の間へ'}</Text>
               </TouchableOpacity>
-            </View>
+            </ImageBackground>
           )}
 
         </Animated.View>
@@ -6908,6 +6947,52 @@ export default function App() {
                     <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{MK2_TEXT_CFG[mk2CM].btn}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12, marginTop: 8 }}><Text style={{ color: '#666', fontSize: 13 }}>{'\u2190 \u623b\u308b'}</Text></TouchableOpacity>
+                </View>
+              )}
+
+              {mk2Phase === 'mk2_alarm' && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#2DD4BF', fontSize: 18, fontWeight: '900', marginBottom: 8 }}>{'⏰ サムライアラーム'}</Text>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 20, textAlign: 'center' }}>{'明日の起床時間をセットしろ。\n撮影しないと止まらない。'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginBottom: 20 }}>
+                    <View style={{ alignItems: 'center' }}>
+                      <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h + 1) % 24); }} style={{ padding: 10 }}><Text style={{ color: '#2DD4BF', fontSize: 24 }}>{'▲'}</Text></Pressable>
+                      <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmHour).padStart(2, '0')}</Text>
+                      <Pressable onPress={() => { playTapSound(); setAlarmHour(h => (h - 1 + 24) % 24); }} style={{ padding: 10 }}><Text style={{ color: '#2DD4BF', fontSize: 24 }}>{'▼'}</Text></Pressable>
+                    </View>
+                    <Text style={{ color: '#fff', fontSize: 48, marginHorizontal: 8 }}>{':'}</Text>
+                    <View style={{ alignItems: 'center' }}>
+                      <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m + 15) % 60); }} style={{ padding: 10 }}><Text style={{ color: '#2DD4BF', fontSize: 24 }}>{'▲'}</Text></Pressable>
+                      <Text style={{ color: '#fff', fontSize: 48, fontWeight: 'bold' }}>{String(alarmMinute).padStart(2, '0')}</Text>
+                      <Pressable onPress={() => { playTapSound(); setAlarmMinute(m => (m - 15 + 60) % 60); }} style={{ padding: 10 }}><Text style={{ color: '#2DD4BF', fontSize: 24 }}>{'▼'}</Text></Pressable>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#888', fontSize: 13, marginBottom: 10 }}>{'📸 撮影ミッション'}</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', marginBottom: 20 }}>
+                    {(['冷蔵庫', '洗面台', '玄関'] as const).map(m => (
+                      <Pressable key={m} onPress={() => { playTapSound(); setAlarmMission(m); }} style={{ backgroundColor: alarmMission === m ? '#2DD4BF' : '#374151', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, marginHorizontal: 4 }}>
+                        <Text style={{ color: alarmMission === m ? '#000' : '#fff', fontWeight: 'bold', fontSize: 14 }}>{m}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <TouchableOpacity onPress={async () => {
+                    playConfirmSound();
+                    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
+                    const now = new Date(); let triggerDate = new Date();
+                    triggerDate.setHours(alarmHour, alarmMinute, 0, 0);
+                    if (triggerDate <= now) triggerDate.setDate(triggerDate.getDate() + 1);
+                    if (alarmNotificationId) { await Notifications.cancelScheduledNotificationAsync(alarmNotificationId); }
+                    const notifId = await Notifications.scheduleNotificationAsync({
+                      content: { title: '⚔️ サムライキング参上', body: '起きろ！' + alarmMission + 'を撮影して目を覚ませ！', sound: true, data: { type: 'wakeup_alarm' } },
+                      trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: triggerDate },
+                    });
+                    setAlarmNotificationId(notifId); setAlarmSet(true);
+                    setMk2Done(prev => [...prev, 'alarm']); setMk2Phase('menu');
+                    Alert.alert('⏰ アラームセット完了', alarmHour + ':' + String(alarmMinute).padStart(2, '0') + ' に起床せよ。\n撮影場所：' + alarmMission);
+                  }} style={{ backgroundColor: '#2DD4BF', borderRadius: 14, paddingVertical: 16, paddingHorizontal: 50 }}>
+                    <Text style={{ color: '#000', fontSize: 16, fontWeight: '900' }}>{'アラームをセット'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => setMk2Phase('menu')} style={{ padding: 12, marginTop: 8 }}><Text style={{ color: '#666', fontSize: 13 }}>{'← 戻る'}</Text></TouchableOpacity>
                 </View>
               )}
 
@@ -7432,6 +7517,9 @@ export default function App() {
           <Pressable onPress={() => { const quips = ATODEYARU_QUIPS; const q = quips[Math.floor(Math.random() * quips.length)]; showSaveSuccess(q); }}>
             <Image source={YOKAI_IMAGES.atodeyaru} style={{ width: 60, height: 60, borderRadius: 30 }} resizeMode="contain" />
             <Text style={{ color: '#e74c3c', fontSize: 9, fontWeight: '900', textAlign: 'center', marginTop: 2 }}>{'アトデヤル'}</Text>
+            <View style={{ backgroundColor: '#e67e22', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3, marginTop: 3 }}>
+              <Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>{'タップ！'}</Text>
+            </View>
           </Pressable>
         </View>
       )}

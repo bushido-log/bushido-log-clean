@@ -146,3 +146,35 @@ export const ENEMY_IMAGES: { [key: string]: any } = {
   dragon_boss03: require('../../assets/enemies/dragon_boss03.png'),
   dragon_boss04: require('../../assets/enemies/dragon_boss04.png'),
 };
+
+// Character voices
+export const VOICE_MK_APPEAR = require('../../sounds/voice_mk_appear.mp3');
+export const VOICE_MK_DEFEAT = require('../../sounds/voice_mk_defeat.mp3');
+export const VOICE_ATO_APPEAR = require('../../sounds/voice_ato_appear.mp3');
+export const VOICE_ATO_DEFEAT = require('../../sounds/voice_ato_defeat.mp3');
+export const VOICE_DEEBU_APPEAR = require('../../sounds/voice_deebu_appear.mp3');
+export const VOICE_DEEBU_DEFEAT = require('../../sounds/voice_deebu_defeat.mp3');
+export const VOICE_MOUMURI_APPEAR = require('../../sounds/voice_moumuri_appear.mp3');
+export const VOICE_MOUMURI_DEFEAT = require('../../sounds/voice_moumuri_defeat.mp3');
+export const VOICE_MK2_APPEAR = require('../../sounds/voice_mk2_appear.mp3');
+export const VOICE_MK2_DEFEAT = require('../../sounds/voice_mk2_defeat.mp3');
+export const VOICE_TETSUYA_APPEAR = require('../../sounds/voice_tetsuya_appear.mp3');
+export const BGM_MONSTER_APPEAR = require('../../sounds/bgm_monster_appear.mp3');
+export const SFX_TETSUYA_APPEAR = require('../../sounds/sfx_tetsuya_appear.mp3');
+export const SCREAM_VOICES = [
+  require('../../sounds/shonen9-himei3.mp3'),
+  require('../../sounds/shonen9-himei5.mp3'),
+  require('../../sounds/shonen10-uwaa.mp3'),
+  require('../../sounds/shonen8-are.mp3'),
+  require('../../sounds/shonen8-tyottokituiya.mp3'),
+  require('../../sounds/shonen3-yarareta.mp3'),
+  require('../../sounds/shonen10-maketanoka.mp3'),
+  require('../../sounds/shonen6-usosonna.mp3'),
+  require('../../sounds/shonen8-itatamouugokenaiya.mp3'),
+  require('../../sounds/shonen5_konnatokorode.mp3'),
+  require('../../sounds/shonen6-ittanhikuyo.mp3'),
+  require('../../sounds/zyosei3-haibokuda.mp3'),
+  require('../../sounds/zyosei4-munendesu.mp3'),
+];
+export const ENDING_CLEAR_BG = require('../../assets/ending_clear_bg.png');
+export const ENDING_W1_COMPLETE_BG = require('../../assets/ending_w1_complete_bg.png');

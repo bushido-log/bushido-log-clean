@@ -32,6 +32,10 @@ export const MOUMURI_ACTIVE_KEY = 'bushido_moumuri_active';
 export const MK2_EVENT_KEY = 'bushido_mk2_event_done';
 export const MK2_ACTIVE_KEY = 'bushido_mk2_active';
 export const MK2_PROGRESS_KEY = 'bushido_mk2_progress';
+// Samurai Walk keys
+export const DIFFICULTY_KEY = 'BUSHIDO_DIFFICULTY_V1';
+export const WALK_DATA_KEY = 'BUSHIDO_WALK_DATA_V1';
+export const WALK_BOSS_KEY = 'BUSHIDO_WALK_BOSS_V1';
 export const FREE_TRIAL_DAYS = 3;
 
 export const MAX_LEVEL = 10;
@@ -78,3 +82,4 @@ export const KEGARE_QUOTES = [
   '武士の朝は、刀と共に始まる',
   '磨かれた刃は、迷いを断つ',
 ];
+export const W1_BATTLE_KEY = 'BUSHIDO_W1_BATTLE_V1';

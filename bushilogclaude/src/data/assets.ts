@@ -180,3 +180,4 @@ export const ENDING_CLEAR_BG = require('../../assets/ending_clear_bg.png');
 export const ENDING_W1_COMPLETE_BG = require('../../assets/ending_w1_complete_bg.png');
 
 export const CONSULT_SELECT_IMG = require('../../assets/consult_select.png');
+export const BATTLE_BG = require('../../assets/images/battle_bg.png');export const NIDONEEL_SCENE1_IMG = require('../../assets/story/nidoneel_scene1.png');export const NIDONEEL_SCENE2_IMG = require('../../assets/story/nidoneel_scene2.png');export const VOICE_NIDONEEL_APPEAR = require('../../sounds/voice_nidoneel_appear.mp3');export const VOICE_NIDONEEL_DEFEAT = require('../../sounds/voice_nidoneel_defeat.mp3');

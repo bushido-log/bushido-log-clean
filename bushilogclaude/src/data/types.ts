@@ -1,3 +1,48 @@
+// === Samurai Walk: Difficulty & Walk Data ===
+export type Difficulty = 'easy' | 'normal' | 'hard';
+
+export type WalkDayLog = {
+  date: string;
+  steps: number;
+  damageDealt: number;
+};
+
+export type WalkData = {
+  todaySteps: number;
+  totalSteps: number;
+  streak: number;        // 連続日数
+  lastActiveDate: string;
+  saboriDays: number;    // 連続サボり日数
+  dailyLogs: WalkDayLog[];
+};
+
+export const DEFAULT_WALK_DATA: WalkData = {
+  todaySteps: 0,
+  totalSteps: 0,
+  streak: 0,
+  lastActiveDate: '',
+  saboriDays: 0,
+  dailyLogs: [],
+};
+
+export type WalkBossState = {
+  bossIndex: number;       // 現在のボス (0-4)
+  currentHp: number;       // 現在HP
+  maxHp: number;           // 最大HP
+  damageToday: number;     // 今日与えたダメージ
+  lastDamageDate: string;  // 最後にダメージを適用した日
+  defeated: boolean[];     // 倒したボスの記録
+};
+
+export const DEFAULT_WALK_BOSS: WalkBossState = {
+  bossIndex: 0,
+  currentHp: 30000,
+  maxHp: 30000,
+  damageToday: 0,
+  lastDamageDate: '',
+  defeated: [false, false, false, false, false],
+};
+
 export type YokaiFeature = 'consult' | 'gratitude' | 'goal' | 'review' | 'focus' | 'alarm';
 
 export interface YokaiData {

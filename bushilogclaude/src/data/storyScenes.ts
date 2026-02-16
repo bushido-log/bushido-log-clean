@@ -44,3 +44,12 @@ export const MK2_SCENES = [
     { img: 2, text: '\u99ac\u9e7f\u306a\u2026\n3\u65e5\u7d9a\u3051\u3084\u304c\u3063\u305f\u2026' },
     { img: 2, text: '\u304f\u305d\u2026\u304a\u524d\u306f\u3082\u3046\n\u4e09\u65e5\u574a\u4e3b\u3058\u3083\u306a\u3044\u2026' },
   ];
+
+export const NIDONEEL_SCENES = [
+  { img: 1, text: 'ふぁぁ…眠い…\nまだ寝てていいじゃん…' },
+  { img: 1, text: 'アラーム？知らない。\n布団こそ最強。' },
+  { img: 1, text: '俺がいる限り、\nお前は永遠に\n二度寝する。' },
+  { img: 1, text: 'できるもんなら\n起きてミッション\nこなしてみろよ。\nどうせ無理だろ？' },
+  { img: 2, text: 'うそ…起きた…？\nマジかよ…' },
+  { img: 2, text: 'くそ…次の奴は\nもっと手強いから…' },
+];

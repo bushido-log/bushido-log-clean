@@ -50,10 +50,12 @@ import {
   MIKKABOZU_DAY_KEY, MIKKABOZU_EVENT_KEY, ATODEYARU_EVENT_KEY, ATODEYARU_ACTIVE_KEY,
   DEEBU_EVENT_KEY, DEEBU_ACTIVE_KEY, MOUMURI_EVENT_KEY, MOUMURI_ACTIVE_KEY,
   MK2_EVENT_KEY, MK2_ACTIVE_KEY, MK2_PROGRESS_KEY,
+  DIFFICULTY_KEY, WALK_DATA_KEY, WALK_BOSS_KEY, W1_BATTLE_KEY,
   FREE_TRIAL_DAYS, MAX_LEVEL, DAYS_PER_LEVEL, MASTER_VOLUME,
   LEVEL_TITLES, LEVEL_XP_THRESHOLDS, DEFAULT_ROUTINES, urgeMessage, KEGARE_QUOTES,
 } from './src/data/constants';
 import {
+  Difficulty, WalkData, DEFAULT_WALK_DATA, WalkBossState, DEFAULT_WALK_BOSS,
   YokaiFeature, YokaiData, Message, HistoryEntry, GoodDeedEntry,
   NightReview, TodoItem, DailyLog, OnboardingData, AppSettings, SamuraiTimeState,
   DEFAULT_SETTINGS,
@@ -78,16 +80,22 @@ import {
   TETSUYA_SILHOUETTE, MIKKABOZU_DEFEAT_VIDEO,
   WORLD1_BG, NODE_FIST, NODE_KATANA, NODE_SCROLL, NODE_BRAIN, NODE_BOSS, NODE_LOCKED,
   ENEMY_IMAGES,
+  BATTLE_BG, VOICE_NIDONEEL_APPEAR, VOICE_NIDONEEL_DEFEAT,
+  NIDONEEL_SCENE1_IMG, NIDONEEL_SCENE2_IMG,
 } from './src/data/assets';
 import { YOKAI_LIST } from './src/data/yokaiData';
 import { ENEMIES, BATTLE_WIN_QUOTES, BATTLE_LOSE_QUOTES } from './src/data/battleData';
 import { getTodayStr, formatDateLabel, daysDiff, getStreakCount, getRankFromXp, getLevelFromXp, getSamuraiLevelInfo, getSessionId } from './src/utils/helpers';
 import { playSound, playPressSound, playTapSound, playConfirmSound, playRitualSound, playCheckSound, playCorrectSound, playWrongSound, playLevelupSound, playExpSound, playEvolutionSound, playWinSound, playFailSound, playAttackSound, playEnterSound, playFocusStartSound } from './src/utils/sounds';
 import { callSamuraiKing, callSamuraiMissionGPT } from './src/utils/api';
+import { subscribeToSteps, calculateWalkDamage, getDailyGoal, getTodayString } from './src/utils/stepCounter';
+import { WALK_BOSSES, getRecoveryRate } from './src/data/walkBossData';
+import { WORLD1_BOSSES, BATTLE_MISSIONS, getAvailableOugi, RUN_RECOVERY_RATE } from './src/data/battleWorldData';
+import { BattleScreen } from './src/components/BattleScreen';
 import { styles } from './src/styles';
 import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from './src/data/texts';
 import { SamuraiAvatar } from './src/components/SamuraiAvatar';
-import { STORY_SCENES, ATODEYARU_SCENES, DEEBU_SCENES, MOUMURI_SCENES, MK2_SCENES } from './src/data/storyScenes';
+import { STORY_SCENES, ATODEYARU_SCENES, DEEBU_SCENES, MOUMURI_SCENES, MK2_SCENES, NIDONEEL_SCENES } from './src/data/storyScenes';
 import {
   MISSION_TARGET, SQ_TOTAL, MOUMURI_KANSHA_TARGET, DEEBU_HIT_TARGET,
   MK2_DAY1, MK2_DAY2, MK2_DAY3, MK2_MISSIONS, MK2_TEXT_CFG, MK2_LIST_CFG,
@@ -131,8 +139,8 @@ export default function App() {
   };
   const messagesRef = useRef<ScrollView | null>(null);
 
-  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm' | 'character' | 'battle' | 'innerWorld'>('consult');
-  const [showStartScreen, setShowStartScreen] = useState(true);
+  const [tab, setTab] = useState<'consult' | 'goal' | 'review' | 'settings' | 'browser' | 'gratitude' | 'focus' | 'alarm' | 'character' | 'battle' | 'innerWorld'>('innerWorld');
+  const [showStartScreen, setShowStartScreen] = useState(false);
   const [showSaveToast, setShowSaveToast] = useState(false);
   const [saveToastMessage, setSaveToastMessage] = useState('');
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null);
@@ -157,7 +165,7 @@ export default function App() {
   // 集中機能
   const [focusPurpose, setFocusPurpose] = useState('');
   const [focusUrl, setFocusUrl] = useState('https://www.google.com');
-  const [showFocusEntry, setShowFocusEntry] = useState(true);
+  const [showFocusEntry, setShowFocusEntry] = useState(false);
   const [focusStartTime, setFocusStartTime] = useState<Date | null>(null);
   const [focusMinutesLeft, setFocusMinutesLeft] = useState(25);
   const [focusSecondsLeft, setFocusSecondsLeft] = useState(0);
@@ -169,7 +177,7 @@ export default function App() {
   const [focusType, setFocusType] = useState<'select' | 'net' | 'study'>('select');
   
   // アラーム機能
-  const [showDojoGate, setShowDojoGate] = useState(true);
+  const [showDojoGate, setShowDojoGate] = useState(false);
   const [showIntro, setShowIntro] = useState(false);
   const [videoFinished, setVideoFinished] = useState(false);
   const [introSkipped, setIntroSkipped] = useState(false);
@@ -423,6 +431,7 @@ export default function App() {
     setAlarmRinging(false);
     setAlarmSet(false);
     speakSamurai('よくやった。今日も己に勝て。武士道とは毎朝の勝利から始まる。');
+    setAlarmDismissedFlag(true);
   };
   
   const takeMissionPhoto = async () => {
@@ -487,8 +496,8 @@ export default function App() {
   ];
 
   // onboarding
-  const [isOnboarding, setIsOnboarding] = useState(true);
-  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(true);
+  const [isOnboarding, setIsOnboarding] = useState(false);
+  const [isLoadingOnboarding, setIsLoadingOnboarding] = useState(false);
   const [onboardingData, setOnboardingData] = useState<OnboardingData | null>(null);
   const [isEditingOnboarding, setIsEditingOnboarding] = useState(false);
   const [obIdentity, setObIdentity] = useState('');
@@ -496,6 +505,23 @@ export default function App() {
   const [obRule, setObRule] = useState('');
   const [onboardingStep, setOnboardingStep] = useState(1); // 新オンボーディング: 1-4
   const [userStartChoice, setUserStartChoice] = useState<'free' | 'serious' | null>(null);
+  // Samurai Walk: 難易度 & 歩数データ
+  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
+  const [walkData, setWalkData] = useState<WalkData>(DEFAULT_WALK_DATA);
+  const [walkBoss, setWalkBoss] = useState<WalkBossState>(DEFAULT_WALK_BOSS);
+  const [ougiFlash, setOugiFlash] = useState(false);
+  const [ougiDamageText, setOugiDamageText] = useState('');
+  const [showDifficultySelect, setShowDifficultySelect] = useState(true);
+
+  // === World 1 Battle System ===
+  const [battleActive, setBattleActive] = useState(false);
+  const [w1BossIndex, setW1BossIndex] = useState(0);
+  const [w1BossHp, setW1BossHp] = useState(WORLD1_BOSSES[0].hp);
+  const [w1CompletedMissions, setW1CompletedMissions] = useState<string[]>([]);
+  const [w1OugiUsed, setW1OugiUsed] = useState(false);
+  const [alarmDismissedFlag, setAlarmDismissedFlag] = useState(false);
+  const [w1DefeatedCount, setW1DefeatedCount] = useState(0);
+
 
   // settings
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
@@ -804,6 +830,185 @@ export default function App() {
     })();
   }, []);
 
+  // 難易度読み込み
+  useEffect(() => {
+    (async () => {
+      try {
+        const val = await AsyncStorage.getItem(DIFFICULTY_KEY);
+        if (val && (val === 'easy' || val === 'normal' || val === 'hard')) {
+          setDifficulty(val as Difficulty);
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
+  // W1バトル状態読み込み
+  useEffect(() => {
+    (async () => {
+      try {
+        const json = await AsyncStorage.getItem(W1_BATTLE_KEY);
+        if (json) {
+          const data = JSON.parse(json);
+          setW1BossIndex(data.bossIndex ?? 0);
+          setW1BossHp(data.bossHp ?? WORLD1_BOSSES[0].hp);
+          setW1DefeatedCount(data.defeatedCount ?? 0);
+          const today = new Date().toISOString().split('T')[0];
+          if (data.lastDate === today) {
+            setW1CompletedMissions(data.completedMissions ?? []);
+            setW1OugiUsed(data.ougiUsed ?? false);
+          }
+        }
+      } catch (e) {}
+    })();
+  }, []);
+
+  const saveW1Battle = async (overrides?: any) => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const data = {
+        bossIndex: overrides?.bossIndex ?? w1BossIndex,
+        bossHp: overrides?.bossHp ?? w1BossHp,
+        defeatedCount: overrides?.defeatedCount ?? w1DefeatedCount,
+        completedMissions: overrides?.completedMissions ?? w1CompletedMissions,
+        ougiUsed: overrides?.ougiUsed ?? w1OugiUsed,
+        lastDate: today,
+      };
+      await AsyncStorage.setItem(W1_BATTLE_KEY, JSON.stringify(data));
+    } catch (e) {}
+  };
+
+  const applyBattleDamage = (dmg: number) => {
+    setW1BossHp(prev => {
+      const newHp = Math.max(0, prev - dmg);
+      if (newHp <= 0 && prev > 0) {
+        saveW1Battle({ bossHp: 0 });
+      } else {
+        saveW1Battle({ bossHp: newHp });
+      }
+      return newHp;
+    });
+  }
+  // アラーム解除 → バトルダメージ
+  React.useEffect(() => {
+    if (!alarmDismissedFlag) return;
+    setAlarmDismissedFlag(false);
+    if (w1CompletedMissions.includes('alarm') || w1BossIndex >= WORLD1_BOSSES.length) return;
+    const missions = BATTLE_MISSIONS[w1BossIndex] || [];
+    const alarmMission = missions.find((m: any) => m.id === 'alarm');
+    if (alarmMission) {
+      const dmg = alarmMission.baseDamage;
+      applyBattleDamage(dmg);
+      const newCompleted = [...w1CompletedMissions, 'alarm'];
+      setW1CompletedMissions(newCompleted);
+      saveW1Battle({ completedMissions: newCompleted });
+      showSaveSuccess('⏰ 起床攻撃！ ' + dmg.toLocaleString() + ' ダメージ！');
+    }
+  }, [alarmDismissedFlag]);
+
+
+  const handleBattleMissionComplete = async (missionId: string, damage: number, data: any) => {
+    applyBattleDamage(damage);
+    const newCompleted = [...w1CompletedMissions, missionId];
+    setW1CompletedMissions(newCompleted);
+    saveW1Battle({ completedMissions: newCompleted });
+
+    // XP reward
+    const xpGain = Math.max(5, Math.floor(damage / 500));
+    try { await addXpWithLevelCheck(xpGain); } catch(e) {}
+
+    // Save to app features based on mission type
+    if (missionId === 'goal' && data.text) {
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: data.text,
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+      }));
+      showSaveSuccess('⚔️ 目標を刻んだ！');
+    } else if (missionId === 'review' && data.text) {
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: prev?.mission ?? '',
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+        review: {
+          proud: data.text,
+          lesson: prev?.review?.lesson ?? '',
+          nextAction: prev?.review?.nextAction ?? '',
+        },
+      }));
+      showSaveSuccess('⚔️ 振り返りを記録！');
+    } else if (missionId === 'diary' && data.text) {
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: (prev?.mission ?? '') + '\n' + data.text,
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+      }));
+      showSaveSuccess('⚔️ 日記に追加！');
+    } else if (data.type === 'gratitude' && data.items) {
+      setGratitudeList((prev: string[]) => [...prev, ...data.items]);
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: prev?.mission ?? '',
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+        goodDeeds: [...(prev?.goodDeeds ?? []), ...data.items],
+      }));
+      showSaveSuccess('⚔️ 感謝' + data.items.length + '個記録！');
+    } else if (data.type === 'focus') {
+      const mins = Math.floor((data.seconds || 0) / 60);
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: (prev?.mission ?? '') + '\n【バトル集中】' + mins + '分達成',
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+      }));
+    } else if (data.type === 'exercise') {
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: (prev?.mission ?? '') + '\n【バトル筋トレ】' + (data.reps || 0) + '回達成',
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+      }));
+    } else if (data.type === 'steps') {
+      await upsertTodayLog((prev: any) => ({
+        ...prev,
+        date: getTodayStr(),
+        mission: (prev?.mission ?? '') + '\n【バトル歩数】' + (data.reps || 0) + '歩',
+        routines: prev?.routines ?? [],
+        todos: prev?.todos ?? [],
+      }));
+    }
+  };
+
+  const handleBattleOugi = () => {
+    const ougiInfo = getAvailableOugi(walkData.todaySteps);
+    if (!ougiInfo || w1OugiUsed) return;
+    const boss = WORLD1_BOSSES[w1BossIndex];
+    const dmg = Math.floor(boss.hp * ougiInfo.damageRate);
+    applyBattleDamage(dmg);
+    setW1OugiUsed(true);
+    saveW1Battle({ ougiUsed: true });
+  };
+
+  const handleBattleRun = () => {
+    const boss = WORLD1_BOSSES[w1BossIndex];
+    const recovery = Math.floor(boss.hp * RUN_RECOVERY_RATE);
+    setW1BossHp(prev => {
+      const newHp = Math.min(boss.hp, prev + recovery);
+      saveW1Battle({ bossHp: newHp });
+      return newHp;
+    });
+    setBattleActive(false);
+  };
+
   // samuraiKingUsesを読み込み（初回無料体験の管理）
   useEffect(() => {
     (async () => {
@@ -947,6 +1152,143 @@ export default function App() {
       }
     })();
   }, []);
+
+  // =========================
+  // Samurai Walk: 歩数トラッキング
+  // =========================
+  useEffect(() => {
+    if (isOnboarding || difficulty === 'easy') return;
+    
+    // walkData & walkBoss 読み込み
+    (async () => {
+      try {
+        const today = getTodayString();
+
+        // walkData読み込み
+        const wJson = await AsyncStorage.getItem(WALK_DATA_KEY);
+        let loadedWalk = { ...DEFAULT_WALK_DATA };
+        let saboriCount = 0;
+        if (wJson) {
+          const saved = JSON.parse(wJson);
+          if (saved.lastActiveDate === today) {
+            loadedWalk = saved;
+          } else {
+            const yesterday = new Date();
+            yesterday.setDate(yesterday.getDate() - 1);
+            const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+            const wasActiveYesterday = saved.lastActiveDate === yesterdayStr;
+            const newStreak = wasActiveYesterday ? saved.streak + 1 : 0;
+            saboriCount = wasActiveYesterday ? 0 : saved.saboriDays + 1;
+            loadedWalk = {
+              ...saved,
+              todaySteps: 0,
+              streak: newStreak,
+              saboriDays: saboriCount,
+              lastActiveDate: today,
+            };
+          }
+        }
+        setWalkData(loadedWalk);
+
+        // walkBoss読み込み
+        const bJson = await AsyncStorage.getItem(WALK_BOSS_KEY);
+        let loadedBoss = { ...DEFAULT_WALK_BOSS };
+        if (bJson) {
+          loadedBoss = JSON.parse(bJson);
+        }
+        // 難易度に合わせたHP設定（初回）
+        const bossData = WALK_BOSSES[loadedBoss.bossIndex] || WALK_BOSSES[0];
+        if (loadedBoss.maxHp === 0 || loadedBoss.lastDamageDate === '') {
+          loadedBoss.maxHp = difficulty === 'hard' ? bossData.hardHp : bossData.normalHp;
+          loadedBoss.currentHp = loadedBoss.maxHp;
+        }
+
+        // 敵回復ロジック（サボった場合）
+        if (saboriCount > 0 && loadedBoss.currentHp < loadedBoss.maxHp) {
+          const rate = getRecoveryRate(saboriCount, difficulty as 'normal' | 'hard');
+          const recovery = Math.floor(loadedBoss.maxHp * rate);
+          loadedBoss.currentHp = Math.min(loadedBoss.maxHp, loadedBoss.currentHp + recovery);
+        }
+
+        // 日付変わった → 今日のダメージリセット
+        if (loadedBoss.lastDamageDate !== today) {
+          loadedBoss.damageToday = 0;
+        }
+
+        setWalkBoss(loadedBoss);
+        await AsyncStorage.setItem(WALK_BOSS_KEY, JSON.stringify(loadedBoss));
+      } catch (e) {
+        console.warn('Failed to load walk data', e);
+      }
+    })();
+
+    // ペドメーター購読
+    const unsubscribe = subscribeToSteps((steps) => {
+      setWalkData(prev => ({
+        ...prev,
+        todaySteps: Math.max(steps, 500),
+        lastActiveDate: getTodayString(),
+      }));
+    });
+
+    return () => unsubscribe();
+  }, [isOnboarding, difficulty]);
+
+  // 歩数ダメージをボスに適用（歩数更新のたびに）
+  useEffect(() => {
+    if (difficulty === 'easy' || walkData.todaySteps === 0) return;
+    const goal = getDailyGoal(difficulty);
+    const goalReached = walkData.todaySteps >= goal;
+    const totalDamage = calculateWalkDamage(walkData.todaySteps, difficulty, walkData.streak, goalReached);
+    const newDamage = totalDamage - walkBoss.damageToday;
+    if (newDamage <= 0) return;
+
+    setWalkBoss(prev => {
+      const newHp = Math.max(0, prev.currentHp - newDamage);
+      const updated = {
+        ...prev,
+        currentHp: newHp,
+        damageToday: totalDamage,
+        lastDamageDate: getTodayString(),
+      };
+
+      // ボス撃破チェック
+      if (newHp <= 0 && prev.currentHp > 0) {
+        const newDefeated = [...prev.defeated];
+        newDefeated[prev.bossIndex] = true;
+        const nextIndex = prev.bossIndex + 1;
+        if (nextIndex < WALK_BOSSES.length) {
+          const nextBoss = WALK_BOSSES[nextIndex];
+          const nextMaxHp = difficulty === 'hard' ? nextBoss.hardHp : nextBoss.normalHp;
+          return {
+            ...updated,
+            defeated: newDefeated,
+            bossIndex: nextIndex,
+            currentHp: nextMaxHp,
+            maxHp: nextMaxHp,
+            damageToday: 0,
+          };
+        } else {
+          return { ...updated, defeated: newDefeated };
+        }
+      }
+      return updated;
+    });
+  }, [walkData.todaySteps]);
+
+  // walkData保存（5秒デバウンス）
+  const walkSaveTimer = useRef<any>(null);
+  useEffect(() => {
+    if (difficulty === 'easy' || walkData.todaySteps === 0) return;
+    if (walkSaveTimer.current) clearTimeout(walkSaveTimer.current);
+    walkSaveTimer.current = setTimeout(async () => {
+      try {
+        await AsyncStorage.setItem(WALK_DATA_KEY, JSON.stringify(walkData));
+        await AsyncStorage.setItem(WALK_BOSS_KEY, JSON.stringify(walkBoss));
+      } catch (e) {}
+    }, 5000);
+    return () => { if (walkSaveTimer.current) clearTimeout(walkSaveTimer.current); };
+  }, [walkData.todaySteps, walkBoss.currentHp]);
 
   // =========================
   // Tab change sync (Goal/Review)
@@ -1540,6 +1882,7 @@ export default function App() {
         saveMissionState({ alarmActive: false });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showSaveSuccess('アラーム解除！今日も頑張ろう');
+        setAlarmDismissedFlag(true);
           } else {
         setMissionQuizQuestion(generateMissionQuiz());
         setMissionQuizAnswer('');
@@ -1575,6 +1918,7 @@ export default function App() {
       playCorrectSound();
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showSaveSuccess('アラーム解除！今日も頑張ろう');
+      setAlarmDismissedFlag(true);
     }
   };
 
@@ -1751,6 +2095,7 @@ export default function App() {
       routineDone: prev?.routineDone ?? [],
     }));
     showSaveSuccess('振り返り完了。明日も斬れ！');
+
   };
 
   const toggleTodoDone = async (date: string, todoId: string) => {
@@ -3371,6 +3716,7 @@ export default function App() {
                 setShowStartScreen(true);
                 setShowFocusEntry(true);
                 setFocusType('select');
+
               }}
             ]);
             return 0;
@@ -3932,23 +4278,6 @@ export default function App() {
   };
 
   const renderBattleTab = () => {
-    const levelInfo = getLevelFromXp(totalXp);
-
-    const YOKAI_MISSIONS: { [key: string]: { mission: string; tab: YokaiFeature; action: string } } = {
-      mikkabozu: { mission: '今日の目標を書け', tab: 'goal', action: '目標タブで目標を保存する' },
-      hyakume: { mission: '10分以上集中しろ', tab: 'focus', action: '集中タイマーを完了する' },
-      deebu: { mission: '目標を立てて動け', tab: 'goal', action: '目標タブで目標を保存する' },
-      atodeyaru: { mission: '今すぐ目標を書け', tab: 'goal', action: '目標タブで目標を保存する' },
-      scroll: { mission: 'SNSをやめて集中しろ', tab: 'focus', action: '集中タイマーを完了する' },
-      tetsuya: { mission: '明日のアラームをセットしろ', tab: 'alarm', action: 'アラームをセットする' },
-      nidoneel: { mission: '明日ちゃんと起きろ', tab: 'alarm', action: 'アラームを解除する' },
-      hikakuzou: { mission: '感謝を３つ以上書け', tab: 'gratitude', action: '感謝を３つ以上書く' },
-      peeping: { mission: '自分のことに感謝しろ', tab: 'gratitude', action: '感謝を３つ以上書く' },
-      mottemiteya: { mission: '他人じゃなく自分を見ろ', tab: 'gratitude', action: '感謝を３つ以上書く' },
-      moumuri: { mission: '相談してミッションをこなせ', tab: 'consult', action: '相談ミッションを完了する' },
-      atamadekkachi: { mission: '振り返りを書け', tab: 'review', action: '振り返りを保存する' },
-    };
-
     return (
       <ScrollView style={{ flex: 1, padding: 16 }} contentContainerStyle={{ paddingBottom: 40 }}>
         <Pressable
@@ -3958,71 +4287,93 @@ export default function App() {
           <Text style={{ color: '#888', fontSize: 16 }}>← 修行の間</Text>
         </Pressable>
 
-        <View style={{ alignItems: 'center', marginBottom: 24 }}>
+        <View style={{ alignItems: 'center', marginBottom: 20 }}>
           <Text style={{ color: '#ef4444', fontSize: 22, fontWeight: '900' }}>⚔️ 修行対戦 ⚔️</Text>
-          <Text style={{ color: '#555', fontSize: 12, marginTop: 4 }}>妖怪を選んでミッションをこなせ</Text>
+          <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>敵を選んでバトルに挑め</Text>
         </View>
 
-        {YOKAI_LIST.map((yokai) => {
-          const mission = YOKAI_MISSIONS[yokai.id];
-          const isDefeated = defeatedYokaiToday.includes(yokai.id);
-          if (!mission) return null;
-          return (
-            <Pressable
-              key={yokai.id}
-              onPress={() => {
-                if (isDefeated) {
-                  showSaveSuccess('この妖怪は今日倒した');
-                  return;
-                }
+        {/* ボスグリッド（スマブラ風） */}
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 12 }}>
+          {WORLD1_BOSSES.map((b, i) => {
+            const defeated = i < w1DefeatedCount;
+            const current = i === w1BossIndex && w1BossIndex < WORLD1_BOSSES.length;
+            const locked = i > w1BossIndex;
+            const hpR = current ? Math.max(0, w1BossHp / b.hp) : (defeated ? 0 : 1);
+            return (
+              <Pressable key={b.id} onPress={() => {
+                if (locked) { showSaveSuccess('前の敵を倒せ'); return; }
                 playTapSound();
-                setTab(mission.tab === 'consult' ? 'consult' : mission.tab as any);
-                setShowStartScreen(false);
-              }}
+                if (current) setBattleActive(true);
+                else if (defeated) showSaveSuccess(b.name + 'は討伐済み！');
+              }} style={({ pressed }) => [{
+                width: (SCREEN_W - 64) / 3, backgroundColor: current ? '#1a0a00' : defeated ? '#0a1a0a' : '#0a0a1a',
+                borderRadius: 16, padding: 10, alignItems: 'center',
+                borderWidth: 2, borderColor: current ? '#ef4444' : defeated ? '#2DD4BF44' : '#22222244',
+                opacity: locked ? 0.4 : (pressed ? 0.8 : 1),
+              }]}>
+                <View style={{ width: 70, height: 70, borderRadius: 12, overflow: 'hidden', backgroundColor: '#000', marginBottom: 6, borderWidth: 2, borderColor: current ? '#ef444466' : defeated ? '#2DD4BF44' : '#333' }}>
+                  {locked ? (
+                    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: '#111' }}><Text style={{ fontSize: 28 }}>🔒</Text></View>
+                  ) : (
+                    <Image source={defeated ? YOKAI_LOSE_IMAGES[b.yokaiId] : YOKAI_IMAGES[b.yokaiId]} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+                  )}
+                </View>
+                <Text style={{ color: current ? '#ef4444' : defeated ? '#2DD4BF' : '#555', fontSize: 11, fontWeight: '900', textAlign: 'center' }}>{locked ? '？？？' : b.name}</Text>
+                {current && <View style={{ backgroundColor: '#ef4444', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4 }}><Text style={{ color: '#fff', fontSize: 9, fontWeight: '900' }}>CHALLENGE</Text></View>}
+                {defeated && <Text style={{ color: '#2DD4BF', fontSize: 9, fontWeight: '700', marginTop: 4 }}>✓ 討伐済</Text>}
+                {current && <View style={{ width: '100%', height: 4, backgroundColor: '#333', borderRadius: 2, marginTop: 4, overflow: 'hidden' }}><View style={{ height: '100%', width: `${hpR * 100}%`, backgroundColor: hpR > 0.5 ? '#22c55e' : hpR > 0.25 ? '#f59e0b' : '#ef4444', borderRadius: 2 }} /></View>}
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* 現在のボス詳細 */}
+        {w1BossIndex < WORLD1_BOSSES.length && (
+          <View style={{ backgroundColor: '#1a1a2e', borderRadius: 16, padding: 20, marginTop: 20, borderWidth: 1, borderColor: '#ef444444' }}>
+            <View style={{ alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: '900' }}>{'👹 ' + WORLD1_BOSSES[w1BossIndex].name}</Text>
+              <Text style={{ color: '#888', fontSize: 12, fontStyle: 'italic', marginTop: 4 }}>{'「' + WORLD1_BOSSES[w1BossIndex].quote + '」'}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+              <Text style={{ color: '#888', fontSize: 11 }}>HP</Text>
+              <Text style={{ color: '#888', fontSize: 11 }}>{w1BossHp.toLocaleString() + ' / ' + WORLD1_BOSSES[w1BossIndex].hp.toLocaleString()}</Text>
+            </View>
+            <View style={{ height: 10, backgroundColor: '#333', borderRadius: 5, overflow: 'hidden', marginBottom: 16 }}>
+              <View style={{ height: '100%', width: `${Math.max(0, w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) * 100}%`, backgroundColor: (w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) > 0.5 ? '#22c55e' : (w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) > 0.25 ? '#f59e0b' : '#ef4444', borderRadius: 5 }} />
+            </View>
+
+            {/* 歩数情報 */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ color: '#2DD4BF', fontSize: 20, fontWeight: '900' }}>{walkData.todaySteps.toLocaleString()}</Text>
+                <Text style={{ color: '#888', fontSize: 10 }}>今日の歩数</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Text style={{ color: '#f59e0b', fontSize: 20, fontWeight: '900' }}>{walkData.streak}</Text>
+                <Text style={{ color: '#888', fontSize: 10 }}>連続日数</Text>
+              </View>
+            </View>
+
+            <Pressable
+              onPress={() => { playTapSound(); setBattleActive(true); }}
               style={({ pressed }) => [{
-                flexDirection: 'row',
-                alignItems: 'center',
-                backgroundColor: isDefeated ? '#0a1a0a' : (pressed ? '#1a0808' : '#0a0a1a'),
-                borderRadius: 14,
-                padding: 14,
-                marginBottom: 10,
-                borderWidth: 1,
-                borderColor: isDefeated ? '#1a3a1a' : '#8B0000',
-                opacity: isDefeated ? 0.5 : 1,
+                backgroundColor: pressed ? '#3a1010' : '#1a0808',
+                borderWidth: 2, borderColor: '#ef4444', borderRadius: 14,
+                paddingVertical: 16, alignItems: 'center',
               }]}
             >
-              <View style={{
-                width: 60, height: 60, borderRadius: 12, overflow: 'hidden',
-                borderWidth: 2, borderColor: isDefeated ? '#1a3a1a' : '#8B0000',
-                backgroundColor: '#0a0a0a', marginRight: 14,
-              }}>
-                <Image
-                  source={isDefeated ? YOKAI_LOSE_IMAGES[yokai.id] : YOKAI_IMAGES[yokai.id]}
-                  style={{ width: '100%', height: '100%' }}
-                  resizeMode="contain"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Text style={{ color: isDefeated ? '#4a4a4a' : '#ccc', fontSize: 15, fontWeight: '800' }}>{yokai.name}</Text>
-                  {isDefeated && <Text style={{ color: '#2a6a2a', fontSize: 11, marginLeft: 8, fontWeight: '700' }}>✓ 討伐済</Text>}
-                </View>
-                <Text style={{ color: isDefeated ? '#333' : '#ef4444', fontSize: 12, fontWeight: '600', marginTop: 4 }}>
-                  {isDefeated ? '─' : mission.mission}
-                </Text>
-                <Text style={{ color: '#444', fontSize: 10, marginTop: 2 }}>
-                  {isDefeated ? '' : mission.action}
-                </Text>
-              </View>
-              {!isDefeated && <Text style={{ color: '#555', fontSize: 18 }}>›</Text>}
+              <Text style={{ color: '#ef4444', fontSize: 18, fontWeight: '900' }}>⚔️ バトル開始</Text>
             </Pressable>
-          );
-        })}
+          </View>
+        )}
 
-        {defeatedYokaiToday.length > 0 && (
-          <Text style={{ color: '#D4AF37', fontSize: 14, textAlign: 'center', marginTop: 16 }}>
-            🔥 今日の討伐: {defeatedYokaiToday.length} / {YOKAI_LIST.length}
-          </Text>
+        {/* 全クリ */}
+        {w1BossIndex >= WORLD1_BOSSES.length && (
+          <View style={{ backgroundColor: '#1a2a1a', borderRadius: 16, padding: 20, marginTop: 20, alignItems: 'center', borderWidth: 1, borderColor: '#2DD4BF44' }}>
+            <Text style={{ fontSize: 32, marginBottom: 8 }}>🎊</Text>
+            <Text style={{ color: '#2DD4BF', fontSize: 18, fontWeight: '900' }}>World 1 クリア！</Text>
+            <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>全ての敵を討伐した</Text>
+          </View>
         )}
       </ScrollView>
     );
@@ -4197,68 +4548,45 @@ export default function App() {
           </View>
         )}
 
-        {/* Battle Arena Section */}
-        {(isPro || levelInfo.level >= 3) && (
-          <View style={{ marginTop: 32, width: '100%' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-              <Text style={{ color: '#8B0000', fontSize: 16, fontWeight: '900', marginHorizontal: 12 }}>☠️ 対戦場 ☠️</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-            </View>
-
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' }}>
-              {getAvailableEnemies().map((enemy) => (
-                <Pressable
-                  key={enemy.id}
-                  onPress={() => startBattle(enemy)}
-                  style={({ pressed }) => [{
-                    width: '48%',
-                    backgroundColor: pressed ? '#2a0a0a' : '#0a0a1a',
-                    borderRadius: 14,
-                    padding: 10,
-                    marginBottom: 10,
-                    alignItems: 'center',
-                    borderWidth: 1,
-                    borderColor: enemy.isBoss ? '#8B0000' : '#222',
-                    opacity: pressed ? 0.8 : 1,
-                  }]}
-                >
-                  <View style={{
-                    width: 70, height: 70, borderRadius: 12, overflow: 'hidden',
-                    borderWidth: 2, borderColor: enemy.isBoss ? '#8B0000' : '#333',
-                    backgroundColor: '#0a0a0a',
-                  }}>
-                    <Image source={enemy.image} style={{ width: '100%', height: '100%' }} resizeMode="contain" />
+        {/* World 1 マップ */}
+        <View style={{ marginTop: 32, width: '100%' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
+            <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '900', marginHorizontal: 12 }}>⚔️ 修行の道 ⚔️</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
+          </View>
+          <Pressable
+            onPress={() => { playTapSound(); setTab('innerWorld'); setInnerWorldView('stageMap'); }}
+            style={({ pressed }) => [{
+              backgroundColor: '#0a0a1a', borderRadius: 16, overflow: 'hidden',
+              borderWidth: 1, borderColor: '#D4AF3744', opacity: pressed ? 0.8 : 1,
+            }]}
+          >
+            <ImageBackground source={WORLD1_BG} style={{ padding: 20, alignItems: 'center' }} resizeMode="cover" imageStyle={{ borderRadius: 16, opacity: 0.4 }}>
+              <Text style={{ color: '#D4AF37', fontSize: 14, fontWeight: '800', marginBottom: 8 }}>WORLD 1「目覚め」</Text>
+              {w1BossIndex < WORLD1_BOSSES.length ? (
+                <View style={{ alignItems: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                    <Image source={YOKAI_IMAGES[WORLD1_BOSSES[w1BossIndex].yokaiId]} style={{ width: 50, height: 50, borderRadius: 10, marginRight: 12 }} resizeMode="contain" />
+                    <View>
+                      <Text style={{ color: '#ef4444', fontSize: 16, fontWeight: '900' }}>{'👹 ' + WORLD1_BOSSES[w1BossIndex].name}</Text>
+                      <Text style={{ color: '#888', fontSize: 11 }}>{'HP: ' + w1BossHp.toLocaleString() + ' / ' + WORLD1_BOSSES[w1BossIndex].hp.toLocaleString()}</Text>
+                    </View>
                   </View>
-                  {enemy.isBoss && (
-                    <Text style={{ color: '#8B0000', fontSize: 9, fontWeight: '900', marginTop: 4 }}>👹 BOSS</Text>
-                  )}
-                  <Text style={{ color: '#aaa', fontSize: 13, fontWeight: '700', marginTop: 4, textAlign: 'center' }}>{enemy.name}</Text>
-                  <Text style={{ color: '#555', fontSize: 9, fontStyle: 'italic', marginTop: 2, textAlign: 'center' }} numberOfLines={1}>
-                    「{enemy.quote}」
-                  </Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {battleWinStreak > 0 && (
-              <Text style={{ color: '#D4AF37', fontSize: 13, textAlign: 'center', marginTop: 4 }}>
-                🔥 {battleWinStreak}連勝中
-              </Text>
-            )}
-          </View>
-        )}
-
-        {!isPro && levelInfo.level < 3 && (
-          <View style={{ marginTop: 32, width: '100%', alignItems: 'center', opacity: 0.4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-              <Text style={{ color: '#555', fontSize: 14, marginHorizontal: 12 }}>☠️ 対戦場 ☠️</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: '#333' }} />
-            </View>
-            <Text style={{ color: '#555', fontSize: 13 }}>🔒 Lv.3「足軽」で解放</Text>
-          </View>
-        )}
+                  <View style={{ width: '100%', height: 6, backgroundColor: '#333', borderRadius: 3, overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${Math.max(0, w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) * 100}%`, backgroundColor: (w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) > 0.5 ? '#22c55e' : (w1BossHp / WORLD1_BOSSES[w1BossIndex].hp) > 0.25 ? '#f59e0b' : '#ef4444', borderRadius: 3 }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', marginTop: 8 }}>
+                    {WORLD1_BOSSES.map((_, i) => <Text key={i} style={{ fontSize: 14, marginHorizontal: 2, opacity: i < w1DefeatedCount ? 1 : 0.3 }}>{i < w1DefeatedCount ? '💀' : '👹'}</Text>)}
+                  </View>
+                </View>
+              ) : (
+                <Text style={{ color: '#2DD4BF', fontSize: 14, fontWeight: '700' }}>🎊 全クリ！</Text>
+              )}
+              <Text style={{ color: '#888', fontSize: 11, marginTop: 10 }}>タップでマップへ →</Text>
+            </ImageBackground>
+          </Pressable>
+        </View>
 
       </ScrollView>
     );
@@ -4275,8 +4603,8 @@ export default function App() {
   // ============================================================
   const SCREEN_W = Dimensions.get('window').width;
   const SCREEN_H = Dimensions.get('window').height;
-  const [mikkabozuEventDone, setMikkabozuEventDone] = useState(false);
-  const [innerWorldUnlocked, setInnerWorldUnlocked] = useState(false);
+  const [mikkabozuEventDone, setMikkabozuEventDone] = useState(true);
+  const [innerWorldUnlocked, setInnerWorldUnlocked] = useState(true);
   const [atodeyaruEventDone, setAtodeyaruEventDone] = useState(false);
   const [atodeyaruActive, setAtodeyaruActive] = useState(false);
   const [storyStage, setStoryStage] = useState<number>(1);
@@ -4419,8 +4747,6 @@ export default function App() {
 
   const checkMikkabozuEvent = async () => {
     try {
-      // TEMP_TEST
-      setTimeout(() => startStoryEvent(), 500); return;
       const done = await AsyncStorage.getItem(MIKKABOZU_EVENT_KEY);
       if (done === 'true') { setMikkabozuEventDone(true); setInnerWorldUnlocked(true); return; }
       const today = new Date().toISOString().split('T')[0];
@@ -4462,14 +4788,15 @@ export default function App() {
   };
 
   const advanceScene = () => {
-    const scenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const scenes = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     const next = sceneIndex + 1;
-    if (storyStage === 1 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionSelect'); setSelectedMission(null); samuraiSpeak('どう挑む？'); return; }
-    if (storyStage === 2 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
-    if (storyStage === 3 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
-    if (storyStage === 4 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
-    if (storyStage === 5 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('missionBrief'); return; }
+    if (storyStage === 1 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
+    if (storyStage === 2 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
+    if (storyStage === 3 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
+    if (storyStage === 4 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
+    if (storyStage === 5 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
+    if (storyStage === 6 && next === 4) { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryActive(false); storyOverlayOpacity.setValue(0); setBattleActive(true); return; }
     if (next >= scenes.length) { setStoryPhase('clear'); return; }
     setSceneIndex(next); setSamuraiVoice(''); storyTypewriter(scenes[next].text);
   };
@@ -4517,7 +4844,7 @@ export default function App() {
   };
 
   const advanceVictoryScene = () => {
-    const scenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const scenes = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     if (!storyTypingDone) { setStoryTypeText(scenes[sceneIndex].text); setStoryTypingDone(true); return; }
     if (sceneIndex === 4) { setSceneIndex(5); setSamuraiVoice(''); storyTypewriter(scenes[5].text); return; }
     setStoryPhase('clear');
@@ -4540,12 +4867,30 @@ export default function App() {
     } else {
       try { await AsyncStorage.setItem(MIKKABOZU_EVENT_KEY, 'true'); } catch(e) {}
       setMikkabozuEventDone(true);
+      // 三日坊主撃破後、難易度選択を表示（2秒後）
+      setTimeout(() => setShowDifficultySelect(true), 2000);
     }
     setInnerWorldUnlocked(true); setStoryActive(false);
     setStoryPhase('dark'); storyOverlayOpacity.setValue(0); storyEyesOpacity.setValue(0);
     setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice(''); setMissionCount(0);
   };
   // === ATODEYARU EVENT / STAGE 2 ===
+  const startNidoneelEvent = () => {
+    setStoryStage(6);
+    setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
+    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy); } catch(e) {}
+    setTimeout(() => {
+      setStoryPhase('eyes');
+      Animated.timing(storyEyesOpacity, { toValue: 1, duration: 1500, useNativeDriver: true }).start();
+    }, 2000);
+    setTimeout(() => {
+      storyEyesOpacity.setValue(0); setStoryPhase('scenes');
+      storyTypewriter(NIDONEEL_SCENES[0].text);
+      Audio.Sound.createAsync(BGM_MONSTER_APPEAR).then(({sound}) => { monsterBgmRef.current = sound; sound.setVolumeAsync(0.5).then(() => sound.playAsync()); }).catch(e => {}); setTimeout(() => playVoice(VOICE_NIDONEEL_APPEAR), 1500);
+    }, 5000);
+  };
+
   const startAtodeyaruEvent = () => {
     setStoryStage(2);
     setStoryActive(true); setStoryPhase('dark'); setSceneIndex(0); setMissionCount(0);
@@ -4937,11 +5282,11 @@ export default function App() {
 
     if (innerWorldView === 'stageMap') {
       const W1_STAGES = [
-        { id: 1, name: '三日坊主', icon: NODE_FIST, cleared: mikkabozuEventDone, x: 0.5, y: 0.75 },
-        { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: atodeyaruEventDone, x: 0.3, y: 0.60 },
-        { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: deebuEventDone, x: 0.6, y: 0.47 },
-        { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: moumuriEventDone, x: 0.35, y: 0.34 },
-        { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: mk2EventDone, x: 0.5, y: 0.21 },
+        { id: 1, name: 'ニドネール', icon: NODE_FIST, cleared: w1DefeatedCount > 0, x: 0.5, y: 0.75 },
+        { id: 2, name: 'アトデヤル', icon: NODE_KATANA, cleared: w1DefeatedCount > 1, x: 0.3, y: 0.60 },
+        { id: 3, name: 'デーブ', icon: NODE_SCROLL, cleared: w1DefeatedCount > 2, x: 0.6, y: 0.47 },
+        { id: 4, name: 'モウムリ', icon: NODE_BRAIN, cleared: w1DefeatedCount > 3, x: 0.35, y: 0.34 },
+        { id: 5, name: '三日坊主II', icon: NODE_BOSS, cleared: w1DefeatedCount > 4, x: 0.5, y: 0.21 },
       ];
       return (
         <ImageBackground source={WORLD1_BG} style={{ flex: 1 }} resizeMode="cover">
@@ -4953,7 +5298,7 @@ export default function App() {
             const isNext = !stage.cleared && W1_STAGES.filter(s => s.id < stage.id).every(s => s.cleared);
             const isLocked = !stage.cleared && !isNext;
             return (
-              <Pressable key={stage.id} onPress={() => { playTapSound(); if (stage.cleared && stage.id === 1) { startStoryEvent(); } else if (stage.cleared && stage.id === 2) { startAtodeyaruEvent(); } else if (isNext && stage.id === 2) { startAtodeyaruEvent(); } else if (stage.cleared && stage.id === 3) { startDeebuEvent(); } else if (isNext && stage.id === 3) { startDeebuEvent(); } else if (stage.cleared && stage.id === 4) { startMoumuriEvent(); } else if (isNext && stage.id === 4) { startMoumuriEvent(); } else if (stage.cleared && stage.id === 5) { startMk2Event(); } else if (isNext && stage.id === 5) { startMk2Event(); } else if (isNext) showSaveSuccess('近日実装'); else showSaveSuccess('前のステージをクリア'); }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: isLocked ? 0.4 : 1 }}>
+              <Pressable key={stage.id} onPress={() => { playTapSound(); const bossIdx = stage.id - 1; if (w1BossIndex === bossIdx && w1BossHp < WORLD1_BOSSES[bossIdx].hp && w1BossHp > 0) { setBattleActive(true); } else { setW1BossIndex(bossIdx); setW1BossHp(WORLD1_BOSSES[bossIdx].hp); setW1CompletedMissions([]); setBattleActive(true); } }} style={{ position: 'absolute', left: SCREEN_W * stage.x - 35, top: SCREEN_H * stage.y - 35, alignItems: 'center', opacity: 1 }}>
                 <View style={{ width: 70, height: 70, borderRadius: 35, borderWidth: 3, borderColor: stage.cleared ? '#DAA520' : isNext ? '#fff' : '#555', overflow: 'hidden', backgroundColor: '#000' }}>
                   <Image source={isLocked ? NODE_LOCKED : stage.icon} style={{ width: '100%', height: '100%' }} resizeMode='contain' />
                 </View>
@@ -4963,6 +5308,7 @@ export default function App() {
               </Pressable>
             );
           })}
+
         </ImageBackground>
       );
     }
@@ -5765,6 +6111,8 @@ export default function App() {
     // AIの反応をトーストで表示（音声なし）
     const response = gratitudeResponses[Math.floor(Math.random() * gratitudeResponses.length)](inputText);
     showSaveSuccess(response);
+
+
     
     if (newList.length === 10) {
       setTimeout(() => {
@@ -5931,6 +6279,33 @@ export default function App() {
         }}>
           <Text style={styles.restoreButtonText}>購入を復元</Text>
         </Pressable>
+
+        <Text style={styles.sectionTitle}>難易度</Text>
+        <Text style={styles.settingsHint}>バトルの仕組みが変わる。歩数バトルは侍以上で解放。</Text>
+        <View style={styles.segmentRow}>
+          {[
+            { key: 'easy', label: '見習い侍' },
+            { key: 'normal', label: '侍' },
+            { key: 'hard', label: '武士道' },
+          ].map(opt => {
+            const active = difficulty === opt.key;
+            return (
+              <Pressable
+                key={opt.key}
+                style={[styles.segmentButton, active && styles.segmentButtonActive]}
+                onPress={async () => { 
+                  setDifficulty(opt.key as Difficulty);
+                  try {
+                    await AsyncStorage.setItem(DIFFICULTY_KEY, opt.key);
+                  } catch(e) {}
+                  showSaveSuccess('難易度を「' + opt.label + '」に変更');
+                }}
+              >
+                <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>{opt.label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
         <Text style={styles.sectionTitle}>サムライボイス</Text>
         <View style={styles.settingsRow}>
@@ -6174,6 +6549,61 @@ export default function App() {
     return null;
   };
 
+  // === 難易度選択モーダル（三日坊主撃破後） ===
+  const renderDifficultySelectModal = () => {
+    if (!showDifficultySelect) return null;
+    const selectDifficulty = async (d: Difficulty) => {
+      playTapSound();
+      setDifficulty(d);
+      try { await AsyncStorage.setItem(DIFFICULTY_KEY, d); } catch(e) {}
+      setShowDifficultySelect(false);
+      if (d === 'easy') {
+        showSaveSuccess('見習い侍モード。このまま修行を続けよ');
+      } else {
+        showSaveSuccess(d === 'normal' ? '侍モード解放。歩いて敵を倒せ' : '武士道モード解放。容赦なし');
+      }
+    };
+    return (
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center', zIndex: 9999, padding: 24 }}>
+        <View style={{ backgroundColor: '#111827', borderRadius: 20, padding: 28, width: '100%', maxWidth: 360 }}>
+          <Text style={{ color: '#2DD4BF', fontSize: 14, textAlign: 'center', marginBottom: 8 }}>三日坊主を撃破した</Text>
+          <Text style={{ color: '#e5e7eb', fontSize: 22, fontWeight: '900', textAlign: 'center', marginBottom: 8 }}>
+            次の戦い方を選べ
+          </Text>
+          <Text style={{ color: '#888', fontSize: 13, textAlign: 'center', marginBottom: 24 }}>
+            あとから設定で変更できる
+          </Text>
+
+          <Pressable
+            onPress={() => selectDifficulty('easy')}
+            style={({ pressed }) => [{ backgroundColor: pressed ? '#1f2937' : '#0d1117', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#2DD4BF44' }]}
+          >
+            <Text style={{ color: '#2DD4BF', fontSize: 17, fontWeight: '800' }}>⭐ 見習い侍（今まで通り）</Text>
+            <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>タップで戦う。気軽に続ける</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => selectDifficulty('normal')}
+            style={({ pressed }) => [{ backgroundColor: pressed ? '#1f2937' : '#0d1117', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#f59e0b44' }]}
+          >
+            <Text style={{ color: '#f59e0b', fontSize: 17, fontWeight: '800' }}>⭐⭐ 侍</Text>
+            <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>歩いて敵を倒す。サボると敵が回復</Text>
+            <Text style={{ color: '#f59e0b', fontSize: 12, marginTop: 4 }}>🌪️ 10,000歩で奥義が使える</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={() => selectDifficulty('hard')}
+            style={({ pressed }) => [{ backgroundColor: pressed ? '#1f2937' : '#0d1117', borderRadius: 12, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#ef444444' }]}
+          >
+            <Text style={{ color: '#ef4444', fontSize: 17, fontWeight: '800' }}>⭐⭐⭐ 武士道</Text>
+            <Text style={{ color: '#888', fontSize: 13, marginTop: 4 }}>歩く＋ミッション。容赦なし</Text>
+            <Text style={{ color: '#ef4444', fontSize: 12, marginTop: 4 }}>⚡ 奥義の威力が倍増</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  };
+
   const renderTimeOver = () => (
     <View style={styles.timeOverContainer}>
       <View style={styles.timeOverCard}>
@@ -6210,9 +6640,11 @@ export default function App() {
 
   // === Story Overlay ===
   if (storyActive) {
-    const currentScenes = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
+    const currentScenes = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES;
     const currentScene = currentScenes[sceneIndex] || currentScenes[0];
-    const sceneImg = storyStage === 5
+    const sceneImg = storyStage === 6
+      ? (currentScene.img === 2 ? NIDONEEL_SCENE2_IMG : NIDONEEL_SCENE1_IMG)
+      : storyStage === 5
       ? (currentScene.img === 2 ? STORY_SCENE2_IMG : STORY_SCENE1_IMG)
       : storyStage === 4
       ? (currentScene.img === 2 ? MOUMURI_SCENE2_IMG : MOUMURI_SCENE1_IMG)
@@ -6367,7 +6799,7 @@ export default function App() {
 
           {storyPhase === 'defeat' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); storyTypewriter(sc[4].text); } }} />
+              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); storyTypewriter(sc[4].text); } }} />
               <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
             </View>
           )}
@@ -6778,12 +7210,7 @@ export default function App() {
                   onPress={() => {
                     playTapSound();
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-                    const levelInfo = getLevelFromXp(totalXp);
-                    if (levelInfo.level >= 1) {
-                      setTab('character');
-                    } else {
-                      showSaveSuccess('修行の成果は、やがて姿を持つ');
-                    }
+                    setTab('innerWorld');
                   }}
                   style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, transform: [{ scale: pressed ? 0.95 : 1 }], alignItems: 'center' }]}
                 >
@@ -7823,6 +8250,37 @@ export default function App() {
         </View>
       </Modal>
       {renderSaveToast()}
+      {renderDifficultySelectModal()}
+      {/* === World 1 Battle Screen === */}
+      {battleActive && w1BossIndex < WORLD1_BOSSES.length && (
+        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9998 }}>
+          <BattleScreen
+            boss={WORLD1_BOSSES[w1BossIndex]}
+            bossHp={w1BossHp}
+            missions={BATTLE_MISSIONS[w1BossIndex] || []}
+            todaySteps={walkData.todaySteps}
+            streak={walkData.streak}
+            ougi={getAvailableOugi(walkData.todaySteps)}
+            ougiUsed={w1OugiUsed}
+            completedMissions={w1CompletedMissions}
+            bossImage={YOKAI_IMAGES[WORLD1_BOSSES[w1BossIndex].yokaiId]}
+            bossDefeatImage={YOKAI_LOSE_IMAGES[WORLD1_BOSSES[w1BossIndex].yokaiId]}
+            battleBg={BATTLE_BG}
+            defeatedCount={w1DefeatedCount}
+            totalBosses={WORLD1_BOSSES.length}
+            onMissionComplete={handleBattleMissionComplete}
+            onOugi={handleBattleOugi}
+            isFirstEncounter={w1CompletedMissions.length === 0 && w1BossHp === WORLD1_BOSSES[w1BossIndex]?.hp}
+            onRun={handleBattleRun}
+            onClose={() => { setBattleActive(false); setTab('innerWorld'); }}
+            playTapSound={playTapSound}
+            playAttackSound={playAttackSound}
+            playWinSound={playWinSound}
+            sceneImage={w1BossIndex === 0 ? NIDONEEL_SCENE1_IMG : undefined}
+            voiceSource={w1BossIndex === 0 ? VOICE_NIDONEEL_APPEAR : undefined}
+          />
+        </View>
+      )}
       {renderPaywall()}
       {renderMissionAlarm()}
       {renderAlternativeAction()}

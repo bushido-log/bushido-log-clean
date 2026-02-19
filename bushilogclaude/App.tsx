@@ -530,7 +530,7 @@ export default function App() {
   const [walkBoss, setWalkBoss] = useState<WalkBossState>(DEFAULT_WALK_BOSS);
   const [ougiFlash, setOugiFlash] = useState(false);
   const [ougiDamageText, setOugiDamageText] = useState('');
-  const [showDifficultySelect, setShowDifficultySelect] = useState(true);
+  const [showDifficultySelect, setShowDifficultySelect] = useState(false);
 
   // === World 1 Battle System ===
   const [battleActive, setBattleActive] = useState(false);
@@ -650,6 +650,15 @@ export default function App() {
   const [healedToday, setHealedToday] = useState<Record<string, boolean>>({});
   const [lastHealDate, setLastHealDate] = useState('');
   const [showDefeatModal, setShowDefeatModal] = useState(false);
+  const [defeatPhase, setDefeatPhase] = useState(0);
+  const DEFEAT_QUOTES = [
+    '武士は七転び八起き。立て。',
+    '負けを知らぬ者に、本当の強さは宿らぬ',
+    '今日の敗北は、明日の勝利の種だ',
+    '刀は折れても、魂は折れん',
+    '恥じるな。逃げた者だけが本当の敗者だ',
+  ];
+  const [defeatQuote, setDefeatQuote] = useState('');
   const [enemyHp, setEnemyHp] = useState(100);
   const [battleTurnLog, setBattleTurnLog] = useState<string[]>([]);
   const [battleAnimating, setBattleAnimating] = useState(false);
@@ -1072,6 +1081,8 @@ export default function App() {
 
   // === Battle V2: 敗北処理 ===
   const handleDefeat = () => {
+    setDefeatPhase(0);
+    setDefeatQuote(DEFEAT_QUOTES[Math.floor(Math.random() * DEFEAT_QUOTES.length)]);
     setShowDefeatModal(true);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     // ボスHP全回復
@@ -1160,12 +1171,12 @@ export default function App() {
     // 次のボスへ進行
     const nextIndex = bossIndex + 1;
     if (nextIndex < WORLD1_BOSSES.length) {
-      setW1BossIndex(nextIndex);
+      setW1BossIndex(nextIndex); setW1DefeatedCount(prev => prev + 1);
       setW1BossHp(WORLD1_BOSSES[nextIndex].hp);
       setW1CompletedMissions([]);
-      saveW1Battle({ bossIndex: nextIndex, bossHp: WORLD1_BOSSES[nextIndex].hp, completedMissions: [] });
+      saveW1Battle({ bossIndex: nextIndex, bossHp: WORLD1_BOSSES[nextIndex].hp, completedMissions: [], defeatedCount: (w1DefeatedCount + 1) });
     } else {
-      saveW1Battle({ bossIndex: nextIndex, bossHp: 0, completedMissions: [] });
+      setW1DefeatedCount(prev => prev + 1); saveW1Battle({ bossIndex: nextIndex, bossHp: 0, completedMissions: [], defeatedCount: (w1DefeatedCount + 1) });
     }
     
     // 撃破演出（紙芝居）
@@ -5174,7 +5185,7 @@ export default function App() {
 
   const completeStoryEvent = async () => {
     if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; }
-    if (storyStage === 5) {
+    if (storyStage === 6) { completeStoryEvent(); } else if (storyStage === 5) {
       try { await AsyncStorage.setItem(MK2_EVENT_KEY, 'true'); } catch(e) {}
       setMk2EventDone(true);
     } else if (storyStage === 4) {
@@ -7196,10 +7207,10 @@ export default function App() {
             <ImageBackground source={storyStage === 5 ? ENDING_CLEAR_BG : undefined} style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }} resizeMode="cover">
               {storyStage === 5 && <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)' }} />}
               <Text style={{ color: '#DAA520', fontSize: 14, letterSpacing: 3, marginBottom: 8 }}>WORLD 1</Text>
-              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 4, marginBottom: 12, textAlign: 'center' }}>{storyStage === 5 ? 'FINAL STAGE CLEAR' : storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
-              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 5 ? '三日坊主IIを討伐' : storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
+              <Text style={{ color: '#fff', fontSize: 26, fontWeight: '900', letterSpacing: 4, marginBottom: 12, textAlign: 'center' }}>{storyStage === 5 ? 'FINAL STAGE CLEAR' : storyStage === 6 ? 'STAGE 1 CLEAR' : storyStage === 4 ? 'STAGE 4 CLEAR' : storyStage === 3 ? 'STAGE 3 CLEAR' : storyStage === 2 ? 'STAGE 2 CLEAR' : 'STAGE 1 CLEAR'}</Text>
+              <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', marginBottom: 40 }}>{storyStage === 5 ? '三日坊主IIを討伐' : storyStage === 6 ? 'ニドネールを討伐' : storyStage === 4 ? 'モウムリを討伐' : storyStage === 3 ? 'デーブを討伐' : storyStage === 2 ? 'アトデヤルを討伐' : '三日坊主を討伐'}</Text>
               <Text style={{ color: '#888', fontSize: 12, marginBottom: 4 }}>+50 XP</Text>
-              <TouchableOpacity onPress={() => { if (storyStage === 5) { endingStarted.current = false; endingStarted.current = false; endingActive.current = false; endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = []; endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = []; if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('ending1'); setTimeout(() => storyTypewriter('三日。\nたった三日。\n\n「どうせ続かない」\n「お前には無理だ」\n「また明日でいい」\n\n全部、斬った。\n\nお前は──侍だ。'), 800); } else { completeStoryEvent(); } }} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
+              <TouchableOpacity onPress={() => { if (storyStage === 6) { completeStoryEvent(); } else if (storyStage === 5) { endingStarted.current = false; endingStarted.current = false; endingActive.current = false; endingTimers.current.forEach(t => clearTimeout(t)); endingTimers.current = []; endingSounds.current.forEach(s => { try { s.stopAsync(); s.unloadAsync(); } catch(e) {} }); endingSounds.current = []; if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('ending1'); setTimeout(() => storyTypewriter('三日。\nたった三日。\n\n「どうせ続かない」\n「お前には無理だ」\n「また明日でいい」\n\n全部、斬った。\n\nお前は──侍だ。'), 800); } else { completeStoryEvent(); } }} style={{ marginTop: 30, backgroundColor: 'rgba(218,165,32,0.2)', borderWidth: 1, borderColor: '#DAA520', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 50 }}>
                 <Text style={{ color: '#DAA520', fontSize: 16, fontWeight: 'bold', letterSpacing: 2 }}>{storyStage === 5 ? '次へ' : '修行の間へ'}</Text>
               </TouchableOpacity>
             </ImageBackground>
@@ -8603,6 +8614,10 @@ export default function App() {
             onRun={handleBattleRun}
             onClose={() => { setBattleActive(false); setShowStartScreen(false); setInnerWorldView('menu'); setTab('innerWorld'); }}
             onVictory={handleBattleVictory}
+            playerHp={playerHp}
+            playerMaxHp={playerMaxHp}
+            playerLevel={getLevelFromXp(totalXp).level}
+            playerStats={samuraiStats}
             onConsult={async (text: string) => {
               try { return await callSamuraiKing(text); } catch(e) { return 'エラーでござる'; }
             }}
@@ -8712,20 +8727,73 @@ export default function App() {
           {/* === v2: Defeat Modal === */}
           {showDefeatModal && (
             <Pressable
-              onPress={dismissDefeat}
-              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 30, backgroundColor: 'rgba(0,0,0,0.95)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+              onPress={() => {
+                if (defeatPhase < 3) {
+                  setDefeatPhase(defeatPhase + 1);
+                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); } catch(e) {}
+                } else {
+                  dismissDefeat();
+                }
+              }}
+              style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.97)', justifyContent: 'center', alignItems: 'center', padding: 24 }}
             >
-              <Text style={{ color: '#e74c3c', fontSize: 48, marginBottom: 16 }}>{'💀'}</Text>
-              <Text style={{ color: '#e74c3c', fontSize: 22, fontWeight: '900', marginBottom: 8 }}>{'敗北…'}</Text>
-              <Text style={{ color: '#888', fontSize: 14, marginBottom: 16, textAlign: 'center' }}>
-                {'「' + (BOSS_ATTACK_CONFIG[w1BossIndex]?.attackQuote || 'ほら、また負けた') + '」'}
-              </Text>
-              <View style={{ backgroundColor: '#1a1a2e', borderRadius: 16, padding: 20, borderWidth: 1, borderColor: '#D4AF3744', marginBottom: 24, alignItems: 'center' }}>
-                <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '800', marginBottom: 8 }}>{'武士は七転び八起き'}</Text>
-                <Text style={{ color: '#888', fontSize: 12 }}>{'ボスのHPが全回復した。もう一度挑め。'}</Text>
-                <Text style={{ color: '#2ecc71', fontSize: 12, marginTop: 8 }}>{'君のHPは全回復した'}</Text>
-              </View>
-              <Text style={{ color: '#555', fontSize: 12 }}>{'タップで戻る'}</Text>
+              {/* Phase 0: 暗転 → 敗北 */}
+              {defeatPhase === 0 && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#e74c3c', fontSize: 64, marginBottom: 20 }}>{'💀'}</Text>
+                  <Text style={{ color: '#e74c3c', fontSize: 28, fontWeight: '900', letterSpacing: 4 }}>{'敗北…'}</Text>
+                  <Text style={{ color: '#555', fontSize: 12, marginTop: 30 }}>{'タップして続ける'}</Text>
+                </View>
+              )}
+              {/* Phase 1: ボスの嘲笑 */}
+              {defeatPhase === 1 && (
+                <View style={{ alignItems: 'center' }}>
+                  <View style={{ width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#e74c3c', overflow: 'hidden', marginBottom: 20, backgroundColor: '#1a0808' }}>
+                    <Image source={YOKAI_IMAGES[WORLD1_BOSSES[w1BossIndex]?.yokaiId]} style={{ width: 120, height: 120 }} resizeMode="contain" />
+                  </View>
+                  <Text style={{ color: '#fff', fontSize: 20, fontWeight: '900', marginBottom: 12 }}>
+                    {WORLD1_BOSSES[w1BossIndex]?.name || ''}
+                  </Text>
+                  <Text style={{ color: '#e74c3c', fontSize: 16, fontStyle: 'italic', textAlign: 'center', lineHeight: 24 }}>
+                    {'「' + (BOSS_ATTACK_CONFIG[w1BossIndex]?.attackQuote || 'ほら、また負けた') + '」'}
+                  </Text>
+                  <Text style={{ color: '#555', fontSize: 12, marginTop: 30 }}>{'タップして続ける'}</Text>
+                </View>
+              )}
+              {/* Phase 2: サムライキングの励まし */}
+              {defeatPhase === 2 && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#D4AF37', fontSize: 12, fontWeight: '600', letterSpacing: 3, marginBottom: 16 }}>
+                    {'── サムライキング ──'}
+                  </Text>
+                  <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: '900', textAlign: 'center', lineHeight: 34, marginBottom: 20 }}>
+                    {'「' + defeatQuote + '」'}
+                  </Text>
+                  <Text style={{ color: '#555', fontSize: 12, marginTop: 20 }}>{'タップして続ける'}</Text>
+                </View>
+              )}
+              {/* Phase 3: 回復通知 → 戻る */}
+              {defeatPhase === 3 && (
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800', marginBottom: 24 }}>{'再起の刻'}</Text>
+                  <View style={{ backgroundColor: '#1a1a2e', borderRadius: 16, padding: 24, borderWidth: 1, borderColor: '#D4AF3744', marginBottom: 16, width: '100%', alignItems: 'center' }}>
+                    <Text style={{ color: '#e74c3c', fontSize: 14, marginBottom: 12 }}>
+                      {'👹 ' + (WORLD1_BOSSES[w1BossIndex]?.name || '') + 'のHPが全回復した'}
+                    </Text>
+                    <View style={{ height: 1, backgroundColor: '#333', width: '80%', marginVertical: 8 }} />
+                    <Text style={{ color: '#2ecc71', fontSize: 14, marginTop: 4 }}>
+                      {'⚔️ 君のHPも全回復した'}
+                    </Text>
+                    <View style={{ height: 1, backgroundColor: '#333', width: '80%', marginVertical: 8 }} />
+                    <Text style={{ color: '#3b82f6', fontSize: 14, marginTop: 4 }}>
+                      {'🔄 ミッションが復活した'}
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: 'rgba(212,175,55,0.15)', borderWidth: 2, borderColor: '#D4AF37', borderRadius: 12, paddingHorizontal: 40, paddingVertical: 14, marginTop: 16 }}>
+                    <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '900', letterSpacing: 2 }}>{'もう一度挑む'}</Text>
+                  </View>
+                </View>
+              )}
             </Pressable>
           )}
 

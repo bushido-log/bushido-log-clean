@@ -47,6 +47,10 @@ type BattleScreenProps = {
   playTapSound: () => void;
   playAttackSound: () => void;
   playWinSound: () => void;
+  playerHp?: number;
+  playerMaxHp?: number;
+  playerLevel?: number;
+  playerStats?: { power: number; mind: number; skill: number; virtue: number };
 };
 
 type Phase = 'intro' | 'command' | 'mission' | 'textMission' | 'focusMission' | 'gratitudeMission' | 'exercise' | 'stepsMission' | 'appMission' | 'attacking' | 'enemyTurn' | 'runConfirm' | 'info' | 'defeat' | 'victory';
@@ -58,6 +62,7 @@ export const BattleScreen: React.FC<BattleScreenProps> = (props) => {
     defeatedCount, totalBosses,
     onMissionComplete, onOugi, onRun, onClose, onConsult, onSetAlarm, onVictory,
     playTapSound, playAttackSound, playWinSound,
+    playerHp: propPlayerHp, playerMaxHp: propPlayerMaxHp, playerLevel, playerStats,
   } = props;
 
   const introLines: string[] = boss.introLines || [];
@@ -358,6 +363,24 @@ export const BattleScreen: React.FC<BattleScreenProps> = (props) => {
               {/* === COMMAND PHASE === */}
               {phase === 'command' && (
                 <View>
+                  {/* プレイヤーステータス */}
+                  <View style={{ backgroundColor: 'rgba(0,80,40,0.25)', borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(45,212,191,0.2)' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ color: '#2dd4bf', fontSize: 13, fontWeight: '900' }}>{'⚔️ Lv.' + (playerLevel || 1)}</Text>
+                      <Text style={{ color: '#2ecc71', fontSize: 12, fontWeight: '700' }}>{'❤️ ' + (propPlayerHp || 0) + ' / ' + (propPlayerMaxHp || 0)}</Text>
+                    </View>
+                    <View style={{ height: 8, backgroundColor: '#1a1a2e', borderRadius: 4, overflow: 'hidden', marginBottom: 6 }}>
+                      <View style={{ height: '100%', width: (Math.max(0, (propPlayerHp || 0)) / Math.max(1, (propPlayerMaxHp || 1)) * 100) + '%', backgroundColor: (propPlayerHp || 0) / (propPlayerMaxHp || 1) > 0.5 ? '#2ecc71' : (propPlayerHp || 0) / (propPlayerMaxHp || 1) > 0.25 ? '#f39c12' : '#e74c3c', borderRadius: 4 }} />
+                    </View>
+                    {playerStats && (
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                        <Text style={{ color: '#e74c3c', fontSize: 11, fontWeight: '600' }}>{'💪 ' + playerStats.power}</Text>
+                        <Text style={{ color: '#3498db', fontSize: 11, fontWeight: '600' }}>{'🧠 ' + playerStats.mind}</Text>
+                        <Text style={{ color: '#2ecc71', fontSize: 11, fontWeight: '600' }}>{'🎯 ' + playerStats.skill}</Text>
+                        <Text style={{ color: '#f1c40f', fontSize: 11, fontWeight: '600' }}>{'🙏 ' + playerStats.virtue}</Text>
+                      </View>
+                    )}
+                  </View>
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
                     <Pressable
                       onPress={() => { playTapSound(); setPhase('mission'); }}

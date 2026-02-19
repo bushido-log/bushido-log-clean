@@ -1137,47 +1137,6 @@ export default function App() {
   }, [alarmDismissedFlag]);
 
 
-
-  // === Battle V2: 勝利ハンドラー ===
-  const triggerNidoneelDefeat = async () => {
-    setStoryStage(6);
-    setStoryPhase('dark'); setSceneIndex(0); setStoryTypeText(''); setSamuraiVoice('');
-    setStoryActive(true);
-    Animated.timing(storyOverlayOpacity, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-    try { const { sound } = await Audio.Sound.createAsync(require('./sounds/sfx_win.mp3')); await sound.setVolumeAsync(MASTER_VOLUME); await sound.playAsync(); setTimeout(() => { try { sound.stopAsync(); sound.unloadAsync(); } catch(e) {} }, 3000); } catch(e) {}
-    try { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); } catch(e) {}
-    await addXpWithLevelCheck(50);
-    setTimeout(() => { if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; } setStoryPhase('defeat'); playVoice(VOICE_NIDONEEL_DEFEAT); }, 1500);
-  };
-
-  const handleBattleVictory = async () => {
-    // バトル終了
-    setBattleActive(false);
-    
-    // 既存の撃破イベント発動
-    const bossIndex = w1BossIndex;
-    
-    // 次のボスへ進行
-    const nextIndex = bossIndex + 1;
-    if (nextIndex < WORLD1_BOSSES.length) {
-      setW1BossIndex(nextIndex);
-      setW1BossHp(WORLD1_BOSSES[nextIndex].hp);
-      setW1CompletedMissions([]);
-      saveW1Battle({ bossIndex: nextIndex, bossHp: WORLD1_BOSSES[nextIndex].hp, completedMissions: [] });
-    } else {
-      saveW1Battle({ bossIndex: nextIndex, bossHp: 0, completedMissions: [] });
-    }
-    
-    // 撃破演出（紙芝居）
-    switch(bossIndex) {
-      case 0: await triggerNidoneelDefeat(); break;
-      case 1: await triggerAtodeyaruDefeat(); break;
-      case 2: await triggerDeebuDefeat(); break;
-      case 3: await triggerMoumuriDefeat(); break;
-      case 4: await triggerMk2Defeat(); break;
-    }
-  };
-
   const handleBattleMissionComplete = async (missionId: string, damage: number, data: any) => {
     applyBattleDamage(damage);
     const newCompleted = [...w1CompletedMissions, missionId];
@@ -7105,14 +7064,14 @@ export default function App() {
 
           {storyPhase === 'defeat' && (
             <View style={{ flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }}>
-              <Video source={storyStage === 6 ? YOKAI_LOSE_VIDEOS.nidoneel : storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); storyTypewriter(sc[4].text); } }} />
+              <Video source={storyStage === 5 ? MIKKABOZU_DEFEAT_VIDEO : storyStage === 4 ? MOUMURI_DEFEAT_VIDEO : storyStage === 3 ? DEEBU_DEFEAT_VIDEO : storyStage === 2 ? ATODEYARU_DEFEAT_VIDEO : MIKKABOZU_DEFEAT_VIDEO} style={{ width: 300, height: 300 }} resizeMode={ResizeMode.CONTAIN} shouldPlay isLooping={false} onPlaybackStatusUpdate={(status: any) => { if (status.didJustFinish) { const sc = storyStage === 6 ? NIDONEEL_SCENES : storyStage === 5 ? MK2_SCENES : storyStage === 4 ? MOUMURI_SCENES : storyStage === 3 ? DEEBU_SCENES : storyStage === 2 ? ATODEYARU_SCENES : STORY_SCENES; setSceneIndex(4); setSamuraiVoice(''); setStoryPhase('victory'); storyTypewriter(sc[4].text); } }} />
               <Text style={{ color: '#e74c3c', fontSize: 24, fontWeight: '900', marginTop: 16, letterSpacing: 3 }}>{'討伐！'}</Text>
             </View>
           )}
 
           {storyPhase === 'victory' && (
             <TouchableOpacity activeOpacity={1} onPress={advanceVictoryScene} style={{ flex: 1 }}>
-              <ImageBackground source={storyStage === 6 ? NIDONEEL_SCENE2_IMG : storyStage === 5 ? STORY_SCENE2_IMG : storyStage === 4 ? MOUMURI_SCENE2_IMG : storyStage === 3 ? DEEBU_SCENE2_IMG : storyStage === 2 ? ATODEYARU_SCENE2_IMG : STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
+              <ImageBackground source={storyStage === 5 ? STORY_SCENE2_IMG : storyStage === 4 ? MOUMURI_SCENE2_IMG : storyStage === 3 ? DEEBU_SCENE2_IMG : storyStage === 2 ? ATODEYARU_SCENE2_IMG : STORY_SCENE2_IMG} style={{ flex: 1 }} resizeMode="cover">
                 <View style={{ position: 'absolute', top: SCREEN_H * 0.50, left: 55, right: 55, justifyContent: 'center', alignItems: 'center' }}>
                   <Text style={{ color: '#333', fontSize: 17, fontWeight: 'bold', textAlign: 'center', lineHeight: 28, letterSpacing: 1 }}>{storyTypeText}</Text>
                 </View>
@@ -8601,26 +8560,7 @@ export default function App() {
             onOugi={handleBattleOugi}
             isFirstEncounter={w1CompletedMissions.length === 0 && w1BossHp === WORLD1_BOSSES[w1BossIndex]?.hp}
             onRun={handleBattleRun}
-            onClose={() => { setBattleActive(false); setShowStartScreen(false); setInnerWorldView('menu'); setTab('innerWorld'); }}
-            onVictory={handleBattleVictory}
-            onConsult={async (text: string) => {
-              try { return await callSamuraiKing(text); } catch(e) { return 'エラーでござる'; }
-            }}
-            onSetAlarm={(h: number, m: number) => {
-              setAlarmHour(h);
-              setAlarmMinute(m);
-              setAlarmSet(true);
-              const now = new Date();
-              const alarm = new Date();
-              alarm.setHours(h, m, 0, 0);
-              if (alarm <= now) alarm.setDate(alarm.getDate() + 1);
-              const seconds = Math.floor((alarm.getTime() - now.getTime()) / 1000);
-              Notifications.scheduleNotificationAsync({
-                content: { title: '⏰ サムライアラーム', body: '起きろ！武士に二度寝なし！', sound: true },
-                trigger: { type: 'timeInterval', seconds, repeats: false } as any,
-              }).then(id => setAlarmNotificationId(id)).catch(() => {});
-              showSaveSuccess('⏰ ' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0') + ' にアラームセット！');
-            }}
+            onClose={() => { setBattleActive(false); setTab('innerWorld'); }}
             playTapSound={playTapSound}
             playAttackSound={playAttackSound}
             playWinSound={playWinSound}

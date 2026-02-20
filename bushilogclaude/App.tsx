@@ -95,7 +95,6 @@ import { getRandomQuiz, BossQuiz } from './src/data/quizData';
 import { BattleScreen } from './src/components/BattleScreen';
 import { styles } from './src/styles';
 import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from './src/data/texts';
-import { SamuraiAvatar } from './src/components/SamuraiAvatar';
 import { STORY_SCENES, ATODEYARU_SCENES, DEEBU_SCENES, MOUMURI_SCENES, MK2_SCENES, NIDONEEL_SCENES } from './src/data/storyScenes';
 import {
   MISSION_TARGET, SQ_TOTAL, MOUMURI_KANSHA_TARGET, DEEBU_HIT_TARGET,
@@ -240,7 +239,8 @@ export default function App() {
       try {
         await initializePurchases();
         const proStatus = await checkProStatus();
-        // setIsPro(proStatus); // TEST
+        setIsPro(proStatus);
+        try { await AsyncStorage.setItem('bushido_is_pro', proStatus ? 'true' : 'false'); } catch(e) {}
         const monthly = await getMonthlyPrice();
         const annual = await getAnnualPrice();
         setMonthlyPrice(monthly);
@@ -545,7 +545,7 @@ export default function App() {
   // settings
   const [settings, setSettings] = useState<AppSettings>(DEFAULT_SETTINGS);
   // 課金関連
-  const [isPro, setIsPro] = useState(true);
+  const [isPro, setIsPro] = useState(false);
   const [trialExpired, setTrialExpired] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [currentOffering, setCurrentOffering] = useState<PurchasesPackage | null>(null);
@@ -954,7 +954,7 @@ export default function App() {
   };
 
   // === Battle V2: ボスのクイズ攻撃トリガー ===
-  const triggerBossQuiz = () => { console.log("QUIZ TRIGGERED", w1BossIndex, battleTurnCountRef.current);
+  const triggerBossQuiz = () => {
     if (w1BossIndex >= WORLD1_BOSSES.length) return;
     const config = BOSS_ATTACK_CONFIG[w1BossIndex];
     if (!config) return;
@@ -963,7 +963,7 @@ export default function App() {
     battleTurnCountRef.current = newTurn;
 
     // 攻撃頻度チェック
-    if (newTurn % config.attackFrequency !== 0) { console.log("SKIP FREQ", newTurn, config.attackFrequency); return; } console.log("FREQ OK, getting quiz");
+    if (newTurn % config.attackFrequency !== 0) { return; }
 
     // クイズ出題
     const quiz = getRandomQuiz(w1BossIndex, quizUsedIds);
@@ -972,7 +972,7 @@ export default function App() {
     setQuizTimer(config.quizTimeLimit);
     setQuizResult(null);
     setQuizSelectedIndex(null);
-    setQuizActive(true); console.log("QUIZ STATE SET", quiz?.question);
+    setQuizActive(true);
   };
 
   // === Battle V2: クイズタイマー ===
@@ -1928,14 +1928,14 @@ export default function App() {
         setLastConsultReply(replyText);
         setCanCreateMission(true);
       }
-    } catch (error) {
+    } catch (error: any) {
      
       setMessages(prev => [
         ...prev,
         {
           id: `${Date.now()}-error`,
           from: 'king',
-          text: 'ネットワークエラーでござる。もう一度試してほしいでござる。',
+          text: error?.message?.includes('上限') ? error.message : 'ネットワークエラーでござる。もう一度試してほしいでござる。',
           createdAt: new Date().toISOString(),
         },
       ]);
@@ -3438,24 +3438,47 @@ export default function App() {
       )}
 
       <View style={styles.goalCard}>
-        <Text style={styles.goalTitle}>サムライRPGダッシュボード</Text>
-        <Text style={styles.goalSub}>連続ログ：{streakCount} 日でござる🔥</Text>
-        <Text style={styles.goalSub}>
-          サムライレベル：Lv.{samuraiLevel} / {MAX_LEVEL}{' '}
-          {samuraiLevel >= MAX_LEVEL ? '（伝説の侍クリア！）' : `（あと ${daysToClear} 日で伝説の侍）`}
-        </Text>
+        <Text style={{ color: '#D4AF37', fontSize: 18, fontWeight: '900', marginBottom: 12 }}>{'連続ログ：' + streakCount + ' 日'}</Text>
 
-        <View style={styles.progressBar}>
-          <View style={[styles.progressFill, { width: `${Math.round(levelProgress * 100)}%` }]} />
+        {/* バトル進捗 */}
+        <View style={{ backgroundColor: '#0d1117', borderRadius: 14, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#D4AF3733' }}>
+          <Text style={{ color: '#D4AF37', fontSize: 15, fontWeight: '900', marginBottom: 10, letterSpacing: 1 }}>バトル進捗</Text>
+          {w1BossIndex < WORLD1_BOSSES.length ? (
+            <View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>{'vs ' + WORLD1_BOSSES[w1BossIndex].name}</Text>
+                <Text style={{ color: '#888', fontSize: 12 }}>{(w1BossIndex + 1) + ' / ' + WORLD1_BOSSES.length}</Text>
+              </View>
+              <View style={{ height: 10, backgroundColor: '#1a1a2e', borderRadius: 5, overflow: 'hidden', marginBottom: 4 }}>
+                <View style={{ height: '100%', width: (Math.max(0, w1BossHp) / WORLD1_BOSSES[w1BossIndex].hp * 100) + '%', backgroundColor: '#e74c3c', borderRadius: 5 }} />
+              </View>
+              <Text style={{ color: '#888', fontSize: 11, marginBottom: 10 }}>{'HP: ' + w1BossHp.toLocaleString() + ' / ' + WORLD1_BOSSES[w1BossIndex].hp.toLocaleString()}</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                <Text style={{ color: '#2ecc71', fontSize: 12 }}>{'HP: ' + playerHp + ' / ' + playerMaxHp}</Text>
+                <Text style={{ color: '#3498db', fontSize: 12 }}>{'今日: ' + w1CompletedMissions.length + '/' + (BATTLE_MISSIONS[w1BossIndex] ? BATTLE_MISSIONS[w1BossIndex].length : 0) + '回'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', backgroundColor: '#111827', borderRadius: 8, padding: 8 }}>
+                <View style={{ alignItems: 'center' }}><Text style={{ color: '#e74c3c', fontSize: 16, fontWeight: '800' }}>{samuraiStats.power}</Text><Text style={{ color: '#888', fontSize: 10 }}>力</Text></View>
+                <View style={{ alignItems: 'center' }}><Text style={{ color: '#3498db', fontSize: 16, fontWeight: '800' }}>{samuraiStats.mind}</Text><Text style={{ color: '#888', fontSize: 10 }}>心</Text></View>
+                <View style={{ alignItems: 'center' }}><Text style={{ color: '#2ecc71', fontSize: 16, fontWeight: '800' }}>{samuraiStats.skill}</Text><Text style={{ color: '#888', fontSize: 10 }}>技</Text></View>
+                <View style={{ alignItems: 'center' }}><Text style={{ color: '#f1c40f', fontSize: 16, fontWeight: '800' }}>{samuraiStats.virtue}</Text><Text style={{ color: '#888', fontSize: 10 }}>徳</Text></View>
+              </View>
+            </View>
+          ) : (
+            <View style={{ alignItems: 'center', padding: 12 }}>
+              <Text style={{ color: '#D4AF37', fontSize: 16, fontWeight: '900' }}>全ボス撃破！</Text>
+              <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }}>お前は真の侍だ</Text>
+            </View>
+          )}
+          <View style={{ flexDirection: 'row', marginTop: 10, gap: 6 }}>
+            {WORLD1_BOSSES.map((boss, idx) => (
+              <View key={boss.id} style={{ flex: 1, alignItems: 'center', padding: 4, backgroundColor: idx < w1BossIndex ? '#1a2e1a' : idx === w1BossIndex ? '#2e1a1a' : '#1a1a1a', borderRadius: 8, borderWidth: 1, borderColor: idx < w1BossIndex ? '#2ecc7144' : idx === w1BossIndex ? '#e74c3c44' : '#33333344' }}>
+                <Text style={{ fontSize: 10 }}>{idx < w1BossIndex ? 'O' : idx === w1BossIndex ? '!' : '-'}</Text>
+                <Text style={{ color: idx < w1BossIndex ? '#2ecc71' : idx === w1BossIndex ? '#e74c3c' : '#555', fontSize: 8, fontWeight: '700' }}>{boss.name.slice(0,3)}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-        <Text style={styles.progressHint}>3日続けるごとにレベルアップ。1ヶ月やり切れば伝説クリアでござる。</Text>
-
-        <Text style={styles.goalSub}>
-          総経験値：{totalXp} XP（ランク：{rank.label}
-          {rank.next > 0 ? ` / 次のランクまで ${rank.next} XP` : ' / MAX'}）
-        </Text>
-
-        <SamuraiAvatar level={samuraiLevel} rankLabel={rank.label} />
 
         <Text style={[styles.goalTitle, { fontSize: 16, marginTop: 6 }]}>サムライ日記カレンダー</Text>
 
@@ -5185,7 +5208,7 @@ export default function App() {
 
   const completeStoryEvent = async () => {
     if (monsterBgmRef.current) { try { monsterBgmRef.current.stopAsync(); monsterBgmRef.current.unloadAsync(); } catch(e) {} monsterBgmRef.current = null; }
-    if (storyStage === 6) { completeStoryEvent(); } else if (storyStage === 5) {
+    if (storyStage === 6) { /* ニドネール撃破 */ } else if (storyStage === 5) {
       try { await AsyncStorage.setItem(MK2_EVENT_KEY, 'true'); } catch(e) {}
       setMk2EventDone(true);
     } else if (storyStage === 4) {
@@ -8619,7 +8642,7 @@ export default function App() {
             playerLevel={getLevelFromXp(totalXp).level}
             playerStats={samuraiStats}
             onConsult={async (text: string) => {
-              try { return await callSamuraiKing(text); } catch(e) { return 'エラーでござる'; }
+              try { return await callSamuraiKing(text); } catch(e: any) { return e?.message?.includes('上限') ? e.message : 'エラーでござる'; }
             }}
             onSetAlarm={(h: number, m: number) => {
               setAlarmHour(h);

@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.anonymous.bushidologclean",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSCameraUsageDescription": "アラーム解除と善行記録のために写真を撮影します",
+        "NSPhotoLibraryUsageDescription": "善行記録のために写真を選択します"
       }
     },
     "android": {

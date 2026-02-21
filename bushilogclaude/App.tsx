@@ -297,7 +297,7 @@ export default function App() {
       setShowDojoGate(false);
       // 穢れチェック
       await checkKegare();
-      checkMikkabozuEvent();
+      // checkMikkabozuEvent();
       // Atodeyaru state restore
       AsyncStorage.getItem(ATODEYARU_EVENT_KEY).then(v => { if (v === 'true') { setAtodeyaruEventDone(true); setInnerWorldUnlocked(true); } }).catch(e => {});
       AsyncStorage.getItem(ATODEYARU_ACTIVE_KEY).then(v => { if (v === 'true') setAtodeyaruActive(true); }).catch(e => {});
@@ -796,14 +796,14 @@ export default function App() {
           if (data.completed) {
             // 新フォーマット
             setUserStartChoice(data.choice || 'free');
-            setIsOnboarding(false);
+            setIsOnboarding(false); setShowDojoGate(true); setShowStartScreen(true);
           } else if (data.identity !== undefined) {
             // 旧フォーマット（既存ユーザー対応）
             setOnboardingData(data);
             setObIdentity(data.identity ?? '');
             setObQuit(data.quit ?? '');
             setObRule(data.rule ?? '');
-            setIsOnboarding(false);
+            setIsOnboarding(false); setShowDojoGate(true); setShowStartScreen(true);
           } else {
             setIsOnboarding(true);
           }
@@ -2534,7 +2534,7 @@ export default function App() {
       await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify(data));
       setOnboardingData(data);
       setIsEditingOnboarding(false);
-      setIsOnboarding(false);
+      setIsOnboarding(false); setShowDojoGate(true); setShowStartScreen(true);
     } catch (e) {
       console.error('Failed to save onboarding', e);
     }
@@ -2813,7 +2813,7 @@ export default function App() {
           playTapSound(); 
           Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); 
           const levelInfo = getLevelFromXp(totalXp); 
-          if (levelInfo.level >= 1) { 
+          if (true) { 
             setShowStartScreen(false); 
             setInnerWorldView('menu');
             if (mikkabozuEventDone || innerWorldUnlocked) { setTab('innerWorld'); setShowStartScreen(false); } // gated by mikkabozu
@@ -2905,9 +2905,9 @@ export default function App() {
       </Pressable>
       
       <Pressable
-        style={[styles.startButton, !isPro && getLevelFromXp(totalXp).level < 5 && { opacity: 0.4 }]}
+        style={styles.startButton}
         onPress={() => {
-          if (!isPro && getLevelFromXp(totalXp).level < 5) {
+          if (false) {
             playTapSound();
             showSaveSuccess('Lv.5「若侍」で解放');
             return;
@@ -2918,7 +2918,7 @@ export default function App() {
           setShowStartScreen(false);
         }}
       >
-        <Text style={styles.startButtonText}>明日に備える{!isPro && getLevelFromXp(totalXp).level < 5 ? ' 🔒' : ''}</Text>
+        <Text style={styles.startButtonText}>明日に備える</Text>
       </Pressable>
     </View>
   );
@@ -5742,7 +5742,7 @@ export default function App() {
         <Pressable
           onPress={() => {
             playTapSound();
-            if (!isPro && levelInfo.level < 3) {
+            if (false) {
               showSaveSuccess('Lv.3「足軽」で解放');
               return;
             }
@@ -5763,7 +5763,7 @@ export default function App() {
             <Text style={{ fontSize: 28, marginRight: 14 }}>⚔️</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ color: (isPro || levelInfo.level >= 3) ? '#ef4444' : '#555', fontSize: 18, fontWeight: '900' }}>修行対戦</Text>
-              <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>{(isPro || levelInfo.level >= 3) ? '敵と戦い、己を磨け' : '🔒 Lv.3で解放'}</Text>
+              <Text style={{ color: '#555', fontSize: 11, marginTop: 2 }}>{'敵と戦い、己を磨け'}</Text>
             </View>
             {(isPro || levelInfo.level >= 3) && <Text style={{ color: '#555', fontSize: 18 }}>›</Text>}
           </View>
@@ -6851,7 +6851,7 @@ export default function App() {
               onPress={async () => { 
                 playTapSound();
                 await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify({ completed: true, choice: 'serious' }));
-                setIsOnboarding(false);
+                setIsOnboarding(false); setShowDojoGate(true); setShowStartScreen(true);
                 setShowPaywall(true); // Paywall表示
               }}
             >
@@ -6875,7 +6875,7 @@ export default function App() {
                 const trialStart = new Date().toISOString();
                 await AsyncStorage.setItem(FIRST_LAUNCH_KEY, trialStart);
                 await AsyncStorage.setItem(ONBOARDING_KEY, JSON.stringify({ completed: true, choice: 'free' }));
-                setIsOnboarding(false);
+                setIsOnboarding(false); setShowDojoGate(true); setShowStartScreen(true);
               }}
             >
               <Text style={styles.newOnboardingButtonText}>無料で始める</Text>
@@ -7588,7 +7588,7 @@ export default function App() {
                       {tab === 'review' && renderReviewTab()}
                       {tab === 'browser' && renderBrowserTab()}
                       {tab === 'focus' && renderFocusTab()}
-                      {tab === 'alarm' && ((isPro || getLevelFromXp(totalXp).level >= 5) ? renderAlarmTab() : (
+                      {tab === 'alarm' && (true ? renderAlarmTab() : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
                           <Text style={{ fontSize: 48, marginBottom: 16 }}>🔒</Text>
                           <Text style={{ color: '#D4AF37', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>サムライアラーム</Text>
@@ -7600,7 +7600,7 @@ export default function App() {
                       {tab === 'settings' && renderSettingsTab()}
                       {tab === 'innerWorld' && renderInnerWorldTab()}
                       {tab === 'character' && renderCharacterTab()}
-                      {tab === 'battle' && ((isPro || getLevelFromXp(totalXp).level >= 3) ? renderBattleTab() : (
+                      {tab === 'battle' && (true ? renderBattleTab() : (
                         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
                           <Text style={{ fontSize: 48, marginBottom: 16 }}>🔒</Text>
                           <Text style={{ color: '#ef4444', fontSize: 22, fontWeight: 'bold', marginBottom: 8 }}>修行対戦</Text>

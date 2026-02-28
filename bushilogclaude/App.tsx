@@ -27,6 +27,7 @@ import {
   View,
   TouchableOpacity,
   Dimensions,
+  AppState,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { initializePurchases, checkProStatus, getOffering, purchasePro, restorePurchases, getMonthlyPrice, getAnnualPrice, purchaseAnnual } from './src/services/purchaseService';
@@ -110,7 +111,24 @@ import SamuraiWalkScreen from './src/screens/SamuraiWalkScreen';
 // =========================
 
 export default function App() {
-  const todayStr = useMemo(() => getTodayStr(), []);
+  const [todayStr, setTodayStr] = useState(() => getTodayStr());
+
+  // FIX: AppState復帰時に日付を更新
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        const now = getTodayStr();
+        setTodayStr(prev => {
+          if (prev !== now) {
+            console.log('[BUSHIDO] 日付更新:', prev, '->', now);
+            return now;
+          }
+          return prev;
+        });
+      }
+    });
+    return () => sub.remove();
+  }, []);
 
   // 保存成功時のフィードバック
   // タイプライター効果
@@ -268,7 +286,7 @@ export default function App() {
       if (data?.type === 'wakeup_alarm') {
         // 起床アラームの通知タップ → アラームタブへ移動して鳴らす
         setTab('alarm');
-        setAlarmRinging(true);
+        startAlarmShout();
       } else if (data?.type === 'mission_deadline') {
         // ミッション期限通知タップ → アラーム画面表示
         setMissionStatus('expired');
@@ -278,7 +296,19 @@ export default function App() {
     });
     return () => subscription.remove();
   }, []);
-  
+
+  // FIX: フォアグラウンドでアラーム通知受信 → 鳴らす
+  useEffect(() => {
+    const fgSub = Notifications.addNotificationReceivedListener(notification => {
+      const data = notification.request.content.data;
+      if (data?.type === 'wakeup_alarm') {
+        setTab('alarm');
+        startAlarmShout();
+      }
+    });
+    return () => fgSub.remove();
+  }, []);
+
   // 道場の門を閉じる（刀音付き）
   const handleEnterDojo = async () => {
     try {

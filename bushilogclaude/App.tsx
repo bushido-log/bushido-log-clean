@@ -125,6 +125,7 @@ export default function App() {
           }
           return prev;
         });
+        checkTrialStatus();
       }
     });
     return () => sub.remove();
@@ -251,14 +252,34 @@ export default function App() {
     })();
   }, []);
 
+  // トライアル状態チェック
+  const checkTrialStatus = async () => {
+    try {
+      const proStatus = await checkProStatus();
+      if (proStatus) { setIsPro(true); setIsInTrial(false); setTrialExpired(false); return; }
+      setIsPro(false);
+      const trialStart = await AsyncStorage.getItem(FIRST_LAUNCH_KEY);
+      if (!trialStart) return;
+      const startDate = new Date(trialStart);
+      const now = new Date();
+      const diffDays = Math.floor((now.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
+      const daysLeft = Math.max(0, FREE_TRIAL_DAYS - diffDays);
+      if (diffDays < FREE_TRIAL_DAYS) {
+        setIsInTrial(true); setTrialExpired(false); setTrialDaysLeft(daysLeft);
+        console.log('[BUSHIDO] トライアル中: 残り' + daysLeft + '日');
+      } else {
+        setIsInTrial(false); setTrialExpired(true); setTrialDaysLeft(0);
+        console.log('[BUSHIDO] トライアル期限切れ');
+      }
+    } catch (e) { console.error('checkTrialStatus error:', e); }
+  };
+
   // RevenueCat初期化とPro状態チェック
   useEffect(() => {
     (async () => {
       try {
         await initializePurchases();
-        const proStatus = await checkProStatus();
-        setIsPro(proStatus);
-        try { await AsyncStorage.setItem('bushido_is_pro', proStatus ? 'true' : 'false'); } catch(e) {}
+        await checkTrialStatus();
         const monthly = await getMonthlyPrice();
         const annual = await getAnnualPrice();
         setMonthlyPrice(monthly);
@@ -577,6 +598,8 @@ export default function App() {
   // 課金関連
   const [isPro, setIsPro] = useState(false);
   const [trialExpired, setTrialExpired] = useState(false);
+  const [isInTrial, setIsInTrial] = useState(false);
+  const [trialDaysLeft, setTrialDaysLeft] = useState(0);
   const [showPaywall, setShowPaywall] = useState(false);
   const [currentOffering, setCurrentOffering] = useState<PurchasesPackage | null>(null);
   const [monthlyPrice, setMonthlyPrice] = useState('¥700');
@@ -1899,7 +1922,7 @@ export default function App() {
 
   const handleSend = async () => {
     // 課金チェック: Proでない場合、2回目以降はPaywall表示
-    if (!isPro && samuraiKingUses >= 1) {
+    if (!isPro && !isInTrial && samuraiKingUses >= 1) {
       setShowPaywall(true);
       return;
     }

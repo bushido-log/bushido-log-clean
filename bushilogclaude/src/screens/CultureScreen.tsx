@@ -186,7 +186,7 @@ export default function CultureScreen({ onBack }: Props) {
           ))}
         </View>
 
-        {(loading || info) && (
+        {(loading || info || tracks.length > 0) && (
           <View style={styles.infoBox}>
             {selectedArtist && (
               <View style={styles.artistHeader}>
@@ -219,29 +219,14 @@ export default function CultureScreen({ onBack }: Props) {
                 ))}
               </View>
             )}
-            {(loading || info) && (
-              <View style={{ gap: 0 }}>
-                {selectedArtist && (
-                  <View style={styles.artistHeader}>
-                    {selectedArtist.image && (
-                      <Image source={{ uri: selectedArtist.image }} style={styles.artistHeaderImg} />
-                    )}
-                    <View style={styles.artistHeaderInfo}>
-                      <Text style={styles.artistHeaderName}>{selectedArtist.name}</Text>
-                      <Text style={styles.artistFollowers}>
-                        👥 {(selectedArtist.followers / 1000000).toFixed(1)}M followers
-                      </Text>
-                </View>
-              </View>
-            )}
             {loading ? (
               <View style={styles.loadingRow}>
                 <ActivityIndicator color="#C8860A" />
                 <Text style={styles.loadingText}>Selector is spinning...</Text>
               </View>
-            ) : (
+            ) : info ? (
               <Text style={styles.infoText}>{info}</Text>
-            )}
+            ) : null}
           </View>
         )}
         <View style={{ height: 40 }} />

@@ -232,8 +232,8 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                       longitude: spot.longitude,
                       latitudeDelta: 0.05,
                       longitudeDelta: 0.05,
-                    }, 500);
-                  }, 100);
+                    }, 800);
+                  }, 600);
                 }
                 openSpot(spot);
               }}>

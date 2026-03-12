@@ -262,7 +262,21 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
         {selectedSpot && (
           <View style={s.modal}>
             <View style={s.header}>
-              <TouchableOpacity onPress={() => setSelectedSpot(null)}><Text style={s.backBtn}>← Close</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => {
+                const spot = selectedSpot;
+                setSelectedSpot(null);
+                if (spot?.latitude && spot?.longitude) {
+                  setViewMode('map');
+                  setTimeout(() => {
+                    mapRef.current?.animateToRegion({
+                      latitude: spot.latitude,
+                      longitude: spot.longitude,
+                      latitudeDelta: 0.05,
+                      longitudeDelta: 0.05,
+                    }, 800);
+                  }, 300);
+                }
+              }}><Text style={s.backBtn}>🗺️ Map</Text></TouchableOpacity>
               <Text style={s.headerTitle}>{getCategoryEmoji(selectedSpot.category)} {selectedSpot.name}</Text>
               <TouchableOpacity onPress={() => handleDeleteSpot(selectedSpot)}><Text style={{ color: '#FF4444', fontSize: 13 }}>🗑️ Delete</Text></TouchableOpacity>
             </View>

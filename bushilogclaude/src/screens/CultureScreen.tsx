@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Audio } from 'expo-av';
 import {
   View, Text, TouchableOpacity, StyleSheet,
   SafeAreaView, ActivityIndicator, ScrollView, Image, Linking
@@ -6,6 +7,7 @@ import {
 
 const SPOTIFY_URL = 'https://irie-server.onrender.com/spotify-artist';
 const CULTURE_URL = 'https://irie-server.onrender.com/culture-info';
+const TRACKS_URL = 'https://irie-server.onrender.com/spotify-tracks';
 
 const ARTISTS = [
   { id: 'bob-marley', name: 'Bob Marley', era: '1970s' },
@@ -46,6 +48,9 @@ export default function CultureScreen({ onBack }: Props) {
   const [loading, setLoading] = useState(false);
   const [artistImages, setArtistImages] = useState<Record<string, ArtistData>>({});
   const [selectedArtist, setSelectedArtist] = useState<ArtistData | null>(null);
+  const [tracks, setTracks] = useState<any[]>([]);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const soundRef = useRef<Audio.Sound | null>(null);
 
   useEffect(() => {
     if (tab === 'artists') loadArtistImages();
@@ -65,12 +70,41 @@ export default function CultureScreen({ onBack }: Props) {
     setArtistImages(results);
   };
 
+  const fetchTracks = async (artistName: string) => {
+    try {
+      const res = await fetch(`${TRACKS_URL}?name=${encodeURIComponent(artistName)}`);
+      const data = await res.json();
+      if (data.ok) setTracks(data.tracks);
+    } catch {}
+  };
+
+  const playTrack = async (track: any) => {
+    if (soundRef.current) {
+      await soundRef.current.unloadAsync();
+      soundRef.current = null;
+    }
+    if (playingId === track.id) {
+      setPlayingId(null);
+      return;
+    }
+    if (!track.preview_url) return;
+    try {
+      await Audio.setAudioModeAsync({ playsInSilentModeIOS: true });
+      const { sound } = await Audio.Sound.createAsync({ uri: track.preview_url }, { shouldPlay: true });
+      soundRef.current = sound;
+      setPlayingId(track.id);
+      sound.setOnPlaybackStatusUpdate((status: any) => {
+        if (status.didJustFinish) setPlayingId(null);
+      });
+    } catch {}
+  };
+
   const fetchInfo = async (topic: string, type: string, artistData?: ArtistData) => {
     setSelected(topic);
     setInfo(null);
     setLoading(true);
-    if (artistData) setSelectedArtist(artistData);
-    else setSelectedArtist(null);
+    if (artistData) { setSelectedArtist(artistData); fetchTracks(topic); }
+    else { setSelectedArtist(null); setTracks([]); }
     try {
       const res = await fetch(CULTURE_URL, {
         method: 'POST',
@@ -167,6 +201,36 @@ export default function CultureScreen({ onBack }: Props) {
                   <TouchableOpacity onPress={() => Linking.openURL(selectedArtist.spotifyUrl)}>
                     <Text style={styles.spotifyBtn}>▶ Open in Spotify</Text>
                   </TouchableOpacity>
+                </View>
+              </View>
+            )}
+            {tracks.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <Text style={{ color: '#C8860A', fontWeight: 'bold', fontSize: 13 }}>🎵 Top Tracks</Text>
+                {tracks.map(track => (
+                  <TouchableOpacity key={track.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#0F0A05', borderRadius: 8, padding: 8 }} onPress={() => playTrack(track)}>
+                    {track.image && <Image source={{ uri: track.image }} style={{ width: 40, height: 40, borderRadius: 4 }} />}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: '#E8D8A0', fontSize: 12, fontWeight: 'bold' }}>{track.name}</Text>
+                      <Text style={{ color: '#5C5040', fontSize: 11 }}>{track.album}</Text>
+                    </View>
+                    <Text style={{ fontSize: 20 }}>{track.preview_url ? (playingId === track.id ? '⏸️' : '▶️') : '🚫'}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+            {(loading || info) && (
+              <View style={{ gap: 0 }}>
+                {selectedArtist && (
+                  <View style={styles.artistHeader}>
+                    {selectedArtist.image && (
+                      <Image source={{ uri: selectedArtist.image }} style={styles.artistHeaderImg} />
+                    )}
+                    <View style={styles.artistHeaderInfo}>
+                      <Text style={styles.artistHeaderName}>{selectedArtist.name}</Text>
+                      <Text style={styles.artistFollowers}>
+                        👥 {(selectedArtist.followers / 1000000).toFixed(1)}M followers
+                      </Text>
                 </View>
               </View>
             )}

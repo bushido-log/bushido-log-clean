@@ -236,3 +236,47 @@ app.post('/reverse-geocode', async (req, res) => {
     res.status(500).json({ error: 'Reverse geocoding failed' });
   }
 });
+
+// Spotify top tracks with preview URLs
+app.get('/spotify-tracks', async (req, res) => {
+  const { name } = req.query;
+  if (!name) return res.status(400).json({ error: 'name is required' });
+  try {
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(process.env.SPOTIFY_CLIENT_ID + ':' + process.env.SPOTIFY_CLIENT_SECRET).toString('base64'),
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+
+    const searchRes = await fetch(
+      `https://api.spotify.com/v1/search?q=${encodeURIComponent(name)}&type=artist&limit=1`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const searchData = await searchRes.json();
+    const artist = searchData.artists?.items?.[0];
+    if (!artist) return res.json({ ok: false, error: 'Artist not found' });
+
+    const tracksRes = await fetch(
+      `https://api.spotify.com/v1/artists/${artist.id}/top-tracks?market=US`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const tracksData = await tracksRes.json();
+    const tracks = tracksData.tracks?.slice(0, 5).map(t => ({
+      id: t.id,
+      name: t.name,
+      preview_url: t.preview_url,
+      album: t.album.name,
+      image: t.album.images?.[1]?.url || null,
+    })) || [];
+
+    return res.json({ ok: true, tracks });
+  } catch (e) {
+    console.error('Spotify tracks error:', e);
+    return res.status(500).json({ error: 'Spotify API error' });
+  }
+});

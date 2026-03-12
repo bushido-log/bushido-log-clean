@@ -280,3 +280,44 @@ app.get('/spotify-tracks', async (req, res) => {
     return res.status(500).json({ error: 'Spotify API error' });
   }
 });
+
+// Debug spotify endpoint
+app.get('/spotify-debug', async (req, res) => {
+  try {
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(process.env.SPOTIFY_CLIENT_ID + ':' + process.env.SPOTIFY_CLIENT_SECRET).toString('base64'),
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const text = await tokenRes.text();
+    return res.json({ status: tokenRes.status, body: text });
+  } catch (e) {
+    return res.json({ error: e.message });
+  }
+});
+
+app.get('/spotify-debug2', async (req, res) => {
+  try {
+    const tokenRes = await fetch('https://accounts.spotify.com/api/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': 'Basic ' + Buffer.from(process.env.SPOTIFY_CLIENT_ID + ':' + process.env.SPOTIFY_CLIENT_SECRET).toString('base64'),
+      },
+      body: 'grant_type=client_credentials',
+    });
+    const tokenData = await tokenRes.json();
+    const accessToken = tokenData.access_token;
+    const searchRes = await fetch(
+      'https://api.spotify.com/v1/search?q=Bob%20Marley&type=artist&limit=1',
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const text = await searchRes.text();
+    return res.json({ status: searchRes.status, body: text.substring(0, 500) });
+  } catch (e) {
+    return res.json({ error: e.message });
+  }
+});

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, ScrollView, Image, Linking
+  SafeAreaView, ActivityIndicator, ScrollView, Image, Linking, TextInput
 } from 'react-native';
 
 const SPOTIFY_URL = 'https://irie-server.onrender.com/spotify-artist';
@@ -49,6 +49,8 @@ export default function CultureScreen({ onBack }: Props) {
   const [artistImages, setArtistImages] = useState<Record<string, ArtistData>>({});
   const [selectedArtist, setSelectedArtist] = useState<ArtistData | null>(null);
   const [tracks, setTracks] = useState<any[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [playingId, setPlayingId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -68,6 +70,14 @@ export default function CultureScreen({ onBack }: Props) {
       })
     );
     setArtistImages(results);
+  };
+
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    await fetchInfo(searchQuery.trim(), 'artist');
+    await fetchTracks(searchQuery.trim());
+    setIsSearching(false);
   };
 
   const fetchTracks = async (artistName: string) => {
@@ -152,6 +162,22 @@ export default function CultureScreen({ onBack }: Props) {
         </TouchableOpacity>
       </View>
 
+      {tab === 'artists' && (
+        <View style={styles.searchRow}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search reggae artist..."
+            placeholderTextColor="#5C5040"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
+            {isSearching ? <ActivityIndicator color="#0D0A05" size="small" /> : <Text style={styles.searchBtnText}>🔍</Text>}
+          </TouchableOpacity>
+        </View>
+      )}
       <ScrollView style={styles.scroll}>
         <View style={styles.grid}>
           {tab === 'artists' ? ARTISTS.map((a) => {
@@ -256,6 +282,10 @@ const styles = StyleSheet.create({
   artistImgPlaceholder: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#1A1200', justifyContent: 'center', alignItems: 'center' },
   cardName: { color: '#E8D8A0', fontSize: 10, fontWeight: '700', textAlign: 'center' },
   cardEra: { color: '#5C5040', fontSize: 10 },
+  searchRow: { flexDirection: 'row', marginHorizontal: 12, marginBottom: 8, gap: 8 },
+  searchInput: { flex: 1, backgroundColor: '#1A1200', color: '#E8D8A0', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
+  searchBtn: { backgroundColor: '#C8860A', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
+  searchBtnText: { fontSize: 18 },
   infoBox: { margin: 12, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, gap: 12 },
   artistHeader: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   artistHeaderImg: { width: 72, height: 72, borderRadius: 36 },

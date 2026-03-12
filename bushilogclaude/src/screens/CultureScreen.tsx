@@ -22,13 +22,55 @@ const ARTISTS = [
   { id: 'chronixx', name: 'Chronixx', era: '2010s' },
 ];
 
-const ERAS = [
-  { id: 'ska', name: 'Ska', years: '1960s', icon: '🎺' },
-  { id: 'rocksteady', name: 'Rocksteady', years: '1966-68', icon: '🥁' },
-  { id: 'roots-reggae', name: 'Roots Reggae', years: '1970s', icon: '🌿' },
-  { id: 'dancehall', name: 'Dancehall', years: '1980s-2000s', icon: '💃' },
-  { id: 'contemporary-reggae', name: 'Contemporary Reggae', years: '2010s', icon: '🌍' },
-  { id: 'trap-dancehall', name: 'Trap Dancehall', years: 'Now', icon: '🔥' },
+const HISTORY_CATEGORIES: Record<string, { id: string; name: string; sub: string; icon: string }[]> = {
+  music: [
+    { id: 'ska', name: 'Ska', sub: '1960s', icon: '🎺' },
+    { id: 'rocksteady', name: 'Rocksteady', sub: '1966-68', icon: '🥁' },
+    { id: 'roots-reggae', name: 'Roots Reggae', sub: '1970s', icon: '🌿' },
+    { id: 'dancehall', name: 'Dancehall', sub: '1980s-2000s', icon: '💃' },
+    { id: 'contemporary-reggae', name: 'Contemporary Reggae', sub: '2010s', icon: '🌍' },
+    { id: 'trap-dancehall', name: 'Trap Dancehall', sub: 'Now', icon: '🔥' },
+  ],
+  food: [
+    { id: 'jerk', name: 'Jerk', sub: 'BBQ Style', icon: '🔥' },
+    { id: 'ackee', name: 'Ackee & Saltfish', sub: 'National Dish', icon: '🍳' },
+    { id: 'patty', name: 'Patty', sub: 'Street Food', icon: '🥟' },
+    { id: 'rice-peas', name: 'Rice & Peas', sub: 'Staple', icon: '🍚' },
+    { id: 'festival', name: 'Festival', sub: 'Fried Dumpling', icon: '🌽' },
+    { id: 'rum', name: 'Rum', sub: 'Drink Culture', icon: '🥃' },
+  ],
+  history: [
+    { id: 'taino', name: 'Taino People', sub: 'Indigenous', icon: '🪶' },
+    { id: 'slavery', name: 'Slavery Era', sub: '1600s-1838', icon: '⛓️' },
+    { id: 'rastafari', name: 'Rastafari', sub: 'Movement', icon: '🦁' },
+    { id: 'independence', name: 'Independence', sub: '1962', icon: '🇯🇲' },
+    { id: 'marcus-garvey', name: 'Marcus Garvey', sub: 'Pan-Africanism', icon: '✊' },
+    { id: 'maroons', name: 'Maroons', sub: 'Resistance', icon: '🌴' },
+  ],
+  people: [
+    { id: 'usain-bolt', name: 'Usain Bolt', sub: 'Sprinter', icon: '⚡' },
+    { id: 'marcus-garvey-p', name: 'Marcus Garvey', sub: 'Activist', icon: '✊' },
+    { id: 'nanny', name: 'Queen Nanny', sub: 'National Hero', icon: '👑' },
+    { id: 'haile-selassie', name: 'Haile Selassie', sub: 'Rastafari', icon: '🦁' },
+    { id: 'louise-bennett', name: 'Louise Bennett', sub: 'Poet', icon: '📜' },
+    { id: 'shelly-ann', name: 'Shelly-Ann', sub: 'Sprinter', icon: '🏃' },
+  ],
+  places: [
+    { id: 'negril', name: 'Negril', sub: 'West Coast', icon: '🌅' },
+    { id: 'kingston', name: 'Kingston', sub: 'Capital', icon: '🏙️' },
+    { id: 'blue-mountains', name: 'Blue Mountains', sub: 'Nature', icon: '⛰️' },
+    { id: 'port-royal', name: 'Port Royal', sub: 'Pirate City', icon: '🏴‍☠️' },
+    { id: 'ocho-rios', name: 'Ocho Rios', sub: 'North Coast', icon: '🌊' },
+    { id: 'trench-town', name: 'Trench Town', sub: 'Reggae Roots', icon: '🎵' },
+  ],
+};
+
+const HISTORY_TABS = [
+  { id: 'music', label: '🎵 Music' },
+  { id: 'food', label: '🍛 Food' },
+  { id: 'history', label: '🏛️ History' },
+  { id: 'people', label: '👑 People' },
+  { id: 'places', label: '📍 Places' },
 ];
 
 type Tab = 'artists' | 'history';
@@ -51,6 +93,7 @@ export default function CultureScreen({ onBack }: Props) {
   const [tracks, setTracks] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
+  const [historyTab, setHistoryTab] = useState('music');
   const [playingId, setPlayingId] = useState<string | null>(null);
   const soundRef = useRef<Audio.Sound | null>(null);
 
@@ -207,17 +250,28 @@ export default function CultureScreen({ onBack }: Props) {
                 <Text style={styles.cardEra}>{a.era}</Text>
               </TouchableOpacity>
             );
-          }) : ERAS.map((era) => (
-            <TouchableOpacity
-              key={era.id}
-              style={[styles.card, selected === era.name && styles.cardActive]}
-              onPress={() => fetchInfo(era.name, 'history')}
-            >
-              <Text style={{ fontSize: 28 }}>{era.icon}</Text>
-              <Text style={styles.cardName}>{era.name}</Text>
-              <Text style={styles.cardEra}>{era.years}</Text>
-            </TouchableOpacity>
-          ))}
+          }) : (
+            <>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+                {HISTORY_TABS.map(ht => (
+                  <TouchableOpacity key={ht.id} onPress={() => setHistoryTab(ht.id)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: historyTab === ht.id ? '#C8860A' : '#2A2010', backgroundColor: historyTab === ht.id ? '#2A1A00' : 'transparent' }}>
+                    <Text style={{ color: historyTab === ht.id ? '#C8860A' : '#5C5040', fontWeight: '700', fontSize: 12 }}>{ht.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {(HISTORY_CATEGORIES[historyTab] || []).map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  style={[styles.card, selected === item.name && styles.cardActive]}
+                  onPress={() => fetchInfo(item.name, historyTab)}
+                >
+                  <Text style={{ fontSize: 28 }}>{item.icon}</Text>
+                  <Text style={styles.cardName}>{item.name}</Text>
+                  <Text style={styles.cardEra}>{item.sub}</Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
         </View>
 
         {(loading || info || tracks.length > 0) && (

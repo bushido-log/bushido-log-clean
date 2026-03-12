@@ -177,8 +177,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       </ScrollView>
 
       {/* Map View */}
-      {viewMode === 'map' && (
-        <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, display: viewMode === 'map' ? 'flex' : 'none' }}>
           <MapView
             style={{ flex: 1 }}
             ref={mapRef}

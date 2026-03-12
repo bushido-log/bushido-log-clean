@@ -115,6 +115,13 @@ export default function CultureScreen({ onBack }: Props) {
     setArtistImages(results);
   };
 
+  const handleHistorySearch = async () => {
+    if (!searchQuery.trim()) return;
+    setIsSearching(true);
+    await fetchInfo(searchQuery.trim(), historyTab);
+    setIsSearching(false);
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
@@ -213,22 +220,20 @@ export default function CultureScreen({ onBack }: Props) {
         </TouchableOpacity>
       </View>
 
-      {tab === 'artists' && (
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search reggae artist..."
-            placeholderTextColor="#5C5040"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          <TouchableOpacity style={styles.searchBtn} onPress={handleSearch}>
-            {isSearching ? <ActivityIndicator color="#0D0A05" size="small" /> : <Text style={styles.searchBtnText}>🔍</Text>}
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={styles.searchRow}>
+        <TextInput
+          style={styles.searchInput}
+          placeholder={tab === 'artists' ? 'Search reggae artist...' : 'Search Jamaica topic...'}
+          placeholderTextColor="#5C5040"
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmitEditing={tab === 'artists' ? handleSearch : handleHistorySearch}
+          returnKeyType="search"
+        />
+        <TouchableOpacity style={styles.searchBtn} onPress={tab === 'artists' ? handleSearch : handleHistorySearch}>
+          {isSearching ? <ActivityIndicator color="#0D0A05" size="small" /> : <Text style={styles.searchBtnText}>🔍</Text>}
+        </TouchableOpacity>
+      </View>
       <ScrollView style={styles.scroll}>
         <View style={styles.grid}>
           {tab === 'artists' ? ARTISTS.map((a) => {

@@ -75,8 +75,16 @@ export default function CultureScreen({ onBack }: Props) {
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setIsSearching(true);
-    await fetchInfo(searchQuery.trim(), 'artist');
-    await fetchTracks(searchQuery.trim());
+    setTracks([]);
+    setSelectedArtist(null);
+    try {
+      const res = await fetch(`${SPOTIFY_URL}?name=${encodeURIComponent(searchQuery.trim())}`);
+      const data = await res.json();
+      const artistData = data.ok ? data.artist : undefined;
+      await fetchInfo(searchQuery.trim(), 'artist', artistData);
+    } catch {
+      await fetchInfo(searchQuery.trim(), 'artist');
+    }
     setIsSearching(false);
   };
 

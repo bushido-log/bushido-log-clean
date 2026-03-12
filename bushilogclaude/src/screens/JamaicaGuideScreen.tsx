@@ -51,6 +51,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const chatScrollRef = useRef<ScrollView>(null);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => { fetchSpots(); }, [activeCategory]);
 
@@ -180,6 +181,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
         <View style={{ flex: 1 }}>
           <MapView
             style={{ flex: 1 }}
+            ref={mapRef}
             initialRegion={{
               latitude: 18.1096,
               longitude: -77.2975,
@@ -221,7 +223,20 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
               </View>
             )}
             {spots.map(spot => (
-              <TouchableOpacity key={spot.id} style={s.card} onPress={() => openSpot(spot)}>
+              <TouchableOpacity key={spot.id} style={s.card} onPress={() => {
+                if (spot.latitude && spot.longitude) {
+                  setViewMode('map');
+                  setTimeout(() => {
+                    mapRef.current?.animateToRegion({
+                      latitude: spot.latitude,
+                      longitude: spot.longitude,
+                      latitudeDelta: 0.05,
+                      longitudeDelta: 0.05,
+                    }, 500);
+                  }, 100);
+                }
+                openSpot(spot);
+              }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
                   <Text style={{ fontSize: 28, marginRight: 10 }}>{getCategoryEmoji(spot.category)}</Text>
                   <View style={{ flex: 1 }}>

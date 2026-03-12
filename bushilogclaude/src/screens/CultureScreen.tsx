@@ -235,6 +235,15 @@ export default function CultureScreen({ onBack }: Props) {
         </TouchableOpacity>
       </View>
       <ScrollView style={styles.scroll}>
+        {tab === 'history' && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 8, marginBottom: 8 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
+            {HISTORY_TABS.map(ht => (
+              <TouchableOpacity key={ht.id} onPress={() => setHistoryTab(ht.id)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: historyTab === ht.id ? '#C8860A' : '#2A2010', backgroundColor: historyTab === ht.id ? '#2A1A00' : 'transparent' }}>
+                <Text style={{ color: historyTab === ht.id ? '#C8860A' : '#5C5040', fontWeight: '700', fontSize: 12 }}>{ht.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
         <View style={styles.grid}>
           {tab === 'artists' ? ARTISTS.map((a) => {
             const spotifyData = artistImages[a.id];
@@ -257,13 +266,6 @@ export default function CultureScreen({ onBack }: Props) {
             );
           }) : (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 8 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
-                {HISTORY_TABS.map(ht => (
-                  <TouchableOpacity key={ht.id} onPress={() => setHistoryTab(ht.id)} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20, borderWidth: 1, borderColor: historyTab === ht.id ? '#C8860A' : '#2A2010', backgroundColor: historyTab === ht.id ? '#2A1A00' : 'transparent' }}>
-                    <Text style={{ color: historyTab === ht.id ? '#C8860A' : '#5C5040', fontWeight: '700', fontSize: 12 }}>{ht.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
               {(HISTORY_CATEGORIES[historyTab] || []).map((item) => (
                 <TouchableOpacity
                   key={item.id}

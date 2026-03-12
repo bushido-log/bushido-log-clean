@@ -26,9 +26,9 @@ const ERAS = [
   { id: 'ska', name: 'Ska', years: '1960s', icon: '🎺' },
   { id: 'rocksteady', name: 'Rocksteady', years: '1966-68', icon: '🥁' },
   { id: 'roots-reggae', name: 'Roots Reggae', years: '1970s', icon: '🌿' },
-  { id: 'dancehall', name: 'Dancehall', years: '1980s', icon: '💃' },
-  { id: 'ragga', name: 'Ragga', years: '1990s', icon: '🎛️' },
-  { id: 'modern-reggae', name: 'Modern Reggae', years: '2010s+', icon: '🌍' },
+  { id: 'dancehall', name: 'Dancehall', years: '1980s-2000s', icon: '💃' },
+  { id: 'contemporary-reggae', name: 'Contemporary Reggae', years: '2010s', icon: '🌍' },
+  { id: 'trap-dancehall', name: 'Trap Dancehall', years: 'Now', icon: '🔥' },
 ];
 
 type Tab = 'artists' | 'history';

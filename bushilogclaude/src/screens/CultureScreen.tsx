@@ -24,12 +24,12 @@ const ARTISTS = [
 
 const HISTORY_CATEGORIES: Record<string, { id: string; name: string; sub: string; icon: string }[]> = {
   music: [
-    { id: 'ska', name: 'Ska', sub: '1960s', icon: '🎺' },
-    { id: 'rocksteady', name: 'Rocksteady', sub: '1966-68', icon: '🥁' },
-    { id: 'roots-reggae', name: 'Roots Reggae', sub: '1970s', icon: '🌿' },
-    { id: 'dancehall', name: 'Dancehall', sub: '1980s-2000s', icon: '💃' },
-    { id: 'contemporary-reggae', name: 'Contemporary Reggae', sub: '2010s', icon: '🌍' },
-    { id: 'trap-dancehall', name: 'Trap Dancehall', sub: 'Now', icon: '🔥' },
+    { id: 'ska', name: 'Ska', sub: '1960s', icon: null, img: require('../../assets/icons/icon_ska.png') },
+    { id: 'rocksteady', name: 'Rocksteady', sub: '1966-68', icon: null, img: require('../../assets/icons/icon_rocksteady.png') },
+    { id: 'roots-reggae', name: 'Roots Reggae', sub: '1970s', icon: null, img: require('../../assets/icons/icon_roots_reggae.png') },
+    { id: 'dancehall', name: 'Dancehall', sub: '1980s-2000s', icon: null, img: require('../../assets/icons/icon_dancehall.png') },
+    { id: 'contemporary-reggae', name: 'Contemporary Reggae', sub: '2010s', icon: null, img: require('../../assets/icons/icon_contemporary_reggae.png') },
+    { id: 'trap-dancehall', name: 'Trap Dancehall', sub: 'Now', icon: null, img: require('../../assets/icons/icon_trap_dancehall.png') },
   ],
   food: [
     { id: 'jerk', name: 'Jerk', sub: 'BBQ Style', icon: '🔥' },
@@ -273,7 +273,11 @@ export default function CultureScreen({ onBack }: Props) {
                   style={[styles.card, selected === item.name && styles.cardActive]}
                   onPress={() => fetchInfo(item.name, historyTab)}
                 >
-                  <Text style={{ fontSize: 28 }}>{item.icon}</Text>
+                  {item.img ? (
+                    <Image source={item.img} style={{ width: 56, height: 56 }} />
+                  ) : (
+                    <Text style={{ fontSize: 28 }}>{item.icon}</Text>
+                  )}
                   <Text style={styles.cardName}>{item.name}</Text>
                   <Text style={styles.cardEra}>{item.sub}</Text>
                 </TouchableOpacity>

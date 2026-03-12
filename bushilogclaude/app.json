@@ -1,8 +1,8 @@
 {
   "expo": {
-    "name": "bushido-log-clean",
-    "slug": "bushido-log-clean",
-    "version": "1.1.1",
+    "name": "IRIE",
+    "slug": "irie-reggae",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -10,25 +10,24 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#1B5E20"
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.bushidologclean",
+      "bundleIdentifier": "com.hiroya.irie",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSCameraUsageDescription": "アラーム解除と善行記録のために写真を撮影します",
-        "NSPhotoLibraryUsageDescription": "善行記録のために写真を選択します"
+        "NSCameraUsageDescription": "観光スポットの写真を投稿するために使用します",
+        "NSPhotoLibraryUsageDescription": "観光スポットの写真を投稿するために使用します"
       }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1B5E20"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.anonymous.bushidologclean"
+      "package": "com.hiroya.irie"
     },
     "web": {
       "favicon": "./assets/favicon.png"

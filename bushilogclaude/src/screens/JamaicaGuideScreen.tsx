@@ -70,6 +70,19 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
 
   const openSpot = (spot: any) => { setSelectedSpot(spot); fetchReviews(spot.id); };
 
+  const handleDeleteSpot = async (spot: any) => {
+    Alert.alert('Delete Spot', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        await supabase.from('reviews').delete().eq('spot_id', spot.id);
+        await supabase.from('spots').delete().eq('id', spot.id);
+        setSelectedSpot(null);
+        fetchSpots();
+        Alert.alert('Done', 'Spot deleted!');
+      }},
+    ]);
+  };
+
   const handleLike = async (spot: any) => {
     await supabase.from('spots').update({ likes: spot.likes + 1 }).eq('id', spot.id);
     fetchSpots();
@@ -183,13 +196,13 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                 <View style={s.markerPin}>
                   <Text style={{ fontSize: 20 }}>{getCategoryEmoji(spot.category)}</Text>
                 </View>
-                <Callout tooltip={false}>
-                  <TouchableOpacity onPress={() => openSpot(spot)} style={{ width: 200, padding: 8 }}>
+                <Callout tooltip={false} onPress={() => openSpot(spot)}>
+                  <View style={{ width: 200, padding: 8 }}>
                     <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{spot.name}</Text>
                     <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>📍 {spot.parish}</Text>
                     <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }} numberOfLines={2}>{spot.description}</Text>
                     <Text style={{ color: '#C8860A', fontSize: 12, marginTop: 4 }}>Tap for details →</Text>
-                  </TouchableOpacity>
+                  </View>
                 </Callout>
               </Marker>
             ))}
@@ -237,6 +250,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
             <View style={s.header}>
               <TouchableOpacity onPress={() => setSelectedSpot(null)}><Text style={s.backBtn}>← Close</Text></TouchableOpacity>
               <Text style={s.headerTitle}>{getCategoryEmoji(selectedSpot.category)} {selectedSpot.name}</Text>
+              <TouchableOpacity onPress={() => handleDeleteSpot(selectedSpot)}><Text style={{ color: '#FF4444', fontSize: 13 }}>🗑️ Delete</Text></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16 }}>
               <View style={s.card}>

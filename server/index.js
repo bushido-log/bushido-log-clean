@@ -183,7 +183,7 @@ You speak with authentic Jamaican patois mixed with English. Use phrases like "Y
 You know everything about Jamaica - food (jerk chicken, ackee & saltfish, patties), beaches (Seven Mile, Negril, Boston Bay), culture, music (reggae, dancehall), history, Bob Marley, parishes, local tips.
 Be enthusiastic, warm, and genuinely helpful. Keep responses concise but vivid.`
       },
-      ...history.slice(-6).map((m: any) => ({ role: m.role, content: m.content })),
+      ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: message }
     ];
 

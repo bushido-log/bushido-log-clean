@@ -7,10 +7,10 @@ import {
 const API_URL = 'https://irie-server.onrender.com/quiz-generate';
 
 const CATEGORIES = [
-  { id: 'patois', label: 'Patois', icon: '🗣️' },
-  { id: 'reggae', label: 'Reggae', icon: '🎵' },
-  { id: 'jamaica', label: 'Jamaica', icon: '🗺️' },
-  { id: 'artists', label: 'Artists', icon: '🎤' },
+  { id: 'patois', label: 'Patois', icon: '🗣️', img: require('../../assets/icons/icon_quiz_patois.png') },
+  { id: 'reggae', label: 'Reggae', icon: '🎵', img: require('../../assets/icons/icon_quiz_reggae.png') },
+  { id: 'jamaica', label: 'Jamaica', icon: '🗺️', img: require('../../assets/icons/icon_quiz_jamaica.png') },
+  { id: 'artists', label: 'Artists', icon: '🎤', img: require('../../assets/icons/icon_quiz_artists.png') },
 ];
 
 type Quiz = {
@@ -85,7 +85,11 @@ export default function QuizScreen({ onBack }: Props) {
             style={[styles.catBtn, category === cat.id && styles.catBtnActive]}
             onPress={() => setCategory(cat.id)}
           >
-            <Text style={styles.catIcon}>{cat.icon}</Text>
+            {cat.img ? (
+              <Image source={cat.img} style={{ width: 40, height: 40 }} />
+            ) : (
+              <Text style={styles.catIcon}>{cat.icon}</Text>
+            )}
             <Text style={[styles.catLabel, category === cat.id && styles.catLabelActive]}>
               {cat.label}
             </Text>
@@ -97,7 +101,7 @@ export default function QuizScreen({ onBack }: Props) {
       <View style={styles.quizArea}>
         {!quiz && !loading && (
           <View style={styles.startArea}>
-            <Text style={styles.rudeBwoyIcon}>😤</Text>
+            <Image source={require('../../assets/icons/icon_rude_bwoy.png')} style={{ width: 160, height: 160 }} />
             <Text style={styles.startTitle}>Rude Bwoy</Text>
             <Text style={styles.startSub}>Yuh think yuh know Jamaica?{'\n'}Prove it, bredren!</Text>
             <TouchableOpacity style={styles.startBtn} onPress={generateQuiz}>

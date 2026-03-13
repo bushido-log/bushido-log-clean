@@ -73,7 +73,7 @@ export default function QuizScreen({ onBack }: Props) {
         <TouchableOpacity onPress={onBack}>
           <Text style={styles.backBtn}>← 戻る</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>😤 Rude Bwoy Quiz</Text>
+        <Text style={styles.headerTitle}>😤 Ras Quiz</Text>
         <Text style={styles.score}>{score.correct}/{score.total}</Text>
       </View>
 
@@ -102,7 +102,7 @@ export default function QuizScreen({ onBack }: Props) {
         {!quiz && !loading && (
           <View style={styles.startArea}>
             <Image source={require('../../assets/icons/icon_rude_bwoy.png')} style={{ width: 160, height: 160 }} />
-            <Text style={styles.startTitle}>Rude Bwoy</Text>
+            <Text style={styles.startTitle}>Ras Quiz</Text>
             <Text style={styles.startSub}>Yuh think yuh know Jamaica?{'\n'}Prove it, bredren!</Text>
             <TouchableOpacity style={styles.startBtn} onPress={generateQuiz}>
               <Text style={styles.startBtnText}>START QUIZ</Text>
@@ -113,7 +113,7 @@ export default function QuizScreen({ onBack }: Props) {
         {loading && (
           <View style={styles.startArea}>
             <ActivityIndicator color="#C8860A" size="large" />
-            <Text style={styles.loadingText}>Rude Bwoy is thinking...</Text>
+            <Text style={styles.loadingText}>Ras Quiz is thinking...</Text>
           </View>
         )}
 
@@ -162,7 +162,7 @@ const styles = StyleSheet.create({
   catLabelActive: { color: '#C8860A' },
   quizArea: { flex: 1, padding: 16 },
   startArea: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-  rudeBwoyIcon: { fontSize: 64 },
+  rasQuizIcon: { fontSize: 64 },
   startTitle: { color: '#C8860A', fontSize: 28, fontWeight: '900', letterSpacing: 2 },
   startSub: { color: '#5C5040', fontSize: 14, textAlign: 'center', lineHeight: 22 },
   startBtn: { backgroundColor: '#C8860A', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 4, marginTop: 8 },

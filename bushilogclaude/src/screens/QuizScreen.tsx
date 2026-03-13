@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Animated
+  SafeAreaView, ActivityIndicator, Animated, Image
 } from 'react-native';
 
 const API_URL = 'https://irie-server.onrender.com/quiz-generate';

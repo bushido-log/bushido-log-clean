@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
+import { useLang } from '../context/LanguageContext';
 import {
-  View, Text, TextInput, TouchableOpacity,
+  View, Text, TextInput, TouchableOpacity, Image, SafeAreaView, Keyboard,
   ScrollView, StyleSheet, KeyboardAvoidingView, Platform, ActivityIndicator
 } from 'react-native';
 
@@ -8,16 +9,19 @@ const API_URL = 'https://irie-server.onrender.com/patwa-tutor';
 
 type Message = { role: 'user' | 'assistant'; content: string };
 
+type Props = { onBack?: () => void };
 export default function PatwaTutorScreen({ onBack }: Props) {
+  const { lang } = useLang();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'assistant', content: "Wah gwaan! 🇯🇲 I'm Ras Tutor! Ask me anything about Patois or Jamaican culture!" }
+    { role: 'assistant', content: lang === 'ja' ? "Wah gwaan! 🇯🇲 パトワ語やジャマイカ文化について、なんでも答えるから質問してくれラスタ！" : "Wah gwaan! 🇯🇲 I'm Ras Tutor! Ask me anything about Patois or Jamaican culture!" }
   ]);
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<ScrollView>(null);
 
   const send = async () => {
     if (!input.trim()) return;
+    Keyboard.dismiss();
     const userMsg: Message = { role: 'user', content: input };
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
@@ -28,7 +32,8 @@ export default function PatwaTutorScreen({ onBack }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: newMessages }),
-      });
+      
+});
       const data = await res.json();
       setMessages([...newMessages, { role: 'assistant', content: data.reply }]);
     } catch (e) {
@@ -40,13 +45,15 @@ export default function PatwaTutorScreen({ onBack }: Props) {
   };
 
   return (
-    <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+    <SafeAreaView style={styles.container}>
+    <KeyboardAvoidingView style={{flex:1}} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <View style={styles.header}>
-        {onBack && <TouchableOpacity onPress={onBack} style={{ position: 'absolute', left: 16, top: 16 }}><Text style={{ color: '#F9A825', fontSize: 16 }}>← 戻る</Text></TouchableOpacity>}
-        <Text style={styles.headerTitle}>🇯🇲 Ras Tutor</Text>
-        <Text style={styles.headerSub}>AI Patois & Jamaica Guide</Text>
+        {onBack && <TouchableOpacity onPress={onBack} style={{ alignSelf: 'flex-start', padding: 12 }}><Text style={{ color: '#F9A825', fontSize: 16 }}>{lang === 'ja' ? '← 戻る' : '← Back'}</Text></TouchableOpacity>}
+        <Image source={require('../../assets/icons/icon_ras_tutor.png')} style={{ width: 80, height: 80, borderRadius: 40, marginBottom: 8 }} />
+        <Text style={styles.headerTitle}>Ras Tutor</Text>
+        <Text style={styles.headerSub}>{lang === 'ja' ? 'AIパトワ語 & ジャマイカガイド' : 'AI Patois & Jamaica Guide'}</Text>
       </View>
-      <ScrollView ref={scrollRef} style={styles.chat} contentContainerStyle={{ padding: 16 }}>
+      <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled" style={styles.chat} contentContainerStyle={{ padding: 16 }}>
         {messages.map((m, i) => (
           <View key={i} style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}>
             <Text style={[styles.bubbleText, m.role === 'user' ? styles.userText : styles.aiText]}>{m.content}</Text>
@@ -59,21 +66,22 @@ export default function PatwaTutorScreen({ onBack }: Props) {
           style={styles.input}
           value={input}
           onChangeText={setInput}
-          placeholder="Ask about Patois or Jamaica..."
+          placeholder={lang === 'ja' ? 'パトワ語やジャマイカについて聞く...' : 'Ask about Patois or Jamaica...'}
           placeholderTextColor="#888"
           onSubmitEditing={send}
         />
         <TouchableOpacity style={styles.sendBtn} onPress={send}>
-          <Text style={styles.sendText}>Send</Text>
+          <Text style={styles.sendText}>{lang === 'ja' ? '送信' : 'Send'}</Text>
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0A1A0A' },
-  header: { backgroundColor: '#1B5E20', padding: 20, paddingTop: 60, alignItems: 'center' },
+  header: { backgroundColor: '#1B5E20', padding: 20, paddingTop: 8, alignItems: 'center' },
   headerTitle: { color: '#F9A825', fontSize: 24, fontWeight: 'bold' },
   headerSub: { color: '#A5D6A7', fontSize: 13, marginTop: 4 },
   chat: { flex: 1 },

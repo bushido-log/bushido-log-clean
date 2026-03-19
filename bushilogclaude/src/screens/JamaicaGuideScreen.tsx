@@ -1,3 +1,4 @@
+import { useLang } from '../context/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -12,17 +13,18 @@ const COLORS = {
 };
 
 const CATEGORIES = [
-  { key: 'all', label: '🌴 All' },
-  { key: 'restaurant', label: '🍽️ Food' },
-  { key: 'tourist', label: '🏛️ Sights' },
-  { key: 'beach', label: '🏖️ Beach' },
-  { key: 'bar', label: '🍺 Bar' },
-  { key: 'other', label: '✨ Other' },
+  { key: 'all', label_en: '🌴 All', label_ja: '🌴 全て' },
+  { key: 'restaurant', label_en: '🍽️ Food', label_ja: '🍽️ グルメ' },
+  { key: 'tourist', label_en: '🏛️ Sights', label_ja: '🏛️ 観光' },
+  { key: 'beach', label_en: '🏖️ Beach', label_ja: '🏖️ ビーチ' },
+  { key: 'bar', label_en: '🍺 Bar', label_ja: '🍺 バー' },
+  { key: 'other', label_en: '✨ Other', label_ja: '✨ その他' },
 ];
 
 const PARISHES = ['Kingston','Portland','St. Ann','Negril','Montego Bay','Ocho Rios','St. Elizabeth','Westmoreland','Other'];
 
 export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
+  const { lang } = useLang();
   const [spots, setSpots] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState('all');
@@ -38,6 +40,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const [newAddress, setNewAddress] = useState('');
   const [newParish, setNewParish] = useState('Kingston');
   const [newSubmittedBy, setNewSubmittedBy] = useState('');
+  const [newDescriptionJa, setNewDescriptionJa] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [newLatitude, setNewLatitude] = useState<number | null>(null);
   const [newLongitude, setNewLongitude] = useState<number | null>(null);
@@ -72,14 +75,14 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const openSpot = (spot: any) => { setSelectedSpot(spot); fetchReviews(spot.id); };
 
   const handleDeleteSpot = async (spot: any) => {
-    Alert.alert('Delete Spot', 'Are you sure?', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => {
+    Alert.alert(lang === 'ja' ? 'スポット削除' : 'Delete Spot', lang === 'ja' ? '本当に削除しますか？' : 'Are you sure?', [
+      { text: lang === 'ja' ? 'キャンセル' : 'Cancel', style: 'cancel' },
+      { text: lang === 'ja' ? '削除' : 'Delete', style: 'destructive', onPress: async () => {
         await supabase.from('reviews').delete().eq('spot_id', spot.id);
         await supabase.from('spots').delete().eq('id', spot.id);
         setSelectedSpot(null);
         fetchSpots();
-        Alert.alert('Done', 'Spot deleted!');
+        Alert.alert(lang === 'ja' ? '完了' : 'Done', lang === 'ja' ? 'スポットを削除しました！' : 'Spot deleted!');
       }},
     ]);
   };
@@ -90,19 +93,19 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   };
 
   const handleAddSpot = async () => {
-    if (!newName || !newDescription) { Alert.alert('Error', 'Name and description required!'); return; }
+    if (!newName || !newDescription) { Alert.alert(lang === 'ja' ? 'エラー' : 'Error', lang === 'ja' ? '名前と説明を入力してください！' : 'Name and description required!'); return; }
     setSubmitting(true);
     const { error } = await supabase.from('spots').insert({
       name: newName, category: newCategory, description: newDescription,
-      address: newAddress, parish: newParish, submitted_by: newSubmittedBy || 'Anonymous', latitude: newLatitude, longitude: newLongitude,
+      address: newAddress, parish: newParish, submitted_by: newSubmittedBy || 'Anonymous', latitude: newLatitude, longitude: newLongitude, description_ja: newDescriptionJa || null,
     });
     setSubmitting(false);
-    if (error) { Alert.alert('Error', 'Failed to add spot'); }
+    if (error) { Alert.alert(lang === 'ja' ? 'エラー' : 'Error', lang === 'ja' ? 'スポットの追加に失敗しました' : 'Failed to add spot'); }
     else {
       setShowAddSpot(false);
-      setNewName(''); setNewDescription(''); setNewAddress(''); setNewSubmittedBy(''); setNewLatitude(null); setNewLongitude(null);
+      setNewName(''); setNewDescription(''); setNewAddress(''); setNewSubmittedBy(''); setNewLatitude(null); setNewLongitude(null); setNewDescriptionJa('');
       fetchSpots();
-      Alert.alert('IRIE!', 'Spot added! Big up!');
+      Alert.alert(lang === 'ja' ? 'IRIE!' : 'IRIE!', lang === 'ja' ? 'スポットを追加しました！' : 'Spot added! Big up!');
     }
   };
 
@@ -129,7 +132,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       const data = await res.json();
       setChatMessages([...newMessages, { role: 'assistant', content: data.reply }]);
     } catch {
-      setChatMessages([...newMessages, { role: 'assistant', content: "Bredren, di connection drop! Try again!" }]);
+      setChatMessages([...newMessages, { role: 'assistant', content: lang === 'ja' ? "接続エラー！もう一度試してください！" : "Connection error! Please try again!" }]);
     }
     setChatLoading(false);
     setTimeout(() => chatScrollRef.current?.scrollToEnd({ animated: true }), 100);
@@ -152,7 +155,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   return (
     <View style={s.container}>
       <View style={s.header}>
-        <TouchableOpacity onPress={onBack}><Text style={s.backBtn}>← Back</Text></TouchableOpacity>
+        <TouchableOpacity onPress={onBack}><Text style={s.backBtn}>{lang === 'ja' ? '← 戻る' : '← Back'}</Text></TouchableOpacity>
         <Text style={s.headerTitle}>🇯🇲 Jamaica Guide</Text>
         <TouchableOpacity onPress={() => setShowYardie(true)}><Text style={s.backBtn}>🗣️</Text></TouchableOpacity>
       </View>
@@ -160,10 +163,10 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       {/* View Toggle */}
       <View style={s.toggleRow}>
         <TouchableOpacity style={[s.toggleBtn, viewMode === 'map' && s.toggleActive]} onPress={() => setViewMode('map')}>
-          <Text style={[s.toggleText, viewMode === 'map' && s.toggleTextActive]}>🗺️ Map</Text>
+          <Text style={[s.toggleText, viewMode === 'map' && s.toggleTextActive]}>{lang === 'ja' ? '🗺️ マップ' : '🗺️ Map'}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[s.toggleBtn, viewMode === 'list' && s.toggleActive]} onPress={() => setViewMode('list')}>
-          <Text style={[s.toggleText, viewMode === 'list' && s.toggleTextActive]}>📋 List</Text>
+          <Text style={[s.toggleText, viewMode === 'list' && s.toggleTextActive]}>{lang === 'ja' ? '📋 リスト' : '📋 List'}</Text>
         </TouchableOpacity>
       </View>
 
@@ -171,7 +174,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.categoryBar}>
         {CATEGORIES.map(cat => (
           <TouchableOpacity key={cat.key} style={[s.chip, activeCategory === cat.key && s.chipActive]} onPress={() => setActiveCategory(cat.key)}>
-            <Text style={[s.chipText, activeCategory === cat.key && s.chipTextActive]}>{cat.label}</Text>
+            <Text style={[s.chipText, activeCategory === cat.key && s.chipTextActive]}>{lang === 'ja' ? cat.label_ja : cat.label_en}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
@@ -201,15 +204,14 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                   <View style={{ width: 200, padding: 8 }}>
                     <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{spot.name}</Text>
                     <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>📍 {spot.parish}</Text>
-                    <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }} numberOfLines={2}>{spot.description}</Text>
-                    <Text style={{ color: '#C8860A', fontSize: 12, marginTop: 4 }}>Tap for details →</Text>
+                    <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }} numberOfLines={2}>{lang === 'ja' && spot.description_ja ? spot.description_ja : spot.description}</Text>
+                    <Text style={{ color: '#C8860A', fontSize: 12, marginTop: 4 }}>{lang === 'ja' ? '詳細を見る →' : 'Tap for details →'}</Text>
                   </View>
                 </Callout>
               </Marker>
             ))}
           </MapView>
         </View>
-      )}
 
       {/* List View */}
       {viewMode === 'list' && (
@@ -246,7 +248,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                     <Text style={{ color: '#FF6B6B', fontSize: 13 }}>❤️ {spot.likes}</Text>
                   </TouchableOpacity>
                 </View>
-                <Text style={s.spotMuted} numberOfLines={2}>{spot.description}</Text>
+                <Text style={s.spotMuted} numberOfLines={2}>{lang === 'ja' && spot.description_ja ? spot.description_ja : spot.description}</Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
@@ -254,7 +256,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       )}
 
       <TouchableOpacity style={s.fab} onPress={() => setShowAddSpot(true)}>
-        <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>+ Add Spot</Text>
+        <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>{lang === 'ja' ? '+ スポット追加' : '+ Add Spot'}</Text>
       </TouchableOpacity>
 
       {/* Spot Detail Modal */}
@@ -276,20 +278,20 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                     }, 800);
                   }, 300);
                 }
-              }}><Text style={s.backBtn}>🗺️ Map</Text></TouchableOpacity>
+              }}><Text style={s.backBtn}>{lang === 'ja' ? '🗺️ マップ' : '🗺️ Map'}</Text></TouchableOpacity>
               <Text style={s.headerTitle}>{getCategoryEmoji(selectedSpot.category)} {selectedSpot.name}</Text>
-              <TouchableOpacity onPress={() => handleDeleteSpot(selectedSpot)}><Text style={{ color: '#FF4444', fontSize: 13 }}>🗑️ Delete</Text></TouchableOpacity>
+              <TouchableOpacity onPress={() => handleDeleteSpot(selectedSpot)}><Text style={{ color: '#FF4444', fontSize: 13 }}>{lang === 'ja' ? '🗑️ 削除' : '🗑️ Delete'}</Text></TouchableOpacity>
             </View>
             <ScrollView contentContainerStyle={{ padding: 16 }}>
               <View style={s.card}>
                 <Text style={{ color: COLORS.gold, fontSize: 14 }}>📍 {selectedSpot.parish}</Text>
                 {selectedSpot.address ? <Text style={s.spotMuted}>{selectedSpot.address}</Text> : null}
-                <Text style={{ color: COLORS.text, fontSize: 15, lineHeight: 22, marginVertical: 10 }}>{selectedSpot.description}</Text>
+                <Text style={{ color: COLORS.text, fontSize: 15, lineHeight: 22, marginVertical: 10 }}>{lang === 'ja' && selectedSpot.description_ja ? selectedSpot.description_ja : selectedSpot.description}</Text>
                 <TouchableOpacity style={s.likeBtn} onPress={() => handleLike(selectedSpot)}>
                   <Text style={{ color: '#FF6B6B' }}>❤️ {selectedSpot.likes} IRIE</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={s.sectionTitle}>Reviews ({reviews.length})</Text>
+              <Text style={s.sectionTitle}>{lang === 'ja' ? `レビュー (${reviews.length})` : `Reviews (${reviews.length})`}</Text>
               {reviews.map(r => (
                 <View key={r.id} style={s.card}>
                   {renderStars(r.rating)}
@@ -297,13 +299,13 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                   <Text style={s.spotMuted}>— {r.submitted_by}</Text>
                 </View>
               ))}
-              <Text style={s.sectionTitle}>Leave a Review</Text>
+              <Text style={s.sectionTitle}>{lang === 'ja' ? 'レビューを書く' : 'Leave a Review'}</Text>
               <View style={s.card}>
                 {renderStars(reviewRating, setReviewRating)}
-                <TextInput style={s.input} placeholder="Your review..." placeholderTextColor={COLORS.muted} value={reviewComment} onChangeText={setReviewComment} multiline />
-                <TextInput style={s.input} placeholder="Your name (optional)" placeholderTextColor={COLORS.muted} value={reviewName} onChangeText={setReviewName} />
+                <TextInput style={s.input} placeholder={lang === 'ja' ? 'レビューを書く...' : 'Your review...'} placeholderTextColor={COLORS.muted} value={reviewComment} onChangeText={setReviewComment} multiline />
+                <TextInput style={s.input} placeholder={lang === 'ja' ? 'お名前（任意）' : 'Your name (optional)'} placeholderTextColor={COLORS.muted} value={reviewName} onChangeText={setReviewName} />
                 <TouchableOpacity style={s.submitBtn} onPress={handleAddReview}>
-                  <Text style={{ color: '#000', fontWeight: 'bold' }}>Post Review</Text>
+                  <Text style={{ color: '#000', fontWeight: 'bold' }}>{lang === 'ja' ? '投稿する' : 'Post Review'}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>
@@ -317,7 +319,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           <View style={s.modal}>
             <View style={s.header}>
               <TouchableOpacity onPress={() => { if (activeView === 'map') { setActiveView('form'); } else { setShowAddSpot(false); } }}>
-                <Text style={s.backBtn}>{activeView === 'map' ? '← Back' : '← Cancel'}</Text>
+                <Text style={s.backBtn}>{activeView === 'map' ? (lang === 'ja' ? '← 戻る' : '← Back') : (lang === 'ja' ? '← キャンセル' : '← Cancel')}</Text>
               </TouchableOpacity>
               <Text style={s.headerTitle}>{activeView === 'map' ? '📍 Tap to set location' : 'Add a Spot'}</Text>
             </View>
@@ -352,32 +354,34 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                 </MapView>
                 <View style={{ padding: 16, backgroundColor: '#1A1408', borderTopWidth: 1, borderTopColor: '#2A2010' }}>
                   <Text style={{ color: '#8B7355', textAlign: 'center', marginBottom: 12 }}>
-                    {newLatitude ? 'Pin placed! Confirm or adjust.' : 'Tap anywhere on the map'}
+                    {newLatitude ? 'ピンを設置しました！確認または調整してください。' : 'マップをタップしてピンを設置'}
                   </Text>
                   {newLatitude && (
                     <TouchableOpacity style={s.submitBtn} onPress={() => setActiveView('form')}>
-                      <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>✅ Confirm Location</Text>
+                      <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>{lang === 'ja' ? '✅ 場所を確定' : '✅ Confirm Location'}</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
             ) : (
             <ScrollView contentContainerStyle={{ padding: 16 }}>
-              <Text style={s.label}>Name *</Text>
-              <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder="e.g. Scotchies Jerk Centre" placeholderTextColor={COLORS.muted} />
-              <Text style={s.label}>Category</Text>
+              <Text style={s.label}>{lang === 'ja' ? '名前 *' : 'Name *'}</Text>
+              <TextInput style={s.input} value={newName} onChangeText={setNewName} placeholder={lang === 'ja' ? '例：スコッチーズ・ジャーク・センター' : 'e.g. Scotchies Jerk Centre'} placeholderTextColor={COLORS.muted} />
+              <Text style={s.label}>{lang === 'ja' ? 'カテゴリー' : 'Category'}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {CATEGORIES.filter(c => c.key !== 'all').map(cat => (
                   <TouchableOpacity key={cat.key} style={[s.chip, newCategory === cat.key && s.chipActive]} onPress={() => setNewCategory(cat.key)}>
-                    <Text style={[s.chipText, newCategory === cat.key && s.chipTextActive]}>{cat.label}</Text>
+                    <Text style={[s.chipText, newCategory === cat.key && s.chipTextActive]}>{lang === 'ja' ? cat.label_ja : cat.label_en}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <Text style={s.label}>Description *</Text>
-              <TextInput style={[s.input, { height: 80 }]} value={newDescription} onChangeText={setNewDescription} multiline placeholder="What makes it special?" placeholderTextColor={COLORS.muted} />
-              <Text style={s.label}>Address</Text>
+              <Text style={s.label}>{lang === 'ja' ? '説明 *' : 'Description *'}</Text>
+              <TextInput style={[s.input, { height: 80 }]} value={newDescription} onChangeText={setNewDescription} multiline placeholder={lang === 'ja' ? 'どんな魅力がありますか？' : 'What makes it special?'} placeholderTextColor={COLORS.muted} />
+              <Text style={s.label}>{lang === 'ja' ? '日本語説明（任意）' : 'Japanese Description (optional)'}</Text>
+              <TextInput style={[s.input, { height: 80 }]} value={newDescriptionJa} onChangeText={setNewDescriptionJa} multiline placeholder={lang === 'ja' ? '日本語で説明を入力...' : 'Description in Japanese...'} placeholderTextColor={COLORS.muted} />
+              <Text style={s.label}>{lang === 'ja' ? '住所' : 'Address'}</Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <TextInput style={[s.input, { flex: 1 }]} value={newAddress} onChangeText={setNewAddress} placeholder="Street address, Jamaica" placeholderTextColor={COLORS.muted} />
+                <TextInput style={[s.input, { flex: 1 }]} value={newAddress} onChangeText={setNewAddress} placeholder={lang === 'ja' ? '住所（ジャマイカ）' : 'Street address, Jamaica'} placeholderTextColor={COLORS.muted} />
                 <TouchableOpacity
                   style={{ backgroundColor: COLORS.gold, paddingHorizontal: 12, borderRadius: 8, justifyContent: 'center', marginBottom: 4, marginTop: 4 }}
                   onPress={async () => {
@@ -402,7 +406,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                   <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 13 }}>🔍</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={s.label}>Parish</Text>
+              <Text style={s.label}>{lang === 'ja' ? '教区' : 'Parish'}</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
                 {PARISHES.map(p => (
                   <TouchableOpacity key={p} style={[s.chip, newParish === p && s.chipActive]} onPress={() => setNewParish(p)}>
@@ -410,16 +414,16 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                   </TouchableOpacity>
                 ))}
               </ScrollView>
-              <Text style={s.label}>📍 Location (tap map to set)</Text>
+              <Text style={s.label}>{lang === 'ja' ? '📍 場所（マップでタップ）' : '📍 Location (tap map to set)'}</Text>
               <TouchableOpacity style={[s.input, { justifyContent: 'center', height: 44 }]} onPress={() => setActiveView('map')}>
                 <Text style={{ color: newLatitude ? '#C8860A' : '#8B7355' }}>
-                  {newLatitude ? '✅ Location set! Tap to adjust' : '🗺️ Tap to pick location on map'}
+                  {newLatitude ? (lang === 'ja' ? '✅ 場所設定済み！タップで調整' : '✅ Location set! Tap to adjust') : (lang === 'ja' ? '🗺️ タップして場所を設定' : '🗺️ Tap to pick location on map')}
                 </Text>
               </TouchableOpacity>
-              <Text style={s.label}>Your Name</Text>
-              <TextInput style={s.input} value={newSubmittedBy} onChangeText={setNewSubmittedBy} placeholder="Anonymous" placeholderTextColor={COLORS.muted} />
+              <Text style={s.label}>{lang === 'ja' ? 'お名前' : 'Your Name'}</Text>
+              <TextInput style={s.input} value={newSubmittedBy} onChangeText={setNewSubmittedBy} placeholder={lang === 'ja' ? '匿名' : 'Anonymous'} placeholderTextColor={COLORS.muted} />
               <TouchableOpacity style={[s.submitBtn, submitting && { opacity: 0.6 }]} onPress={handleAddSpot} disabled={submitting}>
-                {submitting ? <ActivityIndicator color="#000" /> : <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>🌴 Add to Jamaica Guide</Text>}
+                {submitting ? <ActivityIndicator color="#000" /> : <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>{lang === 'ja' ? '🌴 ジャマイカガイドに追加' : '🌴 Add to Jamaica Guide'}</Text>}
               </TouchableOpacity>
             </ScrollView>
             )}
@@ -432,12 +436,12 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
         <View style={{ flex: 1, backgroundColor: '#0D0A05' }}>
           <View style={s.header}>
             <TouchableOpacity onPress={() => setShowLocationPicker(false)}>
-              <Text style={s.backBtn}>← Cancel</Text>
+              <Text style={s.backBtn}>{lang === 'ja' ? '← キャンセル' : '← Cancel'}</Text>
             </TouchableOpacity>
             <Text style={s.headerTitle}>📍 Tap to set location</Text>
             {newLatitude && (
               <TouchableOpacity onPress={() => setShowLocationPicker(false)}>
-                <Text style={{ color: '#2D5A1B', fontSize: 15, fontWeight: 'bold' }}>✅ Done</Text>
+                <Text style={{ color: '#2D5A1B', fontSize: 15, fontWeight: 'bold' }}>{lang === 'ja' ? '✅ 完了' : '✅ Done'}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -479,7 +483,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           </MapView>
           <View style={{ padding: 16, backgroundColor: '#1A1408', borderTopWidth: 1, borderTopColor: '#2A2010' }}>
             <Text style={{ color: '#8B7355', textAlign: 'center', fontSize: 13 }}>
-              {newLatitude ? '✅ Pin placed! Tap Done or adjust the pin' : 'Tap anywhere on the map to place your pin'}
+              {newLatitude ? (lang === 'ja' ? '✅ ピン設置完了！完了を押すか調整' : '✅ Pin placed! Tap Done or adjust the pin') : (lang === 'ja' ? 'マップをタップしてピンを設置' : 'Tap anywhere on the map to place your pin')}
             </Text>
             {newLatitude && (
               <TouchableOpacity
@@ -511,9 +515,9 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           </ScrollView>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>
-              <TextInput style={s.chatInput} value={chatInput} onChangeText={setChatInput} placeholder="Ask Yardie anything..." placeholderTextColor={COLORS.muted} onSubmitEditing={sendYardieMessage} />
+              <TextInput style={s.chatInput} value={chatInput} onChangeText={setChatInput} placeholder={lang === 'ja' ? 'ヤーディーに何でも聞く...' : 'Ask Yardie anything...'} placeholderTextColor={COLORS.muted} onSubmitEditing={sendYardieMessage} />
               <TouchableOpacity style={{ backgroundColor: COLORS.gold, paddingHorizontal: 16, borderRadius: 20, justifyContent: 'center' }} onPress={sendYardieMessage}>
-                <Text style={{ color: '#000', fontWeight: 'bold' }}>Send</Text>
+                <Text style={{ color: '#000', fontWeight: 'bold' }}>{lang === 'ja' ? '送信' : 'Send'}</Text>
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>

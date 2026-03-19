@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
+import { useLang } from '../context/LanguageContext';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, Animated, Image
+  SafeAreaView, ActivityIndicator, Image, ScrollView
 } from 'react-native';
 
 const API_URL = 'https://irie-server.onrender.com/quiz-generate';
 
 const CATEGORIES = [
-  { id: 'patois', label: 'Patois', icon: '🗣️', img: require('../../assets/icons/icon_quiz_patois.png') },
-  { id: 'reggae', label: 'Reggae', icon: '🎵', img: require('../../assets/icons/icon_quiz_reggae.png') },
-  { id: 'jamaica', label: 'Jamaica', icon: '🗺️', img: require('../../assets/icons/icon_quiz_jamaica.png') },
-  { id: 'artists', label: 'Artists', icon: '🎤', img: require('../../assets/icons/icon_quiz_artists.png') },
+  { id: 'patois', label_en: 'Patois', label_ja: 'パトワ語', icon: '🗣️', img: require('../../assets/icons/icon_quiz_patois.png') },
+  { id: 'reggae', label_en: 'Reggae', label_ja: 'レゲエ', icon: '🎵', img: require('../../assets/icons/icon_quiz_reggae.png') },
+  { id: 'jamaica', label_en: 'Jamaica', label_ja: 'ジャマイカ', icon: '🗺️', img: require('../../assets/icons/icon_quiz_jamaica.png') },
+  { id: 'artists', label_en: 'Artists', label_ja: 'アーティスト', icon: '🎤', img: require('../../assets/icons/icon_quiz_artists.png') },
 ];
 
 type Quiz = {
@@ -28,6 +29,8 @@ export default function QuizScreen({ onBack }: Props) {
   const [selected, setSelected] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [score, setScore] = useState({ correct: 0, total: 0 });
+  const { lang } = useLang();
+  const [seenIds, setSeenIds] = useState<string[]>([]);
 
   const generateQuiz = async () => {
     setLoading(true);
@@ -37,10 +40,11 @@ export default function QuizScreen({ onBack }: Props) {
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ category }),
+        body: JSON.stringify({ category, seen_ids: seenIds, lang }),
       });
       const data = await res.json();
       setQuiz(data.quiz);
+      if (data.quiz?.id) setSeenIds(prev => [...prev, data.quiz.id]);
     } catch (e) {
       console.error(e);
     } finally {
@@ -68,16 +72,14 @@ export default function QuizScreen({ onBack }: Props) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backBtn}>← 戻る</Text>
+          <Text style={styles.backBtn}>{lang === 'ja' ? '← 戻る' : '← Back'}</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>😤 Ras Quiz</Text>
+        <Text style={styles.headerTitle}>Ras Quiz</Text>
         <Text style={styles.score}>{score.correct}/{score.total}</Text>
       </View>
 
-      {/* Category selector */}
       <View style={styles.categories}>
         {CATEGORIES.map(cat => (
           <TouchableOpacity
@@ -91,21 +93,19 @@ export default function QuizScreen({ onBack }: Props) {
               <Text style={styles.catIcon}>{cat.icon}</Text>
             )}
             <Text style={[styles.catLabel, category === cat.id && styles.catLabelActive]}>
-              {cat.label}
+              {lang === 'ja' ? cat.label_ja : cat.label_en}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      {/* Quiz area */}
       <View style={styles.quizArea}>
         {!quiz && !loading && (
           <View style={styles.startArea}>
             <Image source={require('../../assets/icons/icon_rude_bwoy.png')} style={{ width: 160, height: 160 }} />
             <Text style={styles.startTitle}>Ras Quiz</Text>
-            <Text style={styles.startSub}>Yuh think yuh know Jamaica?{'\n'}Prove it, bredren!</Text>
             <TouchableOpacity style={styles.startBtn} onPress={generateQuiz}>
-              <Text style={styles.startBtnText}>START QUIZ</Text>
+              <Text style={styles.startBtnText}>{lang === 'ja' ? 'クイズスタート' : 'START QUIZ'}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -113,12 +113,15 @@ export default function QuizScreen({ onBack }: Props) {
         {loading && (
           <View style={styles.startArea}>
             <ActivityIndicator color="#C8860A" size="large" />
-            <Text style={styles.loadingText}>Ras Quiz is thinking...</Text>
+            <Text style={styles.loadingText}>{lang === 'ja' ? '考え中...' : 'Ras Quiz is thinking...'}</Text>
           </View>
         )}
 
         {quiz && !loading && (
-          <View style={styles.questionArea}>
+          <ScrollView
+            contentContainerStyle={styles.questionArea}
+            showsVerticalScrollIndicator={false}
+          >
             <Text style={styles.question}>{quiz.question}</Text>
             {quiz.options.map((option, i) => (
               <TouchableOpacity
@@ -137,11 +140,11 @@ export default function QuizScreen({ onBack }: Props) {
                   {quiz.explanation}
                 </Text>
                 <TouchableOpacity style={styles.nextBtn} onPress={generateQuiz}>
-                  <Text style={styles.nextBtnText}>Next Question →</Text>
+                  <Text style={styles.nextBtnText}>{lang === 'ja' ? '次の問題 →' : 'Next Question →'}</Text>
                 </TouchableOpacity>
               </View>
             )}
-          </View>
+          </ScrollView>
         )}
       </View>
     </SafeAreaView>
@@ -162,13 +165,12 @@ const styles = StyleSheet.create({
   catLabelActive: { color: '#C8860A' },
   quizArea: { flex: 1, padding: 16 },
   startArea: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 16 },
-  rasQuizIcon: { fontSize: 64 },
   startTitle: { color: '#C8860A', fontSize: 28, fontWeight: '900', letterSpacing: 2 },
   startSub: { color: '#5C5040', fontSize: 14, textAlign: 'center', lineHeight: 22 },
   startBtn: { backgroundColor: '#C8860A', paddingHorizontal: 40, paddingVertical: 14, borderRadius: 4, marginTop: 8 },
   startBtnText: { color: '#0D0A05', fontSize: 16, fontWeight: '900', letterSpacing: 3 },
   loadingText: { color: '#5C5040', fontSize: 14, marginTop: 12 },
-  questionArea: { gap: 12 },
+  questionArea: { gap: 12, paddingBottom: 32 },
   question: { color: '#E8D8A0', fontSize: 18, fontWeight: '700', lineHeight: 26, marginBottom: 8 },
   option: { backgroundColor: '#0F0A05', borderWidth: 1, borderColor: '#2A2010', borderRadius: 4, padding: 14 },
   optionCorrect: { borderColor: '#4A7C3F', backgroundColor: '#0A1A08' },

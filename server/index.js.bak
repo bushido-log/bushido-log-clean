@@ -1,6 +1,4 @@
 import express from "express";
-import { createClient } from "@supabase/supabase-js";
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 import cors from "cors";
 import OpenAI from "openai";
 
@@ -68,139 +66,32 @@ Always be encouraging and make learning feel like a vibe.`;
   }
 });
 
-async function generateAndStoreQuestions(category) {
-  const systemPrompt = `You are a Jamaican quiz master. Generate 10 different multiple choice questions about ${category}.
-
-STRICT RULES:
-- For Patois questions: the question must be in Japanese/English, and ALL options must be Patois words/phrases (never put Japanese or English translations as options)
-- For reggae/artists/jamaica questions: all options must be real names, places, or facts
-- NEVER use the answer word itself as one of the options
-- Wrong answers must be plausible but clearly wrong
-- Each question must be genuinely different and interesting
-- Options must all be in the same language/format
-
-Respond ONLY with a JSON array (no other text):
-[
-  {
-    "question_en": "English question",
-    "question_ja": "日本語の質問",
-    "options_en": ["A) opt1", "B) opt2", "C) opt3", "D) opt4"],
-    "options_ja": ["A) 選択肢1", "B) 選択肢2", "C) 選択肢3", "D) 選択肢4"],
-    "correct": "A",
-    "explanation_en": "English explanation in Rude Bwoy style",
-    "explanation_ja": "日本語の解説"
-  }
-]`;
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o",
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Generate 10 different ${category} quiz questions` }
-    ],
-    max_tokens: 3000,
-  });
-  const raw = completion.choices[0].message.content;
-  const jsonArr = JSON.parse(raw.replace(/```json|```/g, '').trim());
-  const inserts = jsonArr.map(json => ({
-    category,
-    question_en: json.question_en,
-    question_ja: json.question_ja,
-    options_en: json.options_en,
-    options_ja: json.options_ja,
-    correct: json.correct,
-    explanation_en: json.explanation_en,
-    explanation_ja: json.explanation_ja,
-  }));
-  await supabase.from("quiz_questions").insert(inserts);
-  console.log(`[quiz] Background: added 10 questions for ${category}`);
-}
-
 app.post("/quiz-generate", async (req, res) => {
-  const { category = "patois", lang = "en", seen_ids = [] } = req.body || {};
+  const { category = "patois" } = req.body || {};
+  const systemPrompt = `You are "Rude Bwoy", a competitive and cocky Jamaican quiz master.
+You challenge players with questions about Jamaican culture, Patois, reggae music, and Jamaica geography.
+Generate exactly ONE multiple choice question in this JSON format (no other text, just JSON):
+{
+  "question": "question text here",
+  "options": ["A) option1", "B) option2", "C) option3", "D) option4"],
+  "correct": "A",
+  "explanation": "Rude Bwoy's cocky explanation of the answer, in character, mix English and Patois"
+}
+Category: ${category}
+Be creative, educational, and stay in character as Rude Bwoy. Keep it fun!`;
+
   try {
-    let query = supabase
-      .from("quiz_questions")
-      .select("*")
-      .eq("category", category);
-
-    if (seen_ids.length > 0) {
-      query = query.not("id", "in", `(${seen_ids.join(",")})`);
-    }
-
-    const { data: rows, error } = await query.limit(20);
-
-    if (!error && rows && rows.length > 0) {
-      const row = rows[Math.floor(Math.random() * rows.length)];
-      const quiz = {
-        id: row.id,
-        question: lang === "ja" ? row.question_ja : row.question_en,
-        options: lang === "ja" ? row.options_ja : row.options_en,
-        correct: row.correct,
-        explanation: lang === "ja" ? row.explanation_ja : row.explanation_en,
-      };
-      // 残り5問以下なら バックグラウンドで補充
-      if (rows.length <= 5) {
-        generateAndStoreQuestions(category).catch(e => console.error("Background gen error:", e));
-      }
-      return res.json({ ok: true, quiz, source: "db" });
-    }
-
-    // DBに問題がなければAIで10問まとめて生成
-    const systemPrompt = `You are a Jamaican quiz master. Generate 10 different multiple choice questions about ${category}.
-
-STRICT RULES:
-- For Patois questions: the question must be in Japanese/English, and ALL options must be Patois words/phrases (never put Japanese or English translations as options)
-- For reggae/artists/jamaica questions: all options must be real names, places, or facts
-- NEVER use the answer word itself as one of the options
-- Wrong answers must be plausible but clearly wrong
-- Each question must be genuinely different and interesting
-- Options must all be in the same language/format
-
-Respond ONLY with a JSON array (no other text):
-[
-  {
-    "question_en": "English question",
-    "question_ja": "日本語の質問",
-    "options_en": ["A) opt1", "B) opt2", "C) opt3", "D) opt4"],
-    "options_ja": ["A) 選択肢1", "B) 選択肢2", "C) 選択肢3", "D) 選択肢4"],
-    "correct": "A",
-    "explanation_en": "English explanation in Rude Bwoy style",
-    "explanation_ja": "日本語の解説"
-  }
-]`;
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: `Generate 10 ${category} quiz questions` }
+        { role: "user", content: `Generate a ${category} question` }
       ],
-      max_tokens: 3000,
+      max_tokens: 400,
     });
     const raw = completion.choices[0].message.content;
-    const jsonArr = JSON.parse(raw.replace(/```json|```/g, '').trim());
-
-    const inserts = jsonArr.map(json => ({
-      category,
-      question_en: json.question_en,
-      question_ja: json.question_ja,
-      options_en: json.options_en,
-      options_ja: json.options_ja,
-      correct: json.correct,
-      explanation_en: json.explanation_en,
-      explanation_ja: json.explanation_ja,
-    }));
-
-    const { data: inserted } = await supabase.from("quiz_questions").insert(inserts).select();
-    const row = inserted[0];
-    const quiz = {
-      id: row.id,
-      question: lang === "ja" ? row.question_ja : row.question_en,
-      options: lang === "ja" ? row.options_ja : row.options_en,
-      correct: row.correct,
-      explanation: lang === "ja" ? row.explanation_ja : row.explanation_en,
-    };
-    return res.json({ ok: true, quiz, source: "ai" });
+    const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    return res.json({ ok: true, quiz: json });
   } catch (e) {
     console.error("Quiz error:", e);
     return res.status(500).json({ error: "Quiz generation failed" });
@@ -208,68 +99,30 @@ Respond ONLY with a JSON array (no other text):
 });
 
 app.post("/culture-info", async (req, res) => {
-  const { topic, type = "artist", lang = "en" } = req.body || {};
+  const { topic, type = "artist" } = req.body || {};
+  const systemPrompt = `You are "Selector", a legendary Jamaican sound system DJ and reggae historian.
+You speak with passion and deep knowledge about reggae music, artists, and Jamaican culture.
+Mix English with Patois naturally. Be enthusiastic, use "Selecta!", "Big tune!", "Rewind!" naturally.
+Keep responses concise (3-5 sentences). Always teach something specific and interesting.
+If type is "artist": give key facts about the artist, their biggest songs, their impact.
+If type is "history": explain the era or movement with vivid detail.
+If type is "style": describe the musical style and its characteristics.`;
 
   try {
-    // DBにキャッシュがあれば返す
-    const { data: cached } = await supabase
-      .from("culture_cache")
-      .select("*")
-      .eq("type", type)
-      .eq("topic", topic)
-      .single();
-
-    if (cached) {
-      const reply = lang === "ja" ? cached.content_ja : cached.content_en;
-      return res.json({ ok: true, reply, source: "db" });
-    }
-
-    // なければAIで生成（英語・日本語同時）
-    const systemPrompt = `You are "Selector", a legendary Jamaican sound system DJ and reggae historian.
-Respond ONLY with this JSON (no other text):
-{
-  "content_en": "3-5 sentences in English with Patois mixed in, enthusiastic style",
-  "content_ja": "日本語で3-5文、パトワ語を混ぜながら熱く解説"
-}`;
-
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-    // Wikipediaから情報を取得
-    let wikiSummary = "";
-    try {
-      const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`);
-      const wikiData = await wikiRes.json();
-      if (wikiData.extract) wikiSummary = wikiData.extract.slice(0, 500);
-    } catch {}
-    const userContent = wikiSummary
-      ? `Here is factual info about ${topic}: "${wikiSummary}". Now tell me about: ${topic} (type: ${type}) using this info.`
-      : `Tell me about: ${topic} (type: ${type})`;
-        { role: "user", content: userContent }
+        { role: "user", content: `Tell me about: ${topic} (type: ${type})` }
       ],
-      max_tokens: 600,
+      max_tokens: 300,
     });
-
-    const raw = completion.choices[0].message.content;
-    const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
-
-    // DBに保存
-    await supabase.from("culture_cache").insert({
-      type,
-      topic,
-      content_en: json.content_en,
-      content_ja: json.content_ja,
-    });
-
-    const reply = lang === "ja" ? json.content_ja : json.content_en;
-    return res.json({ ok: true, reply, source: "ai" });
+    return res.json({ ok: true, reply: completion.choices[0].message.content });
   } catch (e) {
     console.error("Culture error:", e);
     return res.status(500).json({ error: "Culture info failed" });
   }
 });
-
 app.get("/spotify-artist", async (req, res) => {
   const { name } = req.query;
   if (!name) return res.status(400).json({ error: "name is required" });
@@ -467,30 +320,4 @@ app.get('/spotify-debug2', async (req, res) => {
   } catch (e) {
     return res.json({ error: e.message });
   }
-});
-app.post('/translate-spots', async (req, res) => {
-  try {
-    const { data: spots, error: fetchError } = await supabase.from('spots').select('id, description').is('description_ja', null);
-    if (fetchError) return res.json({ error: fetchError });
-    if (!spots || spots.length === 0) return res.json({ message: 'All spots already translated', count: 0, spots });
-    let count = 0;
-    for (const spot of spots) {
-      if (!spot.description) continue;
-      const completion = await openai.chat.completions.create({ model: 'gpt-4o-mini', max_tokens: 500, messages: [{ role: 'user', content: '次の英語を自然な日本語に翻訳。翻訳文のみ返す:\n' + spot.description }] });
-      const translated = completion.choices?.[0]?.message?.content?.trim();
-      if (translated) {
-        const { error: updateError } = await supabase.from('spots').update({ description_ja: translated }).eq('id', spot.id);
-        if (updateError) return res.json({ updateError, spot_id: spot.id });
-        count++;
-      } else {
-        return res.json({ aiError: aiData, spot_id: spot.id });
-      }
-    }
-    res.json({ message: 'Done!', count });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-app.get('/debug-spots', async (req, res) => {
-  const { data, error, count } = await supabase.from('spots').select('id, description, description_ja', { count: 'exact' });
-  res.json({ count, error, sample: data?.slice(0, 2) });
 });

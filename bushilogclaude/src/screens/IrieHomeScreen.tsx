@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from 'react';
+import { useLang } from '../context/LanguageContext';
 import {
   View, Text, TouchableOpacity, ScrollView,
   StyleSheet, SafeAreaView, Animated, Dimensions
@@ -15,7 +16,7 @@ const MENU_ITEMS = [
     screen: 'patwa' as const,
     icon: '🎙',
     title: 'Ras Tutor',
-    sub: 'AI Patois & Language',
+    sub_en: 'AI Patois & Language', sub_ja: 'AIパトワ語 & 言語',
     tag: 'SPEAK',
     color: '#C8860A',
     bg: '#2A1A00',
@@ -24,7 +25,7 @@ const MENU_ITEMS = [
     screen: 'culture' as const,
     icon: '♪',
     title: 'Culture',
-    sub: 'History & Artists',
+    sub_en: 'History & Artists', sub_ja: '歴史 & アーティスト',
     tag: 'LEARN',
     color: '#4A7C3F',
     bg: '#0A1A08',
@@ -33,7 +34,7 @@ const MENU_ITEMS = [
     screen: 'jamaica' as const,
     icon: '✦',
     title: 'Jamaica Guide',
-    sub: 'Spots & Reviews',
+    sub_en: 'Spots & Reviews', sub_ja: 'スポット & レビュー',
     tag: 'EXPLORE',
     color: '#8B3A3A',
     bg: '#1A0808',
@@ -42,7 +43,7 @@ const MENU_ITEMS = [
     screen: 'quiz' as const,
     icon: '★',
     title: 'Quiz',
-    sub: 'Test Your Knowledge',
+    sub_en: 'Test Your Knowledge', sub_ja: 'あなたの知識を試そう',
     tag: 'PLAY',
     color: '#5C4A1E',
     bg: '#1A1208',
@@ -50,6 +51,7 @@ const MENU_ITEMS = [
 ];
 
 export default function IrieHomeScreen({ onNavigate }: Props) {
+  const { lang, toggleLang } = useLang();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
   const cardAnims = MENU_ITEMS.map(() => useRef(new Animated.Value(0)).current);
@@ -98,6 +100,9 @@ export default function IrieHomeScreen({ onNavigate }: Props) {
           </View>
 
           <Text style={styles.yearLabel}>EST. KINGSTON, JAMAICA</Text>
+          <TouchableOpacity onPress={toggleLang} style={styles.langBtn}>
+            <Text style={styles.langBtnText}>{lang === 'ja' ? '🇬🇧 English' : '🇯🇵 日本語'}</Text>
+          </TouchableOpacity>
         </Animated.View>
 
         <View style={styles.menuContainer}>
@@ -119,7 +124,7 @@ export default function IrieHomeScreen({ onNavigate }: Props) {
                   <View style={styles.cardLeft}>
                     <Text style={[styles.cardTag, { color: item.color }]}>{item.tag}</Text>
                     <Text style={styles.cardTitle}>{item.title}</Text>
-                    <Text style={styles.cardSub}>{item.sub}</Text>
+                    <Text style={styles.cardSub}>{lang === 'ja' ? item.sub_ja : item.sub_en}</Text>
                   </View>
                   <View style={styles.cardRight}>
                     <Text style={[styles.cardIcon, { color: item.color }]}>{item.icon}</Text>
@@ -178,4 +183,6 @@ const styles = StyleSheet.create({
   footerStar: { color: '#2A2010', fontSize: 10, letterSpacing: 4 },
   footerText: { color: '#3A2A10', fontSize: 10, letterSpacing: 4, fontWeight: '700' },
   footerSubText: { color: '#2A1A08', fontSize: 12 },
+  langBtn: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 6, borderWidth: 1, borderColor: '#3A2A10', borderRadius: 20 },
+  langBtnText: { color: '#C8860A', fontSize: 12, fontWeight: '700', letterSpacing: 2 },
 });

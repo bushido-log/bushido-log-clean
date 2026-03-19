@@ -1,3 +1,4 @@
+import { useLang } from '../context/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 import {
@@ -22,7 +23,7 @@ const ARTISTS = [
   { id: 'chronixx', name: 'Chronixx', era: '2010s' },
 ];
 
-const HISTORY_CATEGORIES: Record<string, { id: string; name: string; sub: string; icon: string }[]> = {
+const HISTORY_CATEGORIES: Record<string, { id: string; name: string; sub: string; icon: string | null; img?: any }[]> = {
   music: [
     { id: 'ska', name: 'Ska', sub: '1960s', icon: null, img: require('../../assets/icons/icon_ska.png') },
     { id: 'rocksteady', name: 'Rocksteady', sub: '1966-68', icon: null, img: require('../../assets/icons/icon_rocksteady.png') },
@@ -84,6 +85,7 @@ type ArtistData = {
 };
 
 export default function CultureScreen({ onBack }: Props) {
+  const { lang } = useLang();
   const [tab, setTab] = useState<Tab>('artists');
   const [selected, setSelected] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -177,7 +179,7 @@ export default function CultureScreen({ onBack }: Props) {
       const res = await fetch(CULTURE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, type }),
+        body: JSON.stringify({ topic, type, lang }),
       });
       const data = await res.json();
       setInfo(data.reply);
@@ -192,7 +194,7 @@ export default function CultureScreen({ onBack }: Props) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={onBack}>
-          <Text style={styles.backBtn}>← 戻る</Text>
+          <Text style={styles.backBtn}>{lang === 'ja' ? '← 戻る' : '← Back'}</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>🎵 Selector's Culture</Text>
         <View style={{ width: 40 }} />
@@ -223,7 +225,7 @@ export default function CultureScreen({ onBack }: Props) {
       <View style={styles.searchRow}>
         <TextInput
           style={styles.searchInput}
-          placeholder={tab === 'artists' ? 'Search reggae artist...' : 'Search Jamaica topic...'}
+          placeholder={tab === 'artists' ? (lang === 'ja' ? 'レゲエアーティストを検索...' : 'Search reggae artist...') : (lang === 'ja' ? 'ジャマイカのトピックを検索...' : 'Search Jamaica topic...')}
           placeholderTextColor="#5C5040"
           value={searchQuery}
           onChangeText={setSearchQuery}

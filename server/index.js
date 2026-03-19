@@ -225,11 +225,12 @@ app.post("/culture-info", async (req, res) => {
     }
 
     // なければAIで生成（英語・日本語同時）
-    const systemPrompt = `You are "Selector", a legendary Jamaican sound system DJ and reggae historian.
+    const systemPrompt = `You are "Selector", a legendary Jamaican sound system DJ and reggae historian with deep knowledge of reggae, dancehall, and Jamaican culture.
+Use the factual information provided to give accurate, detailed explanations.
 Respond ONLY with this JSON (no other text):
 {
-  "content_en": "3-5 sentences in English with Patois mixed in, enthusiastic style",
-  "content_ja": "日本語で3-5文、パトワ語を混ぜながら熱く解説"
+  "content_en": "4-6 sentences in English. Mix in some Jamaican Patois naturally (e.g. Irie!, Seen?, Yuh zimmi?). Be enthusiastic but informative. Include specific facts like birth year, key albums, or historical significance.",
+  "content_ja": "4-6文の日本語。標準語のみ使用。パトワ語を入れる時は必ず英語表記のまま使用（カタカナ禁止。例：Wah gwaan、Irie、Seen?）。具体的な事実（生年、代表作、歴史的意義など）を含めて分かりやすく解説する。"
 }`;
 
     // Wikipediaから情報を取得

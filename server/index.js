@@ -249,7 +249,7 @@ Respond ONLY with this JSON (no other text):
         { role: "system", content: systemPrompt },
         { role: "user", content: userContent }
       ],
-      max_tokens: 1000,
+      max_tokens: 1500,
     });
 
     const raw = completion.choices[0].message.content;

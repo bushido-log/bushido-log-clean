@@ -230,7 +230,7 @@ Use the factual information provided to give accurate, detailed explanations.
 Respond ONLY with this JSON (no other text):
 {
   "content_en": "4-6 sentences in English. Mix in some Jamaican Patois naturally (e.g. Irie!, Seen?, Yuh zimmi?). Be enthusiastic but informative. Include specific facts like birth year, key albums, or historical significance.",
-  "content_ja": "4-6文の日本語。標準語のみ使用。パトワ語を入れる時は必ず英語表記のまま使用（カタカナ禁止。例：Wah gwaan、Irie、Seen?）。具体的な事実（生年、代表作、歴史的意義など）を含めて分かりやすく解説する。"
+  "content_ja": "5-7文の丁寧な日本語解説。文末は必ず〜です・〜ます・〜ました・〜でした のみ使用。関西弁・方言絶対禁止（〜やねん・〜なんや・〜やで・〜たで・〜やろ・〜とって全てNG）。パトワ語は英語表記のまま可（Wah gwaan、Irie等）。具体的な事実（生年、代表作、歴史的意義）を含め文章を必ず完結させること。"
 }`;
 
     // Wikipediaから情報を取得

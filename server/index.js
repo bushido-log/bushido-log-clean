@@ -232,23 +232,23 @@ Respond ONLY with this JSON (no other text):
   "content_ja": "日本語で3-5文、パトワ語を混ぜながら熱く解説"
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "system", content: systemPrompt },
     // Wikipediaから情報を取得
     let wikiSummary = "";
     try {
       const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`);
       const wikiData = await wikiRes.json();
-      if (wikiData.extract) wikiSummary = wikiData.extract.slice(0, 500);
+      if (wikiData.extract) wikiSummary = wikiData.extract.slice(0, 800);
     } catch {}
     const userContent = wikiSummary
       ? `Here is factual info about ${topic}: "${wikiSummary}". Now tell me about: ${topic} (type: ${type}) using this info.`
       : `Tell me about: ${topic} (type: ${type})`;
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: systemPrompt },
         { role: "user", content: userContent }
       ],
-      max_tokens: 600,
+      max_tokens: 1000,
     });
 
     const raw = completion.choices[0].message.content;

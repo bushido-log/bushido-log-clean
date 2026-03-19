@@ -298,7 +298,7 @@ export default function CultureScreen({ onBack }: Props) {
                 <View style={styles.artistHeaderInfo}>
                   <Text style={styles.artistHeaderName}>{selectedArtist.name}</Text>
                   <Text style={styles.artistFollowers}>
-                    👥 {(selectedArtist.followers / 1000000).toFixed(1)}M followers
+                    👥 {(selectedArtist.followers ? (selectedArtist.followers / 1000000).toFixed(1) + "M" : "–")} followers
                   </Text>
                   <TouchableOpacity onPress={() => Linking.openURL(selectedArtist.spotifyUrl)}>
                     <Text style={styles.spotifyBtn}>▶ Open in Spotify</Text>

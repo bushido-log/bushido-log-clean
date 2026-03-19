@@ -97,7 +97,7 @@ Respond ONLY with a JSON array (no other text):
       { role: "system", content: systemPrompt },
       { role: "user", content: `Generate 10 different ${category} quiz questions` }
     ],
-    max_tokens: 3000,
+    max_tokens: 5000,
   });
   const raw = completion.choices[0].message.content;
   const jsonArr = JSON.parse(raw.replace(/```json|```/g, '').trim());
@@ -175,7 +175,7 @@ Respond ONLY with a JSON array (no other text):
         { role: "system", content: systemPrompt },
         { role: "user", content: `Generate 10 ${category} quiz questions` }
       ],
-      max_tokens: 3000,
+      max_tokens: 5000,
     });
     const raw = completion.choices[0].message.content;
     const jsonArr = JSON.parse(raw.replace(/```json|```/g, '').trim());
@@ -229,29 +229,31 @@ app.post("/culture-info", async (req, res) => {
 Use the factual information provided to give accurate, detailed explanations.
 Respond ONLY with this JSON (no other text):
 {
-  "content_en": "4-6 sentences in English. Mix in some Jamaican Patois naturally (e.g. Irie!, Seen?, Yuh zimmi?). Be enthusiastic but informative. Include specific facts like birth year, key albums, or historical significance.",
-  "content_ja": "5-7文の丁寧な日本語解説。文末は必ず〜です・〜ます・〜ました・〜でした のみ使用。関西弁・方言絶対禁止（〜やねん・〜なんや・〜やで・〜たで・〜やろ・〜とって全てNG）。パトワ語は英語表記のまま可（Wah gwaan、Irie等）。具体的な事実（生年、代表作、歴史的意義）を含め文章を必ず完結させること。"
+  "content_ja": "厳密に以下のルールに従って日本語解説を生成せよ。【形式】必要な情報を全て含めて詳しく書くこと。文数制限なし。ただし必ず最後の文まで完全に書き切ること、絶対に途中で終わるな。【文体】全文を百科事典スタイルで統一。文末は必ず〜です／〜ます／〜ました／〜でした のいずれかで終わること。【冒頭】必ず[人名・トピック名]は、[年代や起源]〜という形式で始めること。【禁止事項】①今回は・お話しします・紹介します等のナレーター表現絶対禁止。②Patois（Irie、Seen?、Wah gwaan等）のカタカナ変換絶対禁止、英語表記のまま使用。③関西弁・方言絶対禁止。④文章を途中で終わらせることは絶対禁止、必ず7文目まで完全に書き切ること。【内容】生年・出身地・代表作・歴史的意義・影響を必ず含めること。",
+  "content_en": "4-6 sentences in English. Mix in some Jamaican Patois naturally (e.g. Irie!, Seen?, Yuh zimmi?). Be enthusiastic but informative. Include specific facts like birth year, key albums, or historical significance."
 }`;
 
-    // Wikipediaから情報を取得
-    let wikiSummary = "";
-    try {
-      const wikiRes = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(topic)}`);
-      const wikiData = await wikiRes.json();
-      if (wikiData.extract) wikiSummary = wikiData.extract.slice(0, 800);
-    } catch {}
-    const userContent = wikiSummary
-      ? `Here is factual info about ${topic}: "${wikiSummary}". Now tell me about: ${topic} (type: ${type}) using this info.`
-      : `Tell me about: ${topic} (type: ${type})`;
+    // Step1: web searchで情報収集
+    const searchRes = await openai.chat.completions.create({
+      model: "gpt-4o-search-preview",
+      messages: [
+        { role: "user", content: `Search the web and collect detailed factual information about "${topic}" related to Jamaican music, culture, or history. Return only the raw facts.` }
+      ],
+    });
+    const searchInfo = searchRes.choices[0].message.content
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .trim();
+
+    // Step2: gpt-4oで日英コンテンツ生成
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
         { role: "system", content: systemPrompt },
-        { role: "user", content: userContent }
+        { role: "user", content: `Here is factual info about ${topic}: "${searchInfo}". Now generate the JSON.` }
       ],
-      max_tokens: 1500,
+      max_tokens: 5000,
     });
-
     const raw = completion.choices[0].message.content;
     const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
 

@@ -298,7 +298,7 @@ export default function CultureScreen({ onBack }: Props) {
                 <View style={styles.artistHeaderInfo}>
                   <Text style={styles.artistHeaderName}>{selectedArtist.name}</Text>
                   <Text style={styles.artistFollowers}>
-                    👥 {(selectedArtist.followers ? (selectedArtist.followers / 1000000).toFixed(1) + "M" : "–")} followers
+                    👥 {Number.isFinite(selectedArtist.followers) ? (selectedArtist.followers / 1000000).toFixed(1) + "M" : "–"} followers
                   </Text>
                   <TouchableOpacity onPress={() => Linking.openURL(selectedArtist.spotifyUrl)}>
                     <Text style={styles.spotifyBtn}>▶ Open in Spotify</Text>
@@ -362,7 +362,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, backgroundColor: '#1A1200', color: '#E8D8A0', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   searchBtn: { backgroundColor: '#C8860A', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
   searchBtnText: { fontSize: 18 },
-  infoBox: { margin: 12, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, gap: 12 },
+  infoBox: { margin: 12, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, paddingBottom: 32, gap: 12 },
   artistHeader: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   artistHeaderImg: { width: 72, height: 72, borderRadius: 36 },
   artistHeaderInfo: { flex: 1, justifyContent: 'center', gap: 4 },

@@ -28,15 +28,15 @@ app.post("/samurai-chat", async (req, res) => {
 });
 
 app.post("/patwa-tutor", async (req, res) => {
-  const { messages, text } = req.body || {};
+  const { messages, text, lang = 'ja' } = req.body || {};
   const systemPrompt = `You are a Jamaican Patois tutor named "Ras Tutor". 
 You are warm, fun, and deeply knowledgeable about Jamaican culture, Patois language, and reggae music.
-Respond in a mix of English and Patois, always explaining what Patois phrases mean.
 Keep responses short and engaging (2-4 sentences max).
 Use phrases like "Irie!", "Wah gwaan?", "Respect!" naturally.
-If the user speaks Japanese, respond in Japanese but include Patois phrases with explanations.
-If the user speaks English, respond in English with Patois mixed in.
-Always be encouraging and make learning feel like a vibe.`;
+Always be encouraging and make learning feel like a vibe.
+LANGUAGE: lang = "${lang}"
+If lang = "ja": Respond in natural Japanese. Keep Patois words in English (never katakana). End sentences with 「ラスタ。」
+If lang = "en": Respond in English with natural Patois mixed in.`;
 
   const finalMessages =
     Array.isArray(messages) && messages.length > 0
@@ -53,11 +53,28 @@ Always be encouraging and make learning feel like a vibe.`;
   if (!finalMessages[finalMessages.length - 1]?.content?.trim()) {
     return res.status(400).json({ error: "messages or text is required" });
   }
-
   try {
+    const lastUserMsg = finalMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
+    const searchRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-search-preview',
+        messages: [{ role: 'user', content: `Translate to English if needed, search for accurate Jamaica info: "${lastUserMsg}". Return only verified real facts and place names.` }]
+      })
+    });
+    const searchData = await searchRes.json();
+    const searchInfo = searchData.choices[0].message.content
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .trim();
+    const augmentedMessages = [
+      ...finalMessages,
+      { role: 'user', content: `SEARCH RESULTS: "${searchInfo}". IMPORTANT: Only mention places/names from search results. NEVER invent names.` }
+    ];
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
-      messages: finalMessages,
+      messages: augmentedMessages,
       max_tokens: 300,
     });
     const reply = completion.choices[0].message.content;
@@ -380,24 +397,50 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 // Yardie Guide AI
 app.post('/yardie-guide', async (req, res) => {
-  const { message, history = [] } = req.body;
+  const { message, history = [], lang = 'en' } = req.body;
   try {
-    const messages = [
-      {
-        role: 'system',
-        content: `You are Yardie, a passionate Jamaican local guide with deep knowledge of Jamaica. 
-You speak with authentic Jamaican patois mixed with English. Use phrases like "Yow!", "Bredren", "Big up", "Irie", "No problem mon", "Respect", "Wah gwaan".
-You know everything about Jamaica - food (jerk chicken, ackee & saltfish, patties), beaches (Seven Mile, Negril, Boston Bay), culture, music (reggae, dancehall), history, Bob Marley, parishes, local tips.
-Be enthusiastic, warm, and genuinely helpful. Keep responses concise but vivid.`
-      },
-      ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
-      { role: 'user', content: message }
-    ];
+    const systemPrompt = `You are "YARDIE AI", a charismatic Jamaican cultural guide inside a mobile app.
 
+Your role is to teach users about Jamaican music (dancehall/reggae/sound system culture), food (street food, traditional dishes), travel spots (nature, beaches, party areas, hidden gems), lifestyle and street vibes, patois expressions.
+
+Your personality: Born and raised in Kingston street culture. Friendly, humorous, slightly rebellious but respectful. Proud of Jamaican roots. Speaks like a real local. Energetic storyteller.
+
+LANGUAGE MODE: lang = "${lang}"
+
+If lang = "ja": Main explanation must be natural Japanese. Jamaican slang (riddim, dunce, bashment, badman, ghetto, yard) must stay in English - NEVER convert to Katakana. End sentences with 「ラスタ。」. Example: 「このスポットはKingstonのリアルなdancehall vibeを感じられる場所ラスタ。」
+
+If lang = "en": Use simple global English. Mix light natural patois. Tone = cool local guide talking to a foreign friend.
+
+STORYTELLING: Avoid encyclopedia tone. Use short vivid storytelling. Make users feel like they are in Jamaica. Do not sound like AI. Sound like a proud Jamaican friend.
+
+COMPLETENESS: Never stop mid sentence. Always end naturally. Japanese mode must end with ラスタ。
+ACCURACY RULE: NEVER invent specific business names, guesthouse names, restaurant names, or place names. If you don't know a real specific name, describe the TYPE of place instead. Only mention venues or businesses you are 100% certain exist. When unsure, say "local spots" or "a yard-style guesthouse" instead of making up names. Lying destroys trust - always be honest if you don't know something specific.`;
+
+    // Step1: web searchで情報収集
+    const searchRes = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-search-preview',
+        messages: [{ role: 'user', content: `Translate this question to English if needed, then search for accurate current information about Jamaica: "${message}". Focus on finding specific real place names, businesses, or facts. Return only verified key facts with source context.` }]
+      })
+    });
+    const searchData = await searchRes.json();
+    const searchInfo = searchData.choices[0].message.content
+      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
+      .replace(/https?:\/\/\S+/g, '')
+      .trim();
+
+    // Step2: Yardieキャラとして回答
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
+      { role: 'user', content: `Here is accurate info about the topic: "${searchInfo}". Now answer this question as Yardie: ${message}. IMPORTANT: Only mention specific places, names, or businesses that appeared in the search results above. If the search results don't contain specific names, DO NOT invent any. Say 'local guesthouses' or describe types of places instead.` }
+    ];
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: 'gpt-4o', messages, max_tokens: 300 })
+      body: JSON.stringify({ model: 'gpt-4o', messages, max_tokens: 800 })
     });
     const data = await response.json();
     res.json({ reply: data.choices[0].message.content });

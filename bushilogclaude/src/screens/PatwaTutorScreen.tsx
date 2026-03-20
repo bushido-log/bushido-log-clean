@@ -31,7 +31,7 @@ export default function PatwaTutorScreen({ onBack }: Props) {
       const res = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({ messages: newMessages, lang }),
       
 });
       const data = await res.json();

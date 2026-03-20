@@ -2,7 +2,7 @@ import { useLang } from '../context/LanguageContext';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform
+  TextInput, Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image
 } from 'react-native';
 import MapView, { Marker, Callout } from 'react-native-maps';
 import { supabase } from '../lib/supabase';
@@ -49,7 +49,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewName, setReviewName] = useState('');
   const [chatMessages, setChatMessages] = useState<any[]>([
-    { role: 'assistant', content: "Yow! Mi name Yardie, di real Jamaica guide! Ask mi anyting bout Jamaica - di food, di vibes, di spots. Mi know every corner a dis island! 🇯🇲" }
+    { role: 'assistant', content: lang === 'ja' ? "ヤー！俺の名前はYardie、ジャマイカのリアルなguideラスタ。食べ物、vibes、スポット、何でも聞いてくれラスタ。このislandの全てを知ってるよ！🇯🇲" : "Yow! Mi name Yardie, di real Jamaica guide! Ask mi anyting bout Jamaica - di food, di vibes, di spots. Mi know every corner a dis island! 🇯🇲" }
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
@@ -125,10 +125,14 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
     setChatMessages(newMessages);
     setChatLoading(true);
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
       const res = await fetch('https://irie-server.onrender.com/yardie-guide', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, history: newMessages.slice(-6) }),
+        body: JSON.stringify({ message: userMsg, history: newMessages.slice(-6), lang }),
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
       const data = await res.json();
       setChatMessages([...newMessages, { role: 'assistant', content: data.reply }]);
     } catch {
@@ -254,11 +258,13 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           </ScrollView>
         )
       )}
-
-      <TouchableOpacity style={s.fab} onPress={() => setShowAddSpot(true)}>
+      <TouchableOpacity style={[s.fab, { top: 230, left: 16, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#2D5A1B' }]} onPress={() => setShowYardie(true)}>
+        <Image source={require('../../assets/icons/icon_ras_tutor.png')} style={{ width: 20, height: 20, borderRadius: 10 }} />
+        <Text style={{ color: '#C8860A', fontWeight: 'bold', fontSize: 15 }}>{lang === 'ja' ? 'ラスタに聞く🔥' : 'Ask Yardie!'}</Text>
+      </TouchableOpacity>
+      <TouchableOpacity style={[s.fab, { position: 'absolute', bottom: 30, right: 16 }]} onPress={() => setShowAddSpot(true)}>
         <Text style={{ color: '#000', fontWeight: 'bold', fontSize: 15 }}>{lang === 'ja' ? '+ スポット追加' : '+ Add Spot'}</Text>
       </TouchableOpacity>
-
       {/* Spot Detail Modal */}
       <Modal visible={!!selectedSpot} animationType="slide" presentationStyle="pageSheet">
         {selectedSpot && (
@@ -547,7 +553,7 @@ const s = StyleSheet.create({
   spotName: { color: '#F5E6C8', fontSize: 16, fontWeight: 'bold' },
   spotMuted: { color: '#8B7355', fontSize: 13, marginTop: 2 },
   likeBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#2A1515', borderWidth: 1, borderColor: '#4A2020' },
-  fab: { position: 'absolute', bottom: 30, right: 20, backgroundColor: '#C8860A', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28 },
+  fab: { position: 'absolute', backgroundColor: '#C8860A', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28 },
   modal: { flex: 1, backgroundColor: '#0D0A05' },
   sectionTitle: { color: '#C8860A', fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },
   input: { backgroundColor: '#0A0806', borderWidth: 1, borderColor: '#2A2010', borderRadius: 8, color: '#F5E6C8', padding: 10, fontSize: 14, marginBottom: 4, marginTop: 4 },

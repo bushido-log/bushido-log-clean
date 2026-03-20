@@ -225,19 +225,23 @@ app.post("/culture-info", async (req, res) => {
     }
 
     // なければAIで生成（英語・日本語同時）
-    const systemPrompt = `You are "Selector", a legendary Jamaican sound system DJ and reggae historian with deep knowledge of reggae, dancehall, and Jamaican culture.
-Use the factual information provided to give accurate, detailed explanations.
-Respond ONLY with this JSON (no other text):
-{
-  "content_ja": "厳密に以下のルールに従って日本語解説を生成せよ。【形式】必要な情報を全て含めて詳しく書くこと。文数制限なし。ただし必ず最後の文まで完全に書き切ること、絶対に途中で終わるな。【文体】全文を百科事典スタイルで統一。文末は必ず〜です／〜ます／〜ました／〜でした のいずれかで終わること。【冒頭】必ず[人名・トピック名]は、[年代や起源]〜という形式で始めること。【禁止事項】①今回は・お話しします・紹介します等のナレーター表現絶対禁止。②Patois（Irie、Seen?、Wah gwaan等）のカタカナ変換絶対禁止、英語表記のまま使用。③関西弁・方言絶対禁止。④文章を途中で終わらせることは絶対禁止、必ず7文目まで完全に書き切ること。【内容】生年・出身地・代表作・歴史的意義・影響を必ず含めること。",
-  "content_en": "4-6 sentences in English. Mix in some Jamaican Patois naturally (e.g. Irie!, Seen?, Yuh zimmi?). Be enthusiastic but informative. Include specific facts like birth year, key albums, or historical significance."
-}`;
+    // エイリアス辞書でクエリを強化
+    const artistAliases = {
+      'jamal': 'JAMAL dunce jamaican dancehall artist',
+      'valiant': 'Valiant jamaican dancehall artist',
+      'skippa': 'Skippa jamaican dancehall artist',
+      'chronic law': 'Chronic Law jamaican artist',
+      'squash': 'Squash jamaican dancehall artist',
+      'masicka': 'Masicka jamaican dancehall artist',
+    };
+    const topicLower = topic.toLowerCase();
+    const enhancedTopic = artistAliases[topicLower] || `${topic} jamaican music artist`;
 
     // Step1: web searchで情報収集
     const searchRes = await openai.chat.completions.create({
       model: "gpt-4o-search-preview",
       messages: [
-        { role: "user", content: `Search the web and collect detailed factual information about "${topic}" related to Jamaican music, culture, or history. Return only the raw facts.` }
+        { role: "user", content: `Search the web and collect detailed factual information about "${enhancedTopic}" related to Jamaican music, culture, or history. Focus only on this specific artist's career and music. Return only the raw facts.` }
       ],
     });
     const searchInfo = searchRes.choices[0].message.content
@@ -245,17 +249,33 @@ Respond ONLY with this JSON (no other text):
       .replace(/https?:\/\/\S+/g, '')
       .trim();
 
-    // Step2: gpt-4oで日英コンテンツ生成
-    const completion = await openai.chat.completions.create({
+    // Step2: 日本語を生成
+    const jaRes = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Here is factual info about ${topic}: "${searchInfo}". Now generate the JSON.` }
+        { role: "system", content: "You are Selector, a Jamaican reggae historian. Based on the facts provided, write a detailed Japanese explanation ONLY about the artist/topic itself. IMPORTANT: Write naturally in Japanese - do NOT translate English sentences, write original Japanese prose. Focus on: background, career, key works, cultural impact. EXCLUDE: criminal records, arrests, murders, controversies, negative events. Rules: 百科事典スタイルで自然な日本語で書くこと（英語の翻訳ではなく）。文末は〜です／〜ます／〜ました／〜でした。冒頭は[名前]は、[年代や出身]〜で始める。ナレーター表現禁止。Patoisカタカナ変換禁止。途中で終わるな。Output Japanese text only." },
+        { role: "user", content: `Facts about ${topic}: "${searchInfo}". Write the Japanese explanation.` }
       ],
-      max_tokens: 5000,
+      max_tokens: 3000,
     });
-    const raw = completion.choices[0].message.content;
-    const json = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    let content_ja = jaRes.choices[0].message.content.trim();
+    // 文章が途中で切れてたら最後の句点までトリミング
+    if (!content_ja.match(/[。！？]$/)) {
+      const lastPeriod = Math.max(content_ja.lastIndexOf('。'), content_ja.lastIndexOf('！'), content_ja.lastIndexOf('？'));
+      if (lastPeriod > 0) content_ja = content_ja.substring(0, lastPeriod + 1);
+    }
+
+    // Step3: 英語を生成
+    const enRes = await openai.chat.completions.create({
+      model: "gpt-4o",
+      messages: [
+        { role: "system", content: "You are Selector, a legendary Jamaican sound system DJ. Write 4-6 sentences in English. Mix in Patois naturally (Irie!, Seen?, Yuh zimmi?). Be enthusiastic. Output English text only." },
+        { role: "user", content: `Facts about ${topic}: "${searchInfo}". Write the English explanation.` }
+      ],
+      max_tokens: 1000,
+    });
+    const content_en = enRes.choices[0].message.content.trim();
+    const json = { content_ja, content_en };
 
     // DBに保存
     await supabase.from("culture_cache").insert({
@@ -273,45 +293,82 @@ Respond ONLY with this JSON (no other text):
   }
 });
 
+// Spotifyトークンキャッシュ
+const spotifyTokenCache = { accessToken: null, expiresAt: 0 };
+let tokenPromise = null;
+
+async function getSpotifyAccessToken() {
+  const now = Date.now();
+  if (spotifyTokenCache.accessToken && now < spotifyTokenCache.expiresAt - 60000) {
+    return spotifyTokenCache.accessToken;
+  }
+  if (tokenPromise) return tokenPromise;
+  tokenPromise = (async () => {
+    try {
+      const credentials = Buffer.from(
+        process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET
+      ).toString("base64");
+      const res = await fetch("https://accounts.spotify.com/api/token", {
+        method: "POST",
+        headers: { Authorization: "Basic " + credentials, "Content-Type": "application/x-www-form-urlencoded" },
+        body: "grant_type=client_credentials",
+      });
+      if (!res.ok) {
+        const errText = await res.text();
+        console.error("Spotify token error:", res.status, errText);
+        throw new Error("Token fetch failed: " + errText);
+      }
+      const data = await res.json();
+      console.log("Spotify token ok:", data.token_type, "expires_in:", data.expires_in);
+      spotifyTokenCache.accessToken = data.access_token;
+      spotifyTokenCache.expiresAt = Date.now() + data.expires_in * 1000;
+      return spotifyTokenCache.accessToken;
+    } finally {
+      tokenPromise = null;
+    }
+  })();
+  return tokenPromise;
+}
+
 app.get("/spotify-artist", async (req, res) => {
   const { name } = req.query;
   if (!name) return res.status(400).json({ error: "name is required" });
 
   try {
-    // Get access token
-    const tokenRes = await fetch("https://accounts.spotify.com/api/token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": "Basic " + Buffer.from(
-          process.env.SPOTIFY_CLIENT_ID + ":" + process.env.SPOTIFY_CLIENT_SECRET
-        ).toString("base64"),
-      },
-      body: "grant_type=client_credentials",
-    });
-    const tokenData = await tokenRes.json();
-    const accessToken = tokenData.access_token;
+    // キャッシュ確認
+    const { data: cached } = await supabase
+      .from("spotify_cache")
+      .select("*")
+      .eq("name", name)
+      .single();
+    if (cached) {
+      return res.json({ ok: true, artist: { name: cached.name, image: cached.image, followers: cached.followers, spotifyUrl: cached.spotify_url } });
+    }
+    const accessToken = await getSpotifyAccessToken();
 
     // Search artist
     const searchRes = await fetch(
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(name)}&type=artist&limit=1`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+    if (!searchRes.ok) {
+      console.error("Spotify search error:", searchRes.status, await searchRes.text());
+      return res.json({ ok: false, error: "Spotify rate limited" });
+    }
     const searchData = await searchRes.json();
     const artist = searchData.artists?.items?.[0];
 
     if (!artist) return res.json({ ok: false, error: "Artist not found" });
 
-    return res.json({
-      ok: true,
-      artist: {
-        name: artist.name,
-        image: artist.images?.[0]?.url || null,
-        followers: artist.followers?.total,
-        popularity: artist.popularity,
-        spotifyUrl: artist.external_urls?.spotify,
-      }
-    });
+    const artistData = {
+      name: artist.name,
+      image: artist.images?.[0]?.url || null,
+      followers: artist.followers?.total,
+      spotifyUrl: artist.external_urls?.spotify,
+    };
+    // Supabaseにキャッシュ保存
+    await supabase.from("spotify_cache").upsert({ name, image: artistData.image, followers: artistData.followers, spotify_url: artistData.spotifyUrl });
+    return res.json({ ok: true, artist: artistData });
   } catch (e) {
     console.error("Spotify error:", e);
     return res.status(500).json({ error: "Spotify API error" });
@@ -407,6 +464,10 @@ app.get('/spotify-tracks', async (req, res) => {
       `https://api.spotify.com/v1/search?q=${encodeURIComponent(name)}&type=artist&limit=1`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
+    if (!searchRes.ok) {
+      console.error("Spotify search error:", searchRes.status, await searchRes.text());
+      return res.json({ ok: false, error: "Spotify rate limited" });
+    }
     const searchData = await searchRes.json();
     const artist = searchData.artists?.items?.[0];
     if (!artist) return res.json({ ok: false, error: 'Artist not found' });

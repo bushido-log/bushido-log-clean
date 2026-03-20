@@ -21,6 +21,8 @@ const ARTISTS = [
   { id: 'sizzla', name: 'Sizzla', era: '2000s' },
   { id: 'damian-marley', name: 'Damian Marley', era: '2000s' },
   { id: 'chronixx', name: 'Chronixx', era: '2010s' },
+  { id: 'popcaan', name: 'Popcaan', era: '2010s' },
+  { id: 'vybz-kartel', name: 'Vybz Kartel', era: '2000s' },
 ];
 
 const HISTORY_CATEGORIES: Record<string, { id: string; name: string; sub: string; icon: string | null; img?: any }[]> = {
@@ -362,7 +364,7 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, backgroundColor: '#1A1200', color: '#E8D8A0', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 14 },
   searchBtn: { backgroundColor: '#C8860A', borderRadius: 8, paddingHorizontal: 16, justifyContent: 'center', alignItems: 'center' },
   searchBtnText: { fontSize: 18 },
-  infoBox: { margin: 12, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, paddingBottom: 32, gap: 12 },
+  infoBox: { margin: 12, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, paddingBottom: 200, gap: 12 },
   artistHeader: { flexDirection: 'row', gap: 12, marginBottom: 8 },
   artistHeaderImg: { width: 72, height: 72, borderRadius: 36 },
   artistHeaderInfo: { flex: 1, justifyContent: 'center', gap: 4 },
@@ -371,5 +373,5 @@ const styles = StyleSheet.create({
   spotifyBtn: { color: '#1DB954', fontSize: 12, fontWeight: '700' },
   loadingRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   loadingText: { color: '#5C5040', fontSize: 13 },
-  infoText: { color: '#E8D8A0', fontSize: 14, lineHeight: 22 },
+  infoText: { color: '#E8D8A0', fontSize: 13, lineHeight: 20, paddingBottom: 16 },
 });

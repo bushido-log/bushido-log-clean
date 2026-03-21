@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 import {
   View, Text, TouchableOpacity, StyleSheet,
-  SafeAreaView, ActivityIndicator, ScrollView, Image, Linking, TextInput
+  SafeAreaView, ActivityIndicator, ScrollView, Image, Linking, TextInput, Keyboard, Modal, KeyboardAvoidingView, Platform
 } from 'react-native';
 
 const SPOTIFY_URL = 'https://irie-server.onrender.com/spotify-artist';
@@ -86,12 +86,20 @@ type ArtistData = {
   spotifyUrl: string;
 };
 
+
+const SELECTOR_TRIVIA_JA = ["ボブ・マーリーは世界で7500万枚以上のレコードを売り上げたラスタ。", "レゲエは1968年頃にジャマイカで誕生した音楽ジャンルラスタ。", "ダンスホールは1970年代後半にキングストンで生まれたラスタ。", "スカは1950年代末にジャマイカで誕生したポップミュージックラスタ。", "コキャンはスカとレゲエの間に生まれた音楽スタイルラスタ。", "サウンドシステムは1950年代にジャマイカで始まったDJ文化ラスタ。", "ロッカーズは1970年代のレゲエのサブジャンルでルーツレゲエとも呼ばれるラスタ。", "バーニング・スピアはジャマイカで最も尊敬されているルーツレゲエシンガーの一人ラスタ。", "シズラはダンスホール界で最も多作なアーティストの一人ラスタ。", "ダミアン・マーリーはボブ・マーリーの息子でグラミー賞を受賞しているラスタ。", "ヴァイブズ・カーテルはジャマイカで最も影響力のあるダンスホールアーティストの一人ラスタ。", "ピーター・トッシュはウェイラーズのメンバーで人権活動家でもあったラスタ。", "バニー・ウェイラーはボブ・マーリーとともにウェイラーズを結成したラスタ。", "スーパーキャットは1980年代のダンスホール界のパイオニアラスタ。", "バウンティ・キラーはジャマイカで最も影響力のあるDJの一人ラスタ。", "レゲエは2018年にユネスコの無形文化遺産に登録されたラスタ。", "ジャコブ・ミラーは1970年代のレゲエシーンで伝説的な存在ラスタ。", "デニス・ブラウンは「クラウン・プリンス・オブ・レゲエ」と呼ばれたラスタ。", "トーチャーはキングストンで生まれた革新的なダンスホールプロデューサーラスタ。", "スティーリー&クリービーは1980年代のダンスホールサウンドを定義したラスタ。"];
+const SELECTOR_TRIVIA_EN = ["Bob Marley sold over 75 million records worldwide.", "Reggae music was born in Jamaica around 1968.", "Dancehall emerged in Kingston in the late 1970s.", "Ska was Jamaica's first pop music genre, born in the late 1950s.", "Rocksteady was the musical style between ska and reggae.", "Sound system culture began in Jamaica in the 1950s.", "Rockers is a 1970s reggae subgenre, also known as roots reggae.", "Burning Spear is one of the most respected roots reggae singers in Jamaica.", "Sizzla is one of the most prolific artists in dancehall history.", "Damian Marley is Bob Marley's son and a Grammy Award winner.", "Vybz Kartel is one of the most influential dancehall artists in Jamaica.", "Peter Tosh was a Wailers member and prominent human rights activist.", "Bunny Wailer co-founded The Wailers alongside Bob Marley.", "Super Cat was a pioneer of dancehall in the 1980s.", "Bounty Killer is one of the most influential DJs in Jamaica.", "Reggae was inscribed on UNESCO's Intangible Cultural Heritage list in 2018.", "Jacob Miller was a legendary figure in the 1970s reggae scene.", "Dennis Brown was known as the 'Crown Prince of Reggae'.", "Steely & Clevie defined the dancehall sound of the 1980s.", "King Jammy revolutionized dancehall with digital riddims in the 1980s."];
 export default function CultureScreen({ onBack }: Props) {
   const { lang } = useLang();
   const [tab, setTab] = useState<Tab>('artists');
   const [selected, setSelected] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lyricsInput, setLyricsInput] = useState('');
+  const [lyricsResult, setLyricsResult] = useState('');
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [showLyricsModal, setShowLyricsModal] = useState(false);
+  const [trivia, setTrivia] = useState('');
   const [artistImages, setArtistImages] = useState<Record<string, ArtistData>>({});
   const [selectedArtist, setSelectedArtist] = useState<ArtistData | null>(null);
   const [tracks, setTracks] = useState<any[]>([]);
@@ -171,9 +179,31 @@ export default function CultureScreen({ onBack }: Props) {
     } catch {}
   };
 
+  const translateLyrics = async () => {
+    if (!lyricsInput.trim()) return;
+    Keyboard.dismiss();
+    setLyricsLoading(true);
+    setLyricsResult('');
+    try {
+      const res = await fetch('https://irie-server.onrender.com/lyrics-translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lyrics: lyricsInput.trim(), lang }),
+      });
+      const data = await res.json();
+      setLyricsResult(data.reply);
+    } catch (e) {
+      setLyricsResult(lang === 'ja' ? 'エラーが発生しました。もう一度試してください。' : 'Error occurred. Please try again.');
+    } finally {
+      setLyricsLoading(false);
+    }
+  };
+
   const fetchInfo = async (topic: string, type: string, artistData?: ArtistData) => {
     setSelected(topic);
     setInfo(null);
+    const arr = lang === 'ja' ? SELECTOR_TRIVIA_JA : SELECTOR_TRIVIA_EN;
+    setTrivia(arr[Math.floor(Math.random() * arr.length)]);
     setLoading(true);
     if (artistData) { setSelectedArtist(artistData); fetchTracks(topic); }
     else { setSelectedArtist(null); setTracks([]); }
@@ -238,7 +268,22 @@ export default function CultureScreen({ onBack }: Props) {
           {isSearching ? <ActivityIndicator color="#0D0A05" size="small" /> : <Text style={styles.searchBtnText}>🔍</Text>}
         </TouchableOpacity>
       </View>
-      <ScrollView style={styles.scroll}>
+      <ScrollView style={styles.scroll} keyboardShouldPersistTaps="handled">
+        {/* Lyrics Translator Button */}
+        {tab === 'artists' && (
+          <TouchableOpacity
+            style={{ marginHorizontal: 12, marginBottom: 8, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#C8860A', borderRadius: 8, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 8 }}
+            onPress={() => { setLyricsInput(''); setLyricsResult(''); setShowLyricsModal(true); }}
+          >
+            <Text style={{ fontSize: 20 }}>🎵</Text>
+            <View>
+              <Text style={{ color: '#C8860A', fontWeight: '900', fontSize: 14 }}>{lang === 'ja' ? '歌詞を翻訳・解説する' : 'Translate & Explain Lyrics'}</Text>
+              <Text style={{ color: '#5C5040', fontSize: 11, marginTop: 2 }}>{lang === 'ja' ? 'パトワ語歌詞を日本語で解説' : 'Patois lyrics explained in English'}</Text>
+            </View>
+          </TouchableOpacity>
+        )}
+
+
         {tab === 'history' && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: 8, marginBottom: 8 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 4 }}>
             {HISTORY_TABS.map(ht => (
@@ -324,10 +369,21 @@ export default function CultureScreen({ onBack }: Props) {
               </View>
             )}
             {loading ? (
-              <View style={styles.loadingRow}>
-                <ActivityIndicator color="#C8860A" />
-                <Text style={styles.loadingText}>Selector is spinning...</Text>
-              </View>
+              <>
+                <View style={styles.loadingRow}>
+                  <ActivityIndicator color="#C8860A" />
+                  <Text style={styles.loadingText}>Selector is spinning...</Text>
+                </View>
+                {trivia ? (
+                  <View style={{ marginTop: 12, paddingHorizontal: 8 }}>
+                    <Text style={{ color: '#C8860A', fontSize: 11, fontWeight: '700', marginBottom: 4 }}>🎵 RASTA WISDOM</Text>
+                    <Text style={{ color: '#666', fontSize: 12, lineHeight: 18 }}>{trivia}</Text>
+                  </View>
+                ) : null}
+                <Text style={{ color: '#444', fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 24, lineHeight: 16 }}>
+                  {lang === 'ja' ? '本AIの情報は参考目的です。最新情報は各公式サイトをご確認ください。' : "AI-generated content for reference only. Please check official sources for latest info."}
+                </Text>
+              </>
             ) : info ? (
               <Text style={styles.infoText}>{info}</Text>
             ) : null}
@@ -335,6 +391,46 @@ export default function CultureScreen({ onBack }: Props) {
         )}
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Lyrics Modal */}
+      <Modal visible={showLyricsModal} animationType="slide" presentationStyle="pageSheet">
+        <KeyboardAvoidingView style={{ flex: 1, backgroundColor: '#0D0A05' }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#2A2010' }}>
+            <Text style={{ color: '#C8860A', fontWeight: '900', fontSize: 16 }}>🎵 {lang === 'ja' ? '歌詞を解析する' : 'Analyze Lyrics'}</Text>
+            <TouchableOpacity onPress={() => setShowLyricsModal(false)}>
+              <Text style={{ color: '#C8860A', fontSize: 14 }}>✕ {lang === 'ja' ? '閉じる' : 'Close'}</Text>
+            </TouchableOpacity>
+          </View>
+          <ScrollView style={{ flex: 1, padding: 16 }} keyboardShouldPersistTaps="handled">
+            <Text style={{ color: '#5C5040', fontSize: 12, marginBottom: 8 }}>{lang === 'ja' ? '歌詞をコピペして貼り付けてください' : 'Paste lyrics below to translate & analyze'}</Text>
+            <TextInput
+              style={{ backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 12, color: '#E8D8A0', fontSize: 14, minHeight: 200, textAlignVertical: 'top', lineHeight: 22 }}
+              placeholder={lang === 'ja' ? '歌詞をここに貼り付け...' : 'Paste lyrics here...'}
+              placeholderTextColor="#3A2A10"
+              value={lyricsInput}
+              onChangeText={setLyricsInput}
+              multiline
+              autoFocus
+            />
+            <TouchableOpacity
+              style={{ backgroundColor: '#C8860A', padding: 14, borderRadius: 8, alignItems: 'center', marginTop: 12 }}
+              onPress={translateLyrics}
+              disabled={lyricsLoading}
+            >
+              {lyricsLoading
+                ? <ActivityIndicator color="#0D0A05" size="small" />
+                : <Text style={{ color: '#0D0A05', fontWeight: '900', fontSize: 15, letterSpacing: 2 }}>{lang === 'ja' ? '🔍 解析する' : '🔍 Analyze'}</Text>
+              }
+            </TouchableOpacity>
+            {lyricsResult ? (
+              <View style={{ backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#3A2A10', borderRadius: 8, padding: 16, marginTop: 16 }}>
+                <Text style={{ color: '#E8D8A0', fontSize: 14, lineHeight: 24 }}>{lyricsResult}</Text>
+              </View>
+            ) : null}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }

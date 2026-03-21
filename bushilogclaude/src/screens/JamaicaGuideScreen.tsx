@@ -23,6 +23,9 @@ const CATEGORIES = [
 
 const PARISHES = ['Kingston','Portland','St. Ann','Negril','Montego Bay','Ocho Rios','St. Elizabeth','Westmoreland','Other'];
 
+
+const YARDIE_TRIVIA_JA = ["ジャマイカは世界で最初にレゲエを生んだ島ラスタ。", "キングストンのダウンタウンは世界最高のダンスホールシーンの発祥地ラスタ。", "ジャマイカのブルーマウンテンコーヒーは世界で最も高価なコーヒーの一つラスタ。", "ジャマイカは1962年8月6日にイギリスから独立したラスタ。", "ネグリルのセブンマイルビーチはカリブ海で最も美しいビーチの一つラスタ。", "ジャマイカのジャークチキンは世界中で愛されるストリートフードラスタ。", "ポートロイヤルはかつて「世界で最も豊かな街」と呼ばれた海賊の町ラスタ。", "ジャマイカは人口あたりのオリンピックメダル数が世界トップクラスラスタ。", "ダンサーズ・ウォーターフォールはジャマイカで最も有名な滝ラスタ。", "ジャマイカのアッカとソルトフィッシュは国民食として愛されているラスタ。", "ボブ・マーリーの生まれ故郷ナインマイルは聖地として多くの人が訪れるラスタ。", "ジャマイカには世界で唯一のバナナ専用港があったラスタ。", "モンテゴベイは世界有数のリゾート地で毎年数百万人が訪れるラスタ。", "ジャマイカのラム酒は世界で最も古い蒸留酒の一つラスタ。", "キングストンのナショナルギャラリーにはカリブ海最大の美術コレクションがあるラスタ。", "ジャマイカのマルーン族は18世紀にイギリス軍に勝利した唯一の奴隷グループラスタ。", "オーチョリオスはスパニッシュタウンに次ぐジャマイカ第二の観光都市ラスタ。", "ジャマイカのフェスティバルフライドダンプリングは毎日の食卓に欠かせないラスタ。", "ブルーラグーンはその透明な青い水で世界的に有名な観光スポットラスタ。", "ジャマイカのパットはカリブ海全域で愛されるジャマイカの国民的スナックラスタ。"];
+const YARDIE_TRIVIA_EN = ["Jamaica is the birthplace of reggae, dancehall, and ska music.", "Kingston's downtown is the origin of the world's greatest dancehall scene.", "Blue Mountain Coffee from Jamaica is one of the world's most expensive coffees.", "Jamaica gained independence from Britain on August 6, 1962.", "Negril's Seven Mile Beach is one of the most beautiful beaches in the Caribbean.", "Jamaican jerk chicken is a beloved street food enjoyed worldwide.", "Port Royal was once called 'the richest city in the world' - a pirate haven.", "Jamaica has one of the highest per-capita Olympic medal counts in the world.", "Dunn's River Falls is Jamaica's most famous waterfall and tourist attraction.", "Ackee and saltfish is Jamaica's national dish, loved by locals daily.", "Bob Marley's birthplace Nine Mile is a pilgrimage site for fans worldwide.", "Jamaica once had the world's only banana-dedicated shipping port.", "Montego Bay is a world-class resort city visited by millions each year.", "Jamaican rum is one of the oldest distilled spirits in the world.", "Kingston's National Gallery houses the largest art collection in the Caribbean.", "Jamaica's Maroon people defeated the British army in the 18th century.", "Ocho Rios is Jamaica's second most visited tourist city.", "Festival fried dumplings are a staple of the Jamaican daily table.", "The Blue Lagoon is world-famous for its crystal-clear blue waters.", "Jamaican patties are a beloved snack enjoyed across the entire Caribbean."];
 export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const { lang } = useLang();
   const [spots, setSpots] = useState<any[]>([]);
@@ -53,6 +56,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatTrivia, setChatTrivia] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
   const mapRef = useRef<MapView>(null);
 
@@ -118,6 +122,8 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   };
 
   const sendYardieMessage = async () => {
+    const arr = lang === 'ja' ? YARDIE_TRIVIA_JA : YARDIE_TRIVIA_EN;
+    setChatTrivia(arr[Math.floor(Math.random() * arr.length)]);
     if (!chatInput.trim()) return;
     const userMsg = chatInput.trim();
     setChatInput('');
@@ -517,7 +523,16 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                 <Text style={{ color: COLORS.text, fontSize: 14, lineHeight: 20 }}>{msg.content}</Text>
               </View>
             ))}
-            {chatLoading && <View style={s.bubbleBot}><ActivityIndicator color={COLORS.gold} size="small" /></View>}
+            {chatLoading && (
+              <View style={s.bubbleBot}>
+                <ActivityIndicator color={COLORS.gold} size="small" />
+                <Text style={{ color: '#C8860A', fontSize: 11, fontWeight: '700', marginTop: 8 }}>🇯🇲 RASTA WISDOM</Text>
+                <Text style={{ color: '#666', fontSize: 12, marginTop: 4, lineHeight: 18 }}>{chatTrivia}</Text>
+              </View>
+            )}
+            <Text style={{ color: '#444', fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 24, lineHeight: 16 }}>
+              {lang === 'ja' ? '本AIの情報は参考目的です。営業状況等は事前にご確認ください。' : "AI-generated content for reference only. Please verify before visiting."}
+            </Text>
           </ScrollView>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={{ flexDirection: 'row', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: COLORS.border }}>

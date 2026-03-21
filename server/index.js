@@ -391,6 +391,51 @@ app.get("/spotify-artist", async (req, res) => {
     return res.status(500).json({ error: "Spotify API error" });
   }
 });
+
+// Lyrics Translation
+app.post('/lyrics-translate', async (req, res) => {
+  const { lyrics, lang = 'ja' } = req.body || {};
+  if (!lyrics) return res.status(400).json({ error: 'lyrics required' });
+  try {
+    const systemPrompt = lang === 'ja'
+      ? `あなたはジャマイカのレゲエ・ダンスホール文化の専門家です。ユーザーが貼り付けた歌詞を以下の形式で解説してください：
+🎵 日本語訳
+（自然な日本語で訳す）
+
+📖 パトワ語解説
+（使われているパトワ語の意味を箇条書きで）
+
+🌍 文化的背景
+（この歌詞が持つジャマイカ文化的な意味）
+
+重要：マークダウン記号（###、**など）は使わないでください。絵文字で見出しを表現してください。必ず最後まで書き切ってください。`
+      : `You are an expert in Jamaican reggae and dancehall culture. Analyze the lyrics in this format:
+🎵 Translation
+(Natural English explanation)
+
+📖 Patois Breakdown
+(Meanings of Patois words used, in bullet points)
+
+🌍 Cultural Context
+(What these lyrics mean in Jamaican culture)
+
+IMPORTANT: Never use markdown symbols (###, **). Use emojis for headings. Always complete your response fully.`;
+
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Analyze these lyrics:\n\n${lyrics}` }
+      ],
+      max_tokens: 1500,
+    });
+    res.json({ reply: completion.choices[0].message.content });
+  } catch (e) {
+    console.error('Lyrics error:', e);
+    res.status(500).json({ error: 'AI error' });
+  }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 IRIE server running on http://localhost:${PORT}`);

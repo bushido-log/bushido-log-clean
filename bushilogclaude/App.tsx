@@ -6,8 +6,9 @@ import PatwaTutorScreen from './src/screens/PatwaTutorScreen';
 import QuizScreen from './src/screens/QuizScreen';
 import CultureScreen from './src/screens/CultureScreen';
 import JamaicaGuideScreen from './src/screens/JamaicaGuideScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 
-type Screen = 'splash' | 'home' | 'patwa' | 'culture' | 'jamaica' | 'quiz';
+type Screen = 'splash' | 'home' | 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings';
 
 function AppInner() {
   const [screen, setScreen] = useState<Screen>('splash');
@@ -16,6 +17,7 @@ function AppInner() {
   if (screen === 'quiz') return <QuizScreen onBack={() => setScreen('home')} />;
   if (screen === 'culture') return <CultureScreen onBack={() => setScreen('home')} />;
   if (screen === 'jamaica') return <JamaicaGuideScreen onBack={() => setScreen('home')} />;
+  if (screen === 'settings') return <SettingsScreen onBack={() => setScreen('home')} />;
   return <IrieHomeScreen onNavigate={(s) => setScreen(s as Screen)} />;
 }
 

@@ -8,7 +8,7 @@ import {
 const { width } = Dimensions.get('window');
 
 type Props = {
-  onNavigate: (screen: 'patwa' | 'culture' | 'jamaica' | 'quiz') => void;
+  onNavigate: (screen: 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings') => void;
 };
 
 const MENU_ITEMS = [
@@ -100,9 +100,14 @@ export default function IrieHomeScreen({ onNavigate }: Props) {
           </View>
 
           <Text style={styles.yearLabel}>EST. KINGSTON, JAMAICA</Text>
-          <TouchableOpacity onPress={toggleLang} style={styles.langBtn}>
-            <Text style={styles.langBtnText}>{lang === 'ja' ? '🇬🇧 English' : '🇯🇵 日本語'}</Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
+            <TouchableOpacity onPress={toggleLang} style={styles.langBtn}>
+              <Text style={styles.langBtnText}>{lang === 'ja' ? '🇬🇧 English' : '🇯🇵 日本語'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => onNavigate('settings')} style={[styles.langBtn, { backgroundColor: '#1A1408' }]}>
+              <Text style={styles.langBtnText}>⚙️ {lang === 'ja' ? '設定' : 'Settings'}</Text>
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
         <View style={styles.menuContainer}>

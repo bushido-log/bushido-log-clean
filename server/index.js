@@ -32,13 +32,9 @@ app.post("/patwa-tutor", async (req, res) => {
   const systemPrompt = `You are "Ras Tutor", a Jamaican Patois and culture specialist.
 Your ONLY topics are: Jamaican Patois language, Jamaican culture, reggae/dancehall music, Jamaican food, Jamaican history, Rasta culture.
 
-SCOPE RULE: For ANY topic, first give useful info related to Jamaica if possible. Then ALWAYS end with a relevant Jamaican proverb or Patois phrase. Format: info first, then "ジャマイカではこう言うラスタ：[proverb]" or "In Jamaica we say: [proverb]"
-
-PATOIS RULE: When users ask how to say something in Patois, ALWAYS give the Patois phrase first, then explain. Never give standard English only.
-
-LANGUAGE RULE - CRITICAL:
-If lang = "ja": You MUST respond in Japanese. NEVER switch to English mid-response. Keep Patois words in English spelling. End with 「ラスタ。」
-If lang = "en": Respond in English with natural Patois mixed in.
+SCOPE RULE: NEVER refuse any question. For ANY topic including wars, politics, or non-Jamaica topics, ALWAYS connect it to Jamaican wisdom. Include 2-3 Patois phrases in single quotes like 'One Love', 'Jah know'. NEVER say you cannot help.
+LANGUAGE RULE - CRITICAL: Current language is ${lang}.
+${lang === 'ja' ? 'You MUST respond entirely in Japanese. NEVER use English sentences. Keep Patois words in English spelling only. End every response with ラスタ。' : 'Respond in English with natural Patois mixed in.'}
 
 Keep responses short (2-4 sentences max). Be warm and encouraging.
 JAPANESE SPELLING: Always write ジャマイカ人 not ジャマイキアン. Always write ジャマイカ not ジャマイカン.`;
@@ -83,14 +79,11 @@ JAPANESE SPELLING: Always write ジャマイカ人 not ジャマイキアン. Al
       max_tokens: 400,
     });
     const reply = completion.choices[0].message.content;
-
     // パトワ語を抽出
-        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include complete Patois phrases even if they mix English and Patois (like "Can I use di toilet?" or "Mi can use di bathroom?") 2) Include single Patois slang words 3) NEVER include pure Japanese or pure standard English words 4) Return ONLY a JSON array of strings. Example: ["Wah gwaan", "Can I use di toilet?", "Irie"] \n\n${reply}` }
+    const extractRes = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include phrases as complete phrases 2) Include single slang words 3) NEVER include Japanese, English words, or standard greetings like Good morning 4) Return ONLY a JSON array of strings, nothing else. Example: ["Wah gwaan", "Irie", "Respeck"] \n\n${reply}` }
-
-${reply}` }
+        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include complete Patois phrases 2) Include single slang words 3) NEVER include Japanese or standard English 4) Return ONLY a JSON array. Example: ["Wah gwaan", "Irie"] \n\n${reply}` }
       ],
       max_tokens: 100,
     });
@@ -466,29 +459,83 @@ app.post('/tts', async (req, res) => {
   try {
     // パトワ語の発音ガイドマップ
     const pronunciationMap = {
-      'Wah gwaan': 'wah gwaan (sounds like: wah-GWAAN)',
-      'Irie': 'Irie (pronounce: AY-ree, Caribbean accent, like "eye-ree" with Jamaican lilt)',
-      'Riddim': 'Riddim (sounds like: RID-im)',
-      'Jah': 'Jah (sounds like: JAH)',
-      'Respeck': 'Respeck (sounds like: reh-SPECK)',
-      'Nuh worry': 'Nuh worry (sounds like: nuh WUH-ree)',
-      'Mi deh yah': 'Mi deh yah (sounds like: mee-DEH-yah)',
-      'Bomboclaat': 'Bomboclaat (sounds like: BOM-bo-klaat)',
-      'di': 'di (sounds like: dee, meaning "the")',
-      'mi': 'mi (sounds like: mee, meaning "me" or "I")',
-      'fi': 'fi (sounds like: fee, meaning "for" or "to")',
-      'yuh': 'yuh (sounds like: yuh, meaning "you")',
-      'nuh': 'nuh (sounds like: nuh, meaning "no" or "not")',
-      'deh': 'deh (sounds like: deh, meaning "there" or "are")',
-      'seh': 'seh (sounds like: seh, meaning "say")',
-      'wid': 'wid (sounds like: wid, meaning "with")',
-      'Yow': 'Yow (sounds like: yow, Jamaican exclamation)',
+      'Wah gwaan': 'Wah gwaan',
+      'Wagwan': 'Wah gwaan',
+      'Irie': 'Ahy-ree',
+      'Riddim': 'Riddim (pronounce: RID-im)',
+      'Jah': 'Jah (pronounce: JAH)',
+      'Respeck': 'Respeck (pronounce: reh-SPECK)',
+      'Nuh worry': 'Nuh worry',
+      'Mi deh yah': 'Mee deh yah',
+      'Bomboclaat': 'Bom-bo-klaat',
+      'One Love': 'Wun Luv',
+      'Big up': 'Big up',
+      'Likkle more': 'Lik-kle more',
+      'Bless up': 'Bless up',
+      'Nuff respect': 'Nuff reh-speck',
+      'Zeen': 'Zeen',
+      'Duppy': 'Dup-ee',
+      'Bashment': 'Bash-ment',
+      'Yard': 'Yahd',
+      'Yardie': 'Yah-dee',
+      'Babylon': 'Bab-ih-lon',
+      'Rasta': 'Raas-tah',
+      'Rastafari': 'Raas-tah-fah-ree',
+      'di': 'dee',
+      'mi': 'mee',
+      'fi': 'fee',
+      'yuh': 'yuh',
+      'nuh': 'nuh',
+      'deh': 'deh',
+      'seh': 'seh',
+      'wid': 'wid',
+      'dem': 'dem',
+      'nah': 'nah',
+      'Yow': 'Yow',
+      'Bwoy': 'Bwoy',
+      'Gyal': 'Gyal',
+      'Ting': 'Ting',
+      'cyaan': 'kyaan',
+      'Cyaan': 'Kyaan',
+      'Nyam': 'Nyam',
+      'Pickney': 'Pik-nee',
+      'Dutty': 'Dut-ee',
+      'Likkle': 'Lik-kle',
+      'Nuff': 'Nuff',
+      'Bredren': 'Bred-ren',
+      'Sistren': 'Sis-tren',
+      'Jah know': 'Jah no',
+      'Wha de scene': 'Wha dee seen',
+      'How yuh stay': 'How yuh stay',
+      'Walk good': 'Walk good',
+      'Tek care': 'Tek care',
+      'Overstand': 'Oh-ver-stand',
+      'Ital': 'Ee-tal',
+      'Dread': 'Dred',
+      'Natty': 'Nat-ee',
+      'Livity': 'Liv-ih-tee',
+      'Rude bwoy': 'Rood bwoy',
+      'Badman': 'Bad-man',
+      'Don': 'Don',
+      'Selector': 'Seh-lek-tor',
+      'Forward': 'For-ward',
+      'Pull up': 'Pull up',
+      'Empress': 'Em-pres',
+      'Jamrock': 'Jam-rock',
+      'Massive': 'Mas-iv',
+      'Wicked': 'Wik-id',
+      'Boom': 'Boom',
+      'Cho': 'Cho',
+      'Lawd': 'Lawd',
+      'Ragamuffin': 'Rag-ah-muf-fin',
+      'Everything irie': 'Ev-ree-ting Ahy-ree',
+      'Mi can use di bathroom': 'Mee kan yooz dee bath-room',
+      'Mi luv yuh': 'Mee luv yuh',
+      'Mi love yuh bad': 'Mee luv yuh bad',
     };
     const hint = pronunciationMap[text] || text;
     const wordCount = text.trim().split(/\s+/).length;
-    const ttsInput = wordCount === 1
-      ? `Say this Jamaican Patois word with Caribbean accent: ${hint}`
-      : `Say this Jamaican Patois phrase with Caribbean accent: ${hint}`;
+    const ttsInput = hint;
 
     const mp3 = await openai.audio.speech.create({
       model: 'tts-1',

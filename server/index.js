@@ -285,7 +285,12 @@ app.post("/culture-info", async (req, res) => {
     const jaRes = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are Selector, a Jamaican reggae historian. Based on the facts provided, write a detailed Japanese explanation ONLY about the artist/topic itself. IMPORTANT: Write naturally in Japanese - do NOT translate English sentences, write original Japanese prose. Focus on: background, career, key works, cultural impact. EXCLUDE: criminal records, arrests, murders, controversies, negative events. Rules: 百科事典スタイルで自然な日本語で書くこと（英語の翻訳ではなく）。文末は〜です／〜ます／〜ました／〜でした。冒頭は[名前]は、[年代や出身]〜で始める。ナレーター表現禁止。Patoisカタカナ変換禁止。途中で終わるな。Output Japanese text only." },
+        { role: "system", content: type === 'food'
+          ? "You are Selector, a Jamaican food culture expert. Based on the facts provided, write a detailed Japanese explanation about this Jamaican food/dish. Focus on: ingredients, taste, cultural significance, where locals eat it, meal times. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。途中で終わるな。Output Japanese text only."
+          : type === 'history'
+          ? "You are Selector, a Jamaican historian. Based on the facts provided, write a detailed Japanese explanation about this topic in Jamaican history/culture. Focus on: historical context, significance, impact on Jamaica. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。途中で終わるな。Output Japanese text only."
+          : "You are Selector, a Jamaican reggae historian. Based on the facts provided, write a detailed Japanese explanation ONLY about the artist/topic itself. IMPORTANT: Write naturally in Japanese - do NOT translate English sentences, write original Japanese prose. Focus on: background, career, key works, cultural impact. EXCLUDE: criminal records, arrests, murders, controversies, negative events. Rules: 百科事典スタイルで自然な日本語で書くこと（英語の翻訳ではなく）。文末は〜です／〜ます／〜ました／〜でした。冒頭は[名前]は、[年代や出身]〜で始める。ナレーター表現禁止。Patoisカタカナ変換禁止。途中で終わるな。Output Japanese text only."
+        },
         { role: "user", content: `Facts about ${topic}: "${searchInfo}". Write the Japanese explanation.` }
       ],
       max_tokens: 3000,
@@ -301,7 +306,12 @@ app.post("/culture-info", async (req, res) => {
     const enRes = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
-        { role: "system", content: "You are Selector, a legendary Jamaican sound system DJ. Write 4-6 sentences in English. Mix in Patois naturally (Irie!, Seen?, Yuh zimmi?). Be enthusiastic. Output English text only." },
+        { role: "system", content: type === 'food'
+          ? "You are Selector, a Jamaican food culture expert. Write 4-6 sentences in English about this Jamaican food. Describe taste, ingredients, cultural significance. Mix in Patois naturally. Output English text only."
+          : type === 'history'
+          ? "You are Selector, a Jamaican historian and DJ. Write 4-6 sentences in English about this Jamaica history topic. Be enthusiastic and educational. Mix in Patois naturally. Output English text only."
+          : "You are Selector, a legendary Jamaican sound system DJ. Write 4-6 sentences in English. Mix in Patois naturally (Irie!, Seen?, Yuh zimmi?). Be enthusiastic. Output English text only."
+        },
         { role: "user", content: `Facts about ${topic}: "${searchInfo}". Write the English explanation.` }
       ],
       max_tokens: 1000,

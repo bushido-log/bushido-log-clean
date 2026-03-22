@@ -29,14 +29,19 @@ app.post("/samurai-chat", async (req, res) => {
 
 app.post("/patwa-tutor", async (req, res) => {
   const { messages, text, lang = 'ja' } = req.body || {};
-  const systemPrompt = `You are a Jamaican Patois tutor named "Ras Tutor". 
-You are warm, fun, and deeply knowledgeable about Jamaican culture, Patois language, and reggae music.
-Keep responses short and engaging (2-4 sentences max).
-Use phrases like "Irie!", "Wah gwaan?", "Respect!" naturally.
-Always be encouraging and make learning feel like a vibe.
-LANGUAGE: lang = "${lang}"
-If lang = "ja": Respond in natural Japanese. Keep Patois words in English (never katakana). End sentences with 「ラスタ。」
-If lang = "en": Respond in English with natural Patois mixed in.`;
+  const systemPrompt = `You are "Ras Tutor", a Jamaican Patois and culture specialist.
+Your ONLY topics are: Jamaican Patois language, Jamaican culture, reggae/dancehall music, Jamaican food, Jamaican history, Rasta culture.
+
+SCOPE RULE: For ANY topic, first give useful info related to Jamaica if possible. Then ALWAYS end with a relevant Jamaican proverb or Patois phrase. Format: info first, then "ジャマイカではこう言うラスタ：[proverb]" or "In Jamaica we say: [proverb]"
+
+PATOIS RULE: When users ask how to say something in Patois, ALWAYS give the Patois phrase first, then explain. Never give standard English only.
+
+LANGUAGE RULE - CRITICAL:
+If lang = "ja": You MUST respond in Japanese. NEVER switch to English mid-response. Keep Patois words in English spelling. End with 「ラスタ。」
+If lang = "en": Respond in English with natural Patois mixed in.
+
+Keep responses short (2-4 sentences max). Be warm and encouraging.
+JAPANESE SPELLING: Always write ジャマイカ人 not ジャマイキアン. Always write ジャマイカ not ジャマイカン.`;
 
   const finalMessages =
     Array.isArray(messages) && messages.length > 0
@@ -75,10 +80,27 @@ If lang = "en": Respond in English with natural Patois mixed in.`;
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: augmentedMessages,
-      max_tokens: 300,
+      max_tokens: 400,
     });
     const reply = completion.choices[0].message.content;
-    return res.json({ ok: true, reply });
+
+    // パトワ語を抽出
+        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include complete Patois phrases even if they mix English and Patois (like "Can I use di toilet?" or "Mi can use di bathroom?") 2) Include single Patois slang words 3) NEVER include pure Japanese or pure standard English words 4) Return ONLY a JSON array of strings. Example: ["Wah gwaan", "Can I use di toilet?", "Irie"] \n\n${reply}` }
+      model: "gpt-4o",
+      messages: [
+        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include phrases as complete phrases 2) Include single slang words 3) NEVER include Japanese, English words, or standard greetings like Good morning 4) Return ONLY a JSON array of strings, nothing else. Example: ["Wah gwaan", "Irie", "Respeck"] \n\n${reply}` }
+
+${reply}` }
+      ],
+      max_tokens: 100,
+    });
+    let patoisWords = [];
+    try {
+      const raw = extractRes.choices[0].message.content.trim();
+      patoisWords = JSON.parse(raw.replace(/```json|```/g, '').trim());
+    } catch (e) {}
+
+    return res.json({ ok: true, reply, patoisWords });
   } catch (e) {
     console.error("OpenAI error:", e);
     return res.status(500).json({ error: "AI error" });
@@ -433,6 +455,52 @@ IMPORTANT: Never use markdown symbols (###, **). Use emojis for headings. Always
   } catch (e) {
     console.error('Lyrics error:', e);
     res.status(500).json({ error: 'AI error' });
+  }
+});
+
+
+// Text to Speech (OpenAI TTS)
+app.post('/tts', async (req, res) => {
+  const { text } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'text required' });
+  try {
+    // パトワ語の発音ガイドマップ
+    const pronunciationMap = {
+      'Wah gwaan': 'wah gwaan (sounds like: wah-GWAAN)',
+      'Irie': 'Irie (pronounce: AY-ree, Caribbean accent, like "eye-ree" with Jamaican lilt)',
+      'Riddim': 'Riddim (sounds like: RID-im)',
+      'Jah': 'Jah (sounds like: JAH)',
+      'Respeck': 'Respeck (sounds like: reh-SPECK)',
+      'Nuh worry': 'Nuh worry (sounds like: nuh WUH-ree)',
+      'Mi deh yah': 'Mi deh yah (sounds like: mee-DEH-yah)',
+      'Bomboclaat': 'Bomboclaat (sounds like: BOM-bo-klaat)',
+      'di': 'di (sounds like: dee, meaning "the")',
+      'mi': 'mi (sounds like: mee, meaning "me" or "I")',
+      'fi': 'fi (sounds like: fee, meaning "for" or "to")',
+      'yuh': 'yuh (sounds like: yuh, meaning "you")',
+      'nuh': 'nuh (sounds like: nuh, meaning "no" or "not")',
+      'deh': 'deh (sounds like: deh, meaning "there" or "are")',
+      'seh': 'seh (sounds like: seh, meaning "say")',
+      'wid': 'wid (sounds like: wid, meaning "with")',
+      'Yow': 'Yow (sounds like: yow, Jamaican exclamation)',
+    };
+    const hint = pronunciationMap[text] || text;
+    const wordCount = text.trim().split(/\s+/).length;
+    const ttsInput = wordCount === 1
+      ? `Say this Jamaican Patois word with Caribbean accent: ${hint}`
+      : `Say this Jamaican Patois phrase with Caribbean accent: ${hint}`;
+
+    const mp3 = await openai.audio.speech.create({
+      model: 'tts-1',
+      voice: 'onyx',
+      input: ttsInput,
+    });
+    const buffer = Buffer.from(await mp3.arrayBuffer());
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(buffer);
+  } catch (e) {
+    console.error('TTS error:', e);
+    res.status(500).json({ error: 'TTS error' });
   }
 });
 

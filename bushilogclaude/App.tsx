@@ -8,8 +8,9 @@ import QuizScreen from './src/screens/QuizScreen';
 import CultureScreen from './src/screens/CultureScreen';
 import JamaicaGuideScreen from './src/screens/JamaicaGuideScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
+import PaywallScreen from './src/screens/PaywallScreen';
 
-type Screen = 'splash' | 'home' | 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings';
+type Screen = 'splash' | 'home' | 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings' | 'paywall';
 
 const RC_API_KEY_IOS = 'appl_gsGtbNRejccHkDtvJysPiHHMLtU';
 
@@ -20,7 +21,8 @@ function AppInner() {
   if (screen === 'quiz') return <QuizScreen onBack={() => setScreen('home')} />;
   if (screen === 'culture') return <CultureScreen onBack={() => setScreen('home')} />;
   if (screen === 'jamaica') return <JamaicaGuideScreen onBack={() => setScreen('home')} />;
-  if (screen === 'settings') return <SettingsScreen onBack={() => setScreen('home')} />;
+  if (screen === 'settings') return <SettingsScreen onBack={() => setScreen('home')} onPaywall={() => setScreen('paywall')} />;
+  if (screen === 'paywall') return <PaywallScreen onBack={() => setScreen('home')} />;
   return <IrieHomeScreen onNavigate={(s) => setScreen(s as Screen)} />;
 }
 

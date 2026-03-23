@@ -6,9 +6,9 @@ import {
 import { useLang } from '../context/LanguageContext';
 import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from '../data/texts';
 
-type Props = { onBack: () => void };
+type Props = { onBack: () => void; onPaywall: () => void };
 
-export default function SettingsScreen({ onBack }: Props) {
+export default function SettingsScreen({ onBack, onPaywall }: Props) {
   const { lang, toggleLang } = useLang();
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
@@ -26,6 +26,18 @@ export default function SettingsScreen({ onBack }: Props) {
       </View>
 
       <ScrollView style={s.scroll}>
+        {/* IRIE Pro */}
+        <View style={s.section}>
+          <TouchableOpacity style={s.proBtn} onPress={onPaywall}>
+            <Text style={s.proBtnEmoji}>🇯🇲</Text>
+            <View>
+              <Text style={s.proBtnTitle}>IRIE Pro</Text>
+              <Text style={s.proBtnSub}>{lang === 'ja' ? 'フル機能を解放する' : 'Unlock full experience'}</Text>
+            </View>
+            <Text style={s.proBtnArrow}>→</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* 言語設定 */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>{lang === 'ja' ? '🌐 言語' : '🌐 Language'}</Text>
@@ -100,4 +112,9 @@ const s = StyleSheet.create({
   rowValue: { color: '#C8860A', fontSize: 13 },
   textBox: { backgroundColor: '#1A1408', borderRadius: 8, padding: 16, marginBottom: 8 },
   textContent: { color: '#8B7355', fontSize: 12, lineHeight: 20 },
+  proBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1a3a20', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#FFD700', marginBottom: 2 },
+  proBtnEmoji: { fontSize: 28, marginRight: 12 },
+  proBtnTitle: { color: '#FFD700', fontSize: 16, fontWeight: 'bold' },
+  proBtnSub: { color: '#aed6b8', fontSize: 12, marginTop: 2 },
+  proBtnArrow: { color: '#FFD700', fontSize: 18, marginLeft: 'auto' },
 });

@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { LanguageProvider } from './src/context/LanguageContext';
 import IrieSplashScreen from './src/screens/IrieSplashScreen';
 import IrieHomeScreen from './src/screens/IrieHomeScreen';
@@ -9,6 +10,8 @@ import JamaicaGuideScreen from './src/screens/JamaicaGuideScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 
 type Screen = 'splash' | 'home' | 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings';
+
+const RC_API_KEY_IOS = 'appl_gsGtbNRejccHkDtvJysPiHHMLtU';
 
 function AppInner() {
   const [screen, setScreen] = useState<Screen>('splash');
@@ -22,6 +25,10 @@ function AppInner() {
 }
 
 export default function App() {
+  useEffect(() => {
+    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+    Purchases.configure({ apiKey: RC_API_KEY_IOS });
+  }, []);
   return (
     <LanguageProvider>
       <AppInner />

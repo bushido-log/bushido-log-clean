@@ -1,3 +1,4 @@
+import { checkAILimit, incrementAICount } from '../utils/aiLimit';
 import React, { useState, useRef } from 'react';
 import { Audio } from 'expo-av';
 import { useLang } from '../context/LanguageContext';
@@ -137,6 +138,18 @@ export default function PatwaTutorScreen({ onBack }: Props) {
 
   const send = async () => {
     if (!input.trim()) return;
+    const { allowed } = await checkAILimit();
+    if (!allowed) {
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: lang === 'ja'
+          ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
+          : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲',
+        patoisWords: []
+      }]);
+      return;
+    }
+    await incrementAICount();
     Keyboard.dismiss();
     const userMsg: Message = { role: 'user', content: input };
     const newMessages = [...messages, userMsg];

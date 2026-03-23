@@ -1,4 +1,5 @@
 import { useLang } from '../context/LanguageContext';
+import { checkAILimit, incrementAICount } from '../utils/aiLimit';
 import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 import {
@@ -181,6 +182,14 @@ export default function CultureScreen({ onBack }: Props) {
 
   const translateLyrics = async () => {
     if (!lyricsInput.trim()) return;
+    const { allowed } = await checkAILimit();
+    if (!allowed) {
+      setLyricsResult(lang === 'ja'
+        ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
+        : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲');
+      return;
+    }
+    await incrementAICount();
     Keyboard.dismiss();
     setLyricsLoading(true);
     setLyricsResult('');
@@ -200,6 +209,14 @@ export default function CultureScreen({ onBack }: Props) {
   };
 
   const fetchInfo = async (topic: string, type: string, artistData?: ArtistData) => {
+    const { allowed } = await checkAILimit();
+    if (!allowed) {
+      setInfo(lang === 'ja'
+        ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
+        : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲');
+      return;
+    }
+    await incrementAICount();
     setSelected(topic);
     setInfo(null);
     const arr = lang === 'ja' ? SELECTOR_TRIVIA_JA : SELECTOR_TRIVIA_EN;

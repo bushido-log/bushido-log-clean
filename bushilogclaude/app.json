@@ -14,6 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "8",
       "bundleIdentifier": "com.hiroya.irie",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,

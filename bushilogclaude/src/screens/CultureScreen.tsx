@@ -396,19 +396,22 @@ export default function CultureScreen({ onBack }: Props) {
             )}
             {loading ? (
               <>
-                <View style={styles.loadingRow}>
-                  <ActivityIndicator color="#C8860A" />
-                  <Text style={styles.loadingText}>Selector is spinning...</Text>
+                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                  <Text style={{ fontSize: 48, marginBottom: 8 }}>🎵</Text>
+                  <Text style={{ color: '#C8860A', fontSize: 16, fontWeight: '800', marginBottom: 4 }}>
+                    {lang === 'ja' ? 'セレクタが回してる...' : 'Selector is spinning...'}
+                  </Text>
+                  <Text style={{ color: '#666', fontSize: 12, marginBottom: 16 }}>
+                    {lang === 'ja' ? 'AIが情報を集めてるよ、少し待ってね！' : 'AI is digging through the crates, hold tight!'}
+                  </Text>
+                  <ActivityIndicator color="#C8860A" size="large" />
                 </View>
                 {trivia ? (
-                  <View style={{ marginTop: 12, paddingHorizontal: 8 }}>
-                    <Text style={{ color: '#C8860A', fontSize: 11, fontWeight: '700', marginBottom: 4 }}>🎵 RASTA WISDOM</Text>
-                    <Text style={{ color: '#666', fontSize: 12, lineHeight: 18 }}>{trivia}</Text>
+                  <View style={{ marginTop: 8, padding: 12, backgroundColor: '#1A1408', borderRadius: 10, borderLeftWidth: 3, borderLeftColor: '#C8860A' }}>
+                    <Text style={{ color: '#C8860A', fontSize: 11, fontWeight: '800', marginBottom: 4 }}>🇯🇲 {lang === 'ja' ? 'ジャマイカ豆知識' : 'JAMAICA TRIVIA'}</Text>
+                    <Text style={{ color: '#8B7355', fontSize: 12, lineHeight: 18 }}>{trivia}</Text>
                   </View>
                 ) : null}
-                <Text style={{ color: '#444', fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 24, lineHeight: 16 }}>
-                  {lang === 'ja' ? '本AIの情報は参考目的です。最新情報は各公式サイトをご確認ください。' : "AI-generated content for reference only. Please check official sources for latest info."}
-                </Text>
               </>
             ) : info ? (
               <Text style={styles.infoText}>{info}</Text>

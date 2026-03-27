@@ -273,13 +273,29 @@ app.post("/culture-info", async (req, res) => {
       'masicka': 'Masicka jamaican dancehall artist',
     };
     const topicLower = topic.toLowerCase();
-    const enhancedTopic = artistAliases[topicLower] || `${topic} jamaican music artist`;
+    const enhancedTopic = type === 'food' ? `${topic} jamaican food dish`
+      : type === 'history' ? `${topic} jamaican history`
+      : type === 'people' ? `${topic} jamaican person`
+      : type === 'places' ? `${topic} jamaica location`
+      : type === 'music' ? `${topic} jamaican music genre`
+      : artistAliases[topicLower] || `${topic} jamaican music artist`;
 
     // Step1: web searchで情報収集
     const searchRes = await openai.chat.completions.create({
       model: "gpt-4o-search-preview",
       messages: [
-        { role: "user", content: `Search the web and collect detailed factual information about "${enhancedTopic}" related to Jamaican music, culture, or history. Focus only on this specific artist's career and music. Return only the raw facts.` }
+        { role: "user", content: type === 'food'
+            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: ingredients, taste, cultural significance, how it is made. Return only the raw facts.`
+            : type === 'history'
+            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: historical context, timeline, significance, impact on Jamaica. Return only the raw facts.`
+            : type === 'people'
+            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: background, achievements, cultural impact, legacy. Return only the raw facts.`
+            : type === 'places'
+            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: geography, what makes it special, culture/vibe, what visitors experience. Return only the raw facts.`
+            : type === 'music'
+            ? `Search the web and collect detailed factual information about the Jamaican music genre "${enhancedTopic}". Focus on: origins, key characteristics, era, how it evolved, cultural impact. Return only facts about the GENRE ITSELF. Return only the raw facts.`
+            : `Search the web and collect detailed factual information about "${enhancedTopic}" related to Jamaican music. Focus only on this specific artist's career and music. Return only the raw facts.`
+          }
       ],
     });
     const searchInfo = searchRes.choices[0].message.content
@@ -292,16 +308,16 @@ app.post("/culture-info", async (req, res) => {
       model: "gpt-4o",
       messages: [
         { role: "system", content: type === 'food'
-          ? "You are Selector, a Jamaican food culture expert. Based on the facts provided, write a detailed Japanese explanation about this Jamaican food/dish. Focus on: ingredients, taste, cultural significance, where locals eat it, meal times. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。途中で終わるな。Output Japanese text only."
+          ? "You are Selector, a Jamaican food culture expert. Based on the facts provided, write a detailed Japanese explanation about this Jamaican food/dish. Focus on: ingredients, taste, cultural significance, where locals eat it, meal times. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
           : type === 'history'
-          ? "You are Selector, a Jamaican historian. Based on the facts provided, write a detailed Japanese explanation about this topic in Jamaican history/culture. Focus on: historical context, significance, impact on Jamaica. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。途中で終わるな。Output Japanese text only."
+          ? "You are Selector, a Jamaican historian. Based on the facts provided, write a detailed Japanese explanation about this topic in Jamaican history/culture. Focus on: historical context, significance, impact on Jamaica. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
           : type === 'people'
-          ? "You are Selector, a Jamaican cultural expert. Based on the facts provided, write a detailed Japanese explanation about this notable Jamaican person. Focus on: background, achievements, cultural impact, legacy. EXCLUDE: criminal records, arrests, controversies. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。冒頭は[名前]は、[年代や出身]〜で始める。途中で終わるな。Output Japanese text only."
+          ? "You are Selector, a Jamaican cultural expert. Based on the facts provided, write a detailed Japanese explanation about this notable Jamaican person. Focus on: background, achievements, cultural impact, legacy. EXCLUDE: criminal records, arrests, controversies. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。冒頭は[名前]は、[年代や出身]〜で始める。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
           : type === 'places'
-          ? "You are Selector, a Jamaican travel guide expert. Based on the facts provided, write a detailed Japanese explanation about this Jamaican place/location. Focus on: geography, what makes it special, culture/vibe, what visitors experience. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。途中で終わるな。Output Japanese text only."
+          ? "You are Selector, a Jamaican travel guide expert. Based on the facts provided, write a detailed Japanese explanation about this Jamaican place/location. Focus on: geography, what makes it special, culture/vibe, what visitors experience. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
           : type === 'music'
-          ? "You are Selector, a Jamaican music historian and DJ. Based on the facts provided, write a detailed Japanese explanation about this Jamaican music GENRE or STYLE. Focus on: origins, key characteristics, important era, cultural impact, how it evolved. NEVER describe a specific artist - describe the GENRE ITSELF. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。冒頭は[ジャンル名]は、[年代]〜で始める。途中で終わるな。Output Japanese text only."
-          : "You are Selector, a Jamaican reggae historian. Based on the facts provided, write a detailed Japanese explanation ONLY about the artist/topic itself. IMPORTANT: Write naturally in Japanese - do NOT translate English sentences, write original Japanese prose. Focus on: background, career, key works, cultural impact. EXCLUDE: criminal records, arrests, murders, controversies, negative events. Rules: 百科事典スタイルで自然な日本語で書くこと（英語の翻訳ではなく）。文末は〜です／〜ます／〜ました／〜でした。冒頭は[名前]は、[年代や出身]〜で始める。ナレーター表現禁止。Patoisカタカナ変換禁止。途中で終わるな。Output Japanese text only."
+          ? "You are Selector, a Jamaican music historian and DJ. Based on the facts provided, write a detailed Japanese explanation about this Jamaican music GENRE or STYLE. Focus on: origins, key characteristics, important era, cultural impact, how it evolved. NEVER describe a specific artist - describe the GENRE ITSELF. Write naturally in Japanese. 百科事典スタイルで自然な日本語で書くこと。文末は〜です／〜ます。冒頭は[ジャンル名]は、[年代]〜で始める。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
+          : "You are Selector, a Jamaican reggae historian. Based on the facts provided, write a detailed Japanese explanation ONLY about the artist/topic itself. IMPORTANT: Write naturally in Japanese - do NOT translate English sentences, write original Japanese prose. Focus on: background, career, key works, cultural impact. EXCLUDE: criminal records, arrests, murders, controversies, negative events. Rules: 百科事典スタイルで自然な日本語で書くこと（英語の翻訳ではなく）。文末は〜です／〜ます／〜ました／〜でした。冒頭は[名前]は、[年代や出身]〜で始める。ナレーター表現禁止。Patoisカタカナ変換禁止。固有名詞（地名・人名）は英語のままにすること（例：Blue Mountains→ブルーマウンテンズ、Kingston→キングストン）。固有名詞（地名・山・川・建物名）は英語表記またはカタカナのままにすること（Blue Mountains→ブルーマウンテンズ、Kingston→キングストン、Negril→ネグリル）。途中で終わるな。Output Japanese text only."
         },
         { role: "user", content: `Facts about ${topic}: "${searchInfo}". Write the Japanese explanation.` }
       ],

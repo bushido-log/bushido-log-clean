@@ -537,9 +537,17 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
             ))}
             {chatLoading && (
               <View style={s.bubbleBot}>
-                <ActivityIndicator color={COLORS.gold} size="small" />
-                <Text style={{ color: '#C8860A', fontSize: 11, fontWeight: '700', marginTop: 8 }}>🇯🇲 RASTA WISDOM</Text>
-                <Text style={{ color: '#666', fontSize: 12, marginTop: 4, lineHeight: 18 }}>{chatTrivia}</Text>
+                <Text style={{ fontSize: 36, textAlign: 'center' }}>🇯🇲</Text>
+                <Text style={{ color: '#C8860A', fontSize: 14, fontWeight: '800', textAlign: 'center', marginTop: 6 }}>
+                  {lang === 'ja' ? 'Yardieが調べてるよ...' : 'Yardie is checking...'}
+                </Text>
+                <ActivityIndicator color={COLORS.gold} size="small" style={{ marginTop: 8 }} />
+                {chatTrivia ? (
+                  <View style={{ marginTop: 12, padding: 10, backgroundColor: '#0a2010', borderRadius: 8, borderLeftWidth: 2, borderLeftColor: '#C8860A' }}>
+                    <Text style={{ color: '#C8860A', fontSize: 10, fontWeight: '800', marginBottom: 4 }}>🎵 {lang === 'ja' ? 'ジャマイカ豆知識' : 'JAMAICA TRIVIA'}</Text>
+                    <Text style={{ color: '#666', fontSize: 11, lineHeight: 16 }}>{chatTrivia}</Text>
+                  </View>
+                ) : null}
               </View>
             )}
             <Text style={{ color: '#444', fontSize: 11, textAlign: 'center', marginTop: 8, paddingHorizontal: 24, lineHeight: 16 }}>

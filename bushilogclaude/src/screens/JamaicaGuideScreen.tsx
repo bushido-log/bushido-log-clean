@@ -1,5 +1,5 @@
 import { useLang } from '../context/LanguageContext';
-import { checkAILimit, incrementAICount } from '../utils/aiLimit';
+import { checkAILimit, incrementAICount, AI_KEYS } from '../utils/aiLimit';
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
@@ -123,7 +123,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   };
 
   const sendYardieMessage = async () => {
-    const { allowed, remaining, isPro } = await checkAILimit();
+    const { allowed, remaining, isPro } = await checkAILimit(AI_KEYS.guide);
     if (!allowed) {
       setChatMessages(prev => [...prev, {
         role: 'assistant',
@@ -131,7 +131,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
       }]);
       return;
     }
-    await incrementAICount();
+    await incrementAICount(AI_KEYS.guide);
     const arr = lang === 'ja' ? YARDIE_TRIVIA_JA : YARDIE_TRIVIA_EN;
     setChatTrivia(arr[Math.floor(Math.random() * arr.length)]);
     if (!chatInput.trim()) return;

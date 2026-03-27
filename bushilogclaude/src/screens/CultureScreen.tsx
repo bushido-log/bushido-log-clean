@@ -1,5 +1,5 @@
 import { useLang } from '../context/LanguageContext';
-import { checkAILimit, incrementAICount } from '../utils/aiLimit';
+import { checkAILimit, incrementAICount, AI_KEYS } from '../utils/aiLimit';
 import React, { useState, useEffect, useRef } from 'react';
 import { Audio } from 'expo-av';
 import {
@@ -182,12 +182,12 @@ export default function CultureScreen({ onBack, onPaywall }: Props) {
 
   const translateLyrics = async () => {
     if (!lyricsInput.trim()) return;
-    const { allowed } = await checkAILimit();
+    const { allowed } = await checkAILimit(AI_KEYS.culture);
     if (!allowed) {
       setLyricsResult('__PAYWALL__');
       return;
     }
-    await incrementAICount();
+    await incrementAICount(AI_KEYS.culture);
     Keyboard.dismiss();
     setLyricsLoading(true);
     setLyricsResult('');
@@ -216,12 +216,12 @@ export default function CultureScreen({ onBack, onPaywall }: Props) {
       places: 'places',
     };
     const serverType = typeMap[type] || 'artist';
-    const { allowed } = await checkAILimit();
+    const { allowed } = await checkAILimit(AI_KEYS.culture);
     if (!allowed) {
       setInfo('__PAYWALL__');
       return;
     }
-    await incrementAICount();
+    await incrementAICount(AI_KEYS.culture);
     setSelected(topic);
     setInfo(null);
     const arr = lang === 'ja' ? SELECTOR_TRIVIA_JA : SELECTOR_TRIVIA_EN;

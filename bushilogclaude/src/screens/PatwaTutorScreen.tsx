@@ -1,4 +1,4 @@
-import { checkAILimit, incrementAICount } from '../utils/aiLimit';
+import { checkAILimit, incrementAICount, AI_KEYS } from '../utils/aiLimit';
 import React, { useState, useRef } from 'react';
 import { Audio } from 'expo-av';
 import { useLang } from '../context/LanguageContext';
@@ -138,7 +138,7 @@ export default function PatwaTutorScreen({ onBack, onPaywall }: Props) {
 
   const send = async () => {
     if (!input.trim()) return;
-    const { allowed } = await checkAILimit();
+    const { allowed } = await checkAILimit(AI_KEYS.patwa);
     if (!allowed) {
       setMessages(prev => [...prev, {
         role: 'assistant',
@@ -147,7 +147,7 @@ export default function PatwaTutorScreen({ onBack, onPaywall }: Props) {
       }]);
       return;
     }
-    await incrementAICount();
+    await incrementAICount(AI_KEYS.patwa);
     Keyboard.dismiss();
     const userMsg: Message = { role: 'user', content: input };
     const newMessages = [...messages, userMsg];

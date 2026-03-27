@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import Constants from 'expo-constants';
 import Purchases, { LOG_LEVEL } from 'react-native-purchases';
 import { LanguageProvider } from './src/context/LanguageContext';
 import IrieSplashScreen from './src/screens/IrieSplashScreen';
@@ -28,8 +29,11 @@ function AppInner() {
 
 export default function App() {
   useEffect(() => {
-    Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
-    Purchases.configure({ apiKey: RC_API_KEY_IOS });
+    const isExpoGo = Constants.appOwnership === 'expo';
+    if (!isExpoGo) {
+      Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+      Purchases.configure({ apiKey: RC_API_KEY_IOS });
+    }
   }, []);
   return (
     <LanguageProvider>

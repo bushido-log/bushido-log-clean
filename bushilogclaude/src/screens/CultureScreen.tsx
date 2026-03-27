@@ -211,7 +211,7 @@ export default function CultureScreen({ onBack }: Props) {
   const fetchInfo = async (topic: string, type: string, artistData?: ArtistData) => {
     // typeをサーバー側の期待する値に変換
     const typeMap: Record<string, string> = {
-      music: 'artist',
+      music: 'music',
       food: 'food',
       history: 'history',
       people: 'people',

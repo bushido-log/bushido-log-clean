@@ -88,7 +88,7 @@ const extractPatois = (text: string): string[] => {
 type Message = { role: 'user' | 'assistant'; content: string; patoisWords?: string[] };
 
 type Props = { onBack?: () => void };
-export default function PatwaTutorScreen({ onBack }: Props) {
+export default function PatwaTutorScreen({ onBack, onPaywall }: Props) {
   const { lang } = useLang();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([
@@ -142,9 +142,7 @@ export default function PatwaTutorScreen({ onBack }: Props) {
     if (!allowed) {
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: lang === 'ja'
-          ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
-          : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲',
+        content: '__PAYWALL__',
         patoisWords: []
       }]);
       return;
@@ -190,7 +188,23 @@ export default function PatwaTutorScreen({ onBack }: Props) {
           return (
             <View key={i}>
               <View style={[styles.bubble, m.role === 'user' ? styles.userBubble : styles.aiBubble]}>
-                <Text style={[styles.bubbleText, m.role === 'user' ? styles.userText : styles.aiText]}>{m.content}</Text>
+                {m.content === '__PAYWALL__' ? (
+                  <View>
+                    <Text style={[styles.bubbleText, styles.aiText]}>
+                      {lang === 'ja' ? '無料プランのAI使用回数（3回）に達しました。' : 'You have used your 3 free AI credits.'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={onPaywall}
+                      style={{ backgroundColor: '#FFD700', borderRadius: 10, paddingVertical: 12, paddingHorizontal: 20, marginTop: 10, alignItems: 'center' }}
+                    >
+                      <Text style={{ color: '#0a2e1a', fontWeight: 'bold', fontSize: 15 }}>
+                        🇯🇲 {lang === 'ja' ? 'IRIE Proにアップグレード' : 'Upgrade to IRIE Pro'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <Text style={[styles.bubbleText, m.role === 'user' ? styles.userText : styles.aiText]}>{m.content}</Text>
+                )}
               </View>
               {patoisWords.length > 0 && (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4, marginBottom: 8, paddingLeft: 4 }}>

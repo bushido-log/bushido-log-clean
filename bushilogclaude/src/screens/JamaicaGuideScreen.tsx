@@ -127,9 +127,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
     if (!allowed) {
       setChatMessages(prev => [...prev, {
         role: 'assistant',
-        content: lang === 'ja'
-          ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
-          : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲'
+        content: '__PAYWALL__'
       }]);
       return;
     }

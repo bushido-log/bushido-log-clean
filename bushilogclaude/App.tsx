@@ -18,10 +18,10 @@ const RC_API_KEY_IOS = 'appl_gsGtbNRejccHkDtvJysPiHHMLtU';
 function AppInner() {
   const [screen, setScreen] = useState<Screen>('splash');
   if (screen === 'splash') return <IrieSplashScreen onFinish={() => setScreen('home')} />;
-  if (screen === 'patwa') return <PatwaTutorScreen onBack={() => setScreen('home')} />;
+  if (screen === 'patwa') return <PatwaTutorScreen onBack={() => setScreen('home')} onPaywall={() => setScreen('paywall')} />;
   if (screen === 'quiz') return <QuizScreen onBack={() => setScreen('home')} />;
-  if (screen === 'culture') return <CultureScreen onBack={() => setScreen('home')} />;
-  if (screen === 'jamaica') return <JamaicaGuideScreen onBack={() => setScreen('home')} />;
+  if (screen === 'culture') return <CultureScreen onBack={() => setScreen('home')} onPaywall={() => setScreen('paywall')} />;
+  if (screen === 'jamaica') return <JamaicaGuideScreen onBack={() => setScreen('home')} onPaywall={() => setScreen('paywall')} />;
   if (screen === 'settings') return <SettingsScreen onBack={() => setScreen('home')} onPaywall={() => setScreen('paywall')} />;
   if (screen === 'paywall') return <PaywallScreen onBack={() => setScreen('home')} />;
   return <IrieHomeScreen onNavigate={(s) => setScreen(s as Screen)} />;

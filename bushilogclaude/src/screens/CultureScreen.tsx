@@ -78,7 +78,7 @@ const HISTORY_TABS = [
 ];
 
 type Tab = 'artists' | 'history';
-type Props = { onBack: () => void };
+type Props = { onBack: () => void; onPaywall?: () => void };
 
 type ArtistData = {
   name: string;
@@ -90,7 +90,7 @@ type ArtistData = {
 
 const SELECTOR_TRIVIA_JA = ["ボブ・マーリーは世界で7500万枚以上のレコードを売り上げたラスタ。", "レゲエは1968年頃にジャマイカで誕生した音楽ジャンルラスタ。", "ダンスホールは1970年代後半にキングストンで生まれたラスタ。", "スカは1950年代末にジャマイカで誕生したポップミュージックラスタ。", "コキャンはスカとレゲエの間に生まれた音楽スタイルラスタ。", "サウンドシステムは1950年代にジャマイカで始まったDJ文化ラスタ。", "ロッカーズは1970年代のレゲエのサブジャンルでルーツレゲエとも呼ばれるラスタ。", "バーニング・スピアはジャマイカで最も尊敬されているルーツレゲエシンガーの一人ラスタ。", "シズラはダンスホール界で最も多作なアーティストの一人ラスタ。", "ダミアン・マーリーはボブ・マーリーの息子でグラミー賞を受賞しているラスタ。", "ヴァイブズ・カーテルはジャマイカで最も影響力のあるダンスホールアーティストの一人ラスタ。", "ピーター・トッシュはウェイラーズのメンバーで人権活動家でもあったラスタ。", "バニー・ウェイラーはボブ・マーリーとともにウェイラーズを結成したラスタ。", "スーパーキャットは1980年代のダンスホール界のパイオニアラスタ。", "バウンティ・キラーはジャマイカで最も影響力のあるDJの一人ラスタ。", "レゲエは2018年にユネスコの無形文化遺産に登録されたラスタ。", "ジャコブ・ミラーは1970年代のレゲエシーンで伝説的な存在ラスタ。", "デニス・ブラウンは「クラウン・プリンス・オブ・レゲエ」と呼ばれたラスタ。", "トーチャーはキングストンで生まれた革新的なダンスホールプロデューサーラスタ。", "スティーリー&クリービーは1980年代のダンスホールサウンドを定義したラスタ。"];
 const SELECTOR_TRIVIA_EN = ["Bob Marley sold over 75 million records worldwide.", "Reggae music was born in Jamaica around 1968.", "Dancehall emerged in Kingston in the late 1970s.", "Ska was Jamaica's first pop music genre, born in the late 1950s.", "Rocksteady was the musical style between ska and reggae.", "Sound system culture began in Jamaica in the 1950s.", "Rockers is a 1970s reggae subgenre, also known as roots reggae.", "Burning Spear is one of the most respected roots reggae singers in Jamaica.", "Sizzla is one of the most prolific artists in dancehall history.", "Damian Marley is Bob Marley's son and a Grammy Award winner.", "Vybz Kartel is one of the most influential dancehall artists in Jamaica.", "Peter Tosh was a Wailers member and prominent human rights activist.", "Bunny Wailer co-founded The Wailers alongside Bob Marley.", "Super Cat was a pioneer of dancehall in the 1980s.", "Bounty Killer is one of the most influential DJs in Jamaica.", "Reggae was inscribed on UNESCO's Intangible Cultural Heritage list in 2018.", "Jacob Miller was a legendary figure in the 1970s reggae scene.", "Dennis Brown was known as the 'Crown Prince of Reggae'.", "Steely & Clevie defined the dancehall sound of the 1980s.", "King Jammy revolutionized dancehall with digital riddims in the 1980s."];
-export default function CultureScreen({ onBack }: Props) {
+export default function CultureScreen({ onBack, onPaywall }: Props) {
   const { lang } = useLang();
   const [tab, setTab] = useState<Tab>('artists');
   const [selected, setSelected] = useState<string | null>(null);
@@ -184,9 +184,7 @@ export default function CultureScreen({ onBack }: Props) {
     if (!lyricsInput.trim()) return;
     const { allowed } = await checkAILimit();
     if (!allowed) {
-      setLyricsResult(lang === 'ja'
-        ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
-        : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲');
+      setLyricsResult('__PAYWALL__');
       return;
     }
     await incrementAICount();
@@ -220,9 +218,7 @@ export default function CultureScreen({ onBack }: Props) {
     const serverType = typeMap[type] || 'artist';
     const { allowed } = await checkAILimit();
     if (!allowed) {
-      setInfo(lang === 'ja'
-        ? '無料プランのAI使用回数（3回）に達しました。\nIRIE Proにアップグレードすると無制限で使えます！🇯🇲'
-        : 'You have used your 3 free AI credits.\nUpgrade to IRIE Pro for unlimited access! 🇯🇲');
+      setInfo('__PAYWALL__');
       return;
     }
     await incrementAICount();
@@ -413,6 +409,20 @@ export default function CultureScreen({ onBack }: Props) {
                   </View>
                 ) : null}
               </>
+            ) : info === '__PAYWALL__' ? (
+              <View style={{ alignItems: 'center', padding: 16 }}>
+                <Text style={{ color: '#E8D8A0', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 16 }}>
+                  {lang === 'ja' ? '無料プランのAI使用回数（3回）に達しました。' : 'You have used your 3 free AI credits.'}
+                </Text>
+                <TouchableOpacity
+                  onPress={onPaywall}
+                  style={{ backgroundColor: '#FFD700', borderRadius: 12, paddingVertical: 14, paddingHorizontal: 32, width: '100%', alignItems: 'center' }}
+                >
+                  <Text style={{ color: '#0a2e1a', fontWeight: 'bold', fontSize: 16 }}>
+                    🇯🇲 {lang === 'ja' ? 'IRIE Proにアップグレード' : 'Upgrade to IRIE Pro'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ) : info ? (
               <Text style={styles.infoText}>{info}</Text>
             ) : null}

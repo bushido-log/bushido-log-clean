@@ -209,6 +209,15 @@ export default function CultureScreen({ onBack }: Props) {
   };
 
   const fetchInfo = async (topic: string, type: string, artistData?: ArtistData) => {
+    // typeをサーバー側の期待する値に変換
+    const typeMap: Record<string, string> = {
+      music: 'artist',
+      food: 'food',
+      history: 'history',
+      people: 'people',
+      places: 'places',
+    };
+    const serverType = typeMap[type] || 'artist';
     const { allowed } = await checkAILimit();
     if (!allowed) {
       setInfo(lang === 'ja'
@@ -228,7 +237,7 @@ export default function CultureScreen({ onBack }: Props) {
       const res = await fetch(CULTURE_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ topic, type, lang }),
+        body: JSON.stringify({ topic, type: serverType, lang }),
       });
       const data = await res.json();
       setInfo(data.reply);

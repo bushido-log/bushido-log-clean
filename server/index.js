@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
 import cors from "cors";
 import OpenAI from "openai";
+import { createHash } from "crypto";
 
 const app = express();
 app.use(cors());
@@ -10,7 +11,162 @@ app.use(express.json());
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
+// --- AI Cache ---
+
+const CACHE_TTL = { patwa: null, yardie: 7, culture: 30 }; // days, null = permanent
+
+function hashQuestion(text) {
+  return createHash('sha256').update(text.trim().toLowerCase()).digest('hex');
+}
+
+async function getCachedAnswer(questionText, endpoint, lang) {
+  try {
+    const hash = hashQuestion(questionText);
+    const { data, error } = await supabase
+      .from('ai_cache')
+      .select('answer, expires_at')
+      .eq('question_hash', hash)
+      .eq('endpoint', endpoint)
+      .eq('lang', lang)
+      .single();
+    if (error || !data) return null;
+    if (data.expires_at && new Date(data.expires_at) < new Date()) return null;
+    return data.answer;
+  } catch { return null; }
+}
+
+async function setCachedAnswer(questionText, endpoint, lang, answer) {
+  try {
+    const hash = hashQuestion(questionText);
+    const ttlDays = CACHE_TTL[endpoint];
+    const expires_at = ttlDays ? new Date(Date.now() + ttlDays * 86400000).toISOString() : null;
+    await supabase.from('ai_cache').upsert({
+      question_hash: hash,
+      endpoint,
+      lang,
+      question_text: questionText.slice(0, 500),
+      answer,
+      expires_at,
+    });
+  } catch (e) { console.warn('Cache write failed:', e.message); }
+}
+
+// Extract Patois words from structured reply (📖 section)
+function extractPatoisFromReply(reply) {
+  const match = reply.match(/📖\s*(?:PHRASE\/WORD|フレーズ|PHRASE)?\s*\n+(.+)/);
+  if (match) {
+    const phrase = match[1].trim().replace(/^["']+|["']+$/g, '');
+    if (phrase && phrase.length < 100) return [phrase];
+  }
+  // Fallback: extract quoted Patois-looking phrases
+  const quoted = [...reply.matchAll(/['"]([A-Za-z][A-Za-z\s']{1,40})['"]/g)].map(m => m[1]);
+  return [...new Set(quoted)].slice(0, 5);
+}
+
+// Web search with 3-tier fallback: Perplexity (sonar) → gpt-4o-search-preview → gpt-4o
+async function searchWithFallback(searchPrompt) {
+  // 1st: Perplexity sonar (web search built-in)
+  if (process.env.PERPLEXITY_API_KEY) {
+    try {
+      const res = await fetch('https://api.perplexity.ai/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}` },
+        body: JSON.stringify({
+          model: 'sonar',
+          messages: [{ role: 'user', content: searchPrompt }]
+        })
+      });
+      const data = await res.json();
+      if (data.error || !data.choices?.[0]?.message?.content) throw new Error(data.error?.message || 'empty response');
+      return data.choices[0].message.content;
+    } catch (e) {
+      console.warn('Perplexity failed, trying search-preview:', e.message);
+    }
+  }
+  // 2nd: OpenAI gpt-4o-search-preview
+  try {
+    const res = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({
+        model: 'gpt-4o-search-preview',
+        messages: [{ role: 'user', content: searchPrompt }]
+      })
+    });
+    const data = await res.json();
+    if (data.error || !data.choices?.[0]?.message?.content) throw new Error(data.error?.message || 'empty response');
+    return data.choices[0].message.content;
+  } catch (e) {
+    console.warn('search-preview failed, falling back to gpt-4o:', e.message);
+  }
+  // 3rd: gpt-4o (no web search)
+  const fallback = await openai.chat.completions.create({
+    model: 'gpt-4o',
+    messages: [{ role: 'user', content: searchPrompt }],
+    max_tokens: 800,
+  });
+  return fallback.choices[0].message.content;
+}
+
 app.get("/health", (_req, res) => res.json({ ok: true }));
+
+// Temporary debug endpoint — remove after fixing
+app.get("/debug-ai", async (_req, res) => {
+  const results = {};
+  // Test 1: Perplexity sonar
+  if (process.env.PERPLEXITY_API_KEY) {
+    try {
+      const r = await fetch('https://api.perplexity.ai/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.PERPLEXITY_API_KEY}` },
+        body: JSON.stringify({ model: 'sonar', messages: [{ role: 'user', content: 'Say hi in 5 words' }] })
+      });
+      const d = await r.json();
+      if (d.error) results.perplexity = { ok: false, error: d.error };
+      else results.perplexity = { ok: true, reply: d.choices?.[0]?.message?.content };
+    } catch (e) {
+      results.perplexity = { ok: false, error: e.message };
+    }
+  } else {
+    results.perplexity = { ok: false, error: 'PERPLEXITY_API_KEY not set' };
+  }
+  // Test 2: gpt-4o via SDK
+  try {
+    const c = await openai.chat.completions.create({
+      model: "gpt-4o", messages: [{ role: "user", content: "Say hi" }], max_tokens: 10,
+    });
+    results.gpt4o = { ok: true, reply: c.choices[0].message.content };
+  } catch (e) {
+    results.gpt4o = { ok: false, error: e.message, status: e.status, code: e.code };
+  }
+  // Test 3: gpt-4o-search-preview
+  try {
+    const r = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
+      body: JSON.stringify({ model: 'gpt-4o-search-preview', messages: [{ role: 'user', content: 'Say hi' }] })
+    });
+    const d = await r.json();
+    if (d.error) results.search_preview = { ok: false, error: d.error };
+    else results.search_preview = { ok: true, reply: d.choices?.[0]?.message?.content };
+  } catch (e) {
+    results.search_preview = { ok: false, error: e.message };
+  }
+  res.json(results);
+});
+
+// Admin: clear AI cache (optionally by endpoint)
+app.post("/clear-cache", async (req, res) => {
+  const { endpoint } = req.body || {};
+  try {
+    let query = supabase.from('ai_cache').delete();
+    if (endpoint) query = query.eq('endpoint', endpoint);
+    else query = query.neq('endpoint', '___'); // delete all rows
+    const { error, count } = await query;
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ ok: true, cleared: endpoint || 'all', count });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 app.post("/samurai-chat", async (req, res) => {
   const { messages, text } = req.body || {};
@@ -29,21 +185,87 @@ app.post("/samurai-chat", async (req, res) => {
 
 app.post("/patwa-tutor", async (req, res) => {
   const { messages, text, lang = 'ja' } = req.body || {};
-  const systemPrompt = `You are "Ras Tutor", a warm and knowledgeable Jamaican Patois language and culture teacher inside a mobile app.
+  const systemPrompt = `You are "Ras Tutor" — an old-school Jamaican grandfather figure who has lived in Kingston, Montego Bay, and the countryside. You are a native Patois speaker and a warm, funny, authentic language teacher. You share the real living language of Jamaica, not textbook versions.
 
-YOUR ROLE: Teach users about Jamaican Patois language, Jamaican customs/traditions, Rasta philosophy, reggae/dancehall music culture, and Jamaican cultural history.
+RESPONSE FORMAT — Follow this structure for EVERY teaching answer:
 
-STRICT SCOPE RULES:
-- ONLY answer questions about: Patois words/phrases, Jamaican customs, greetings, traditions, Rasta culture, reggae/dancehall music history, Jamaican cultural practices, food culture (meaning/history of dishes, not restaurant recommendations)
-- For questions about specific restaurants, shops, hotels, guesthouses, or "where to go": ALWAYS redirect warmly to Jamaica Guide. Example (ja): 「お店や場所探しはJamaica Guideで見つけてね！ここではパトワ語と文化を教えるよ。'One Love'！ラスタ。」 Example (en): "For finding spots and restaurants, check out the Jamaica Guide feature! I teach Patois and culture here. One Love!"
-- For questions about what to do, where to party, where to eat: REDIRECT to Jamaica Guide
-- For non-Jamaica topics: briefly connect to Jamaican wisdom with a Patois phrase, keep it short
+📖 PHRASE/WORD
+The Patois phrase or word being taught.
 
-LANGUAGE RULE - CRITICAL: Current language is \${lang}.
-\${lang === 'ja' ? 'You MUST respond entirely in Japanese. NEVER use English sentences. Keep Patois words in English spelling only. End every response with ラスタ。' : 'Respond in English with natural Patois mixed in. End with Irie! or One Love!'}
+🗣 PRONUNCIATION
+${lang === 'ja' ? 'カタカナ発音 + 英語の発音ガイド（例: "Wah gwaan" = ワ・グワーン / wah-GWAHN）' : 'English phonetic guide (e.g., "Wah gwaan" = wah-GWAHN)'}
 
-STYLE: Warm, encouraging teacher. Short responses (2-4 sentences). Always include 1-2 Patois phrases in single quotes.
-JAPANESE SPELLING: Always write ジャマイカ人 not ジャマイキアン. Always write ジャマイカ not ジャマイカン.`;
+💬 MEANING
+${lang === 'ja' ? '日本語で意味を分かりやすく説明' : 'Clear English explanation of the meaning'}
+
+📝 EXAMPLES (2-3)
+${lang === 'ja'
+  ? '- パトワ文 → 日本語訳\n- パトワ文 → 日本語訳'
+  : '- Patois sentence → English translation\n- Patois sentence → English translation'}
+
+🎯 WHEN TO USE
+${lang === 'ja' ? 'どんな場面で使うか説明（カジュアル、友達同士、恋愛、初対面、ビジネス等）。注意点があれば必ず書く' : 'Explain the social context: casual, friends only, romantic, first meeting, business, etc. Include warnings if needed'}
+
+🌴 CULTURE NOTE
+${lang === 'ja' ? 'なぜジャマイカ人がこう言うのか、文化的な背景やストーリーを1-2文で' : 'Why Jamaicans say this — the cultural story behind it in 1-2 sentences'}
+
+SPECIAL MODE — LYRICS ANALYSIS:
+When a user asks about a song lyric or quotes dancehall/reggae lyrics:
+- Identify the artist and song if possible
+- Break down each Patois phrase in the lyric
+- Explain the meaning line by line
+- Give the cultural context of why the artist said it that way
+- ${lang === 'ja' ? 'すべて日本語で解説する' : 'Explain in English'}
+
+SPECIAL MODE — STREET SMARTS:
+When a user asks about dealing with hustlers, scammers, people asking for money, or how to handle tricky street situations in Jamaica:
+- Teach the actual Patois phrases to handle the situation
+- Give 2-3 example responses with translations
+- Explain the tone (humorous, firm, friendly) and body language
+- ${lang === 'ja' ? '「こう言えば大丈夫」という実践的なアドバイスを日本語で' : 'Give practical "say this and you\'ll be fine" advice'}
+- Include cultural context: why people approach tourists, how Jamaicans handle it themselves
+
+TEACHING DEPTH RULE — THIS IS THE MOST IMPORTANT RULE:
+You MUST teach deeply. A shallow, short answer is a FAILURE. Follow these rules strictly:
+1. MULTIPLE MEANINGS: If a word has more than one meaning or usage, you MUST list ALL of them with separate examples. For example, "fi" means "for" AND "to" AND possessive — teach all three with examples.
+2. SIMILAR WORDS: Always compare with related/similar Patois words. (e.g., when teaching "fi", compare with "fa" and explain the difference)
+3. CONTEXT VARIATIONS: Show how the same word changes meaning in different situations.
+4. BEGINNER MISTAKES: Add a "⚠️ WATCH OUT" section warning about common mistakes beginners make.
+5. STREET REALITY: Include how you ACTUALLY hear it on the streets of Kingston — the raw, real usage that no textbook covers.
+6. The 📝 EXAMPLES section must have AT LEAST 3 examples showing different usages, not just one meaning repeated.
+Your goal is to make the user feel like they just had a 10-minute conversation with a real Jamaican elder, not a 10-second dictionary lookup. LENGTH IS GOOD — detailed answers are always better than short ones.
+
+TOPIC RULES:
+- Romance, flirting, pickup lines ("lyrics" in Jamaican culture): TEACH ENTHUSIASTICALLY. Sweet talk is an art form in Jamaica. Teach real phrases people actually use on the street.
+- Slang, mild profanity, diss phrases: TEACH with clear usage notes. Explain exactly who you can and cannot say it to. (e.g., "This one is strictly for your bredren, NEVER say this to an elder or a stranger")
+- Dancehall/reggae lyrics: BREAK DOWN the Patois. Explain what the artist is really saying and why.
+- Daily conversations: greetings, shopping, food ordering, taxi rides, beach talk, bargaining
+- Street smarts: how to say no to hustlers, negotiate prices, handle common tourist situations with humor and respect
+- Rasta philosophy, culture, history, food culture (meaning and traditions, not restaurant recommendations)
+- ONLY REFUSE: explicitly graphic sexual descriptions
+- Non-Jamaica topics: Connect to Jamaican wisdom with a Patois proverb, then gently steer back
+- Questions about restaurants, hotels, specific locations: Redirect warmly — ${lang === 'ja' ? '「場所やお店探しはJamaica Guideで聞いてみてね！ここではパトワ語と文化を教えるよ。One Love！ラスタ。」' : '"For finding spots and places, check Jamaica Guide! I teach Patois and culture here. One Love!"'}
+
+CONVERSATION RULES:
+- If the user sends a simple greeting (hi, hello, wah gwaan), respond naturally as Ras Tutor WITHOUT the full structured format. Just greet them warmly and invite them to ask something.
+- If the user asks a follow-up or clarification, adapt the format — you don't need all 6 sections every time, use what fits.
+- For actual teaching questions (what does X mean, how do you say Y, teach me Z), use the FULL structured format.
+
+LANGUAGE RULES:
+${lang === 'ja'
+  ? `- 説明文はすべて日本語で書く。英語の文章を混ぜてはいけない
+- パトワ語のフレーズ・単語はアルファベット表記のまま
+- 発音ガイドはカタカナ＋英語の両方をつける
+- 「ジャマイカ人」と書く（「ジャマイキアン」は不可）
+- 「ジャマイカ」と書く（「ジャマイカン」は不可）
+- 文末は必ず「ラスタ。」で締める`
+  : `- Write all explanations in English
+- Mix natural Patois phrases into your own speaking style
+- End every response with "Irie!" or "One Love!"`}
+
+PERSONALITY: You are NOT a textbook or a chatbot. You are a real yard man sitting on a veranda sharing wisdom. Be warm, be funny, drop little stories from your life in Jamaica. Make the learner feel like they are learning from a wise elder who genuinely loves teaching.
+
+FINAL REMINDER: NEVER give a short or shallow answer. Always teach multiple meanings, compare similar words, warn about mistakes, and show real street usage. A response under 500 characters is too short.`;
 
   const finalMessages =
     Array.isArray(messages) && messages.length > 0
@@ -62,42 +284,23 @@ JAPANESE SPELLING: Always write ジャマイカ人 not ジャマイキアン. Al
   }
   try {
     const lastUserMsg = finalMessages.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
-    const searchRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        messages: [{ role: 'user', content: `Translate to English if needed, search for accurate information about Jamaican Patois language, Jamaican cultural customs, traditions, or Rasta philosophy related to: "${lastUserMsg}". Return only language/culture facts. Do NOT search for restaurants, shops, or specific locations.` }]
-      })
-    });
-    const searchData = await searchRes.json();
-    const searchInfo = searchData.choices[0].message.content
-      .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
-      .replace(/https?:\/\/\S+/g, '')
-      .trim();
-    const augmentedMessages = [
-      ...finalMessages,
-      { role: 'user', content: `SEARCH RESULTS: "${searchInfo}". IMPORTANT: Only mention places/names from search results. NEVER invent names.` }
-    ];
+    // Check cache first
+    const cached = await getCachedAnswer(lastUserMsg, 'patwa', lang);
+    if (cached) {
+      const patoisWords = extractPatoisFromReply(cached);
+      return res.json({ ok: true, reply: cached, patoisWords, source: 'cache' });
+    }
+    // GPT-4o direct (no web search needed for Patois knowledge)
     const completion = await openai.chat.completions.create({
       model: "gpt-4o",
-      messages: augmentedMessages,
-      max_tokens: 400,
+      messages: finalMessages,
+      max_tokens: 1200,
     });
     const reply = completion.choices[0].message.content;
-    // パトワ語を抽出
-    const extractRes = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { role: "user", content: `Extract ONLY Jamaican Patois and Jamaican slang words/phrases from this text. Rules: 1) Include complete Patois phrases 2) Include single slang words 3) NEVER include Japanese or standard English 4) Return ONLY a JSON array. Example: ["Wah gwaan", "Irie"] \n\n${reply}` }
-      ],
-      max_tokens: 100,
-    });
-    let patoisWords = [];
-    try {
-      const raw = extractRes.choices[0].message.content.trim();
-      patoisWords = JSON.parse(raw.replace(/```json|```/g, '').trim());
-    } catch (e) {}
+    // Extract Patois words via regex (no second API call)
+    const patoisWords = extractPatoisFromReply(reply);
+    // Cache the answer (patwa = permanent, no expiry)
+    await setCachedAnswer(lastUserMsg, 'patwa', lang, reply);
 
     return res.json({ ok: true, reply, patoisWords });
   } catch (e) {
@@ -110,20 +313,20 @@ async function generateAndStoreQuestions(category) {
   const systemPrompt = `You are a Jamaican quiz master. Generate 10 different multiple choice questions about ${category}.
 
 STRICT RULES:
-- For Patois questions: the question must be in Japanese/English, and ALL options must be Patois words/phrases (never put Japanese or English translations as options)
+- For Patois questions: the question asks what a Japanese/English word is in Patois. ALL 4 options MUST be Patois words/phrases only. NEVER put Japanese or English translations as options. Example: question="パトワ語で『お腹が空いた』は？" options=["A) Mi hungry", "B) Mi belly full", "C) Mi waan eat", "D) Mi nuh feel good"]
 - For reggae/artists/jamaica questions: all options must be real names, places, or facts
 - NEVER use the answer word itself as one of the options
 - Wrong answers must be plausible but clearly wrong
 - Each question must be genuinely different and interesting
-- Options must all be in the same language/format
+- For Patois category: options_en and options_ja must be IDENTICAL (both in Patois)
 
 Respond ONLY with a JSON array (no other text):
 [
   {
     "question_en": "English question",
     "question_ja": "日本語の質問",
-    "options_en": ["A) opt1", "B) opt2", "C) opt3", "D) opt4"],
-    "options_ja": ["A) 選択肢1", "B) 選択肢2", "C) 選択肢3", "D) 選択肢4"],
+    "options_en": ["A) Patois option1", "B) Patois option2", "C) Patois option3", "D) Patois option4"],
+    "options_ja": ["A) Patois option1", "B) Patois option2", "C) Patois option3", "D) Patois option4"],
     "correct": "A",
     "explanation_en": "English explanation in Rude Bwoy style",
     "explanation_ja": "日本語の解説"
@@ -187,20 +390,20 @@ app.post("/quiz-generate", async (req, res) => {
     const systemPrompt = `You are a Jamaican quiz master. Generate 10 different multiple choice questions about ${category}.
 
 STRICT RULES:
-- For Patois questions: the question must be in Japanese/English, and ALL options must be Patois words/phrases (never put Japanese or English translations as options)
+- For Patois questions: the question asks what a Japanese/English word is in Patois. ALL 4 options MUST be Patois words/phrases only. NEVER put Japanese or English translations as options. Example: question="パトワ語で『お腹が空いた』は？" options=["A) Mi hungry", "B) Mi belly full", "C) Mi waan eat", "D) Mi nuh feel good"]
 - For reggae/artists/jamaica questions: all options must be real names, places, or facts
 - NEVER use the answer word itself as one of the options
 - Wrong answers must be plausible but clearly wrong
 - Each question must be genuinely different and interesting
-- Options must all be in the same language/format
+- For Patois category: options_en and options_ja must be IDENTICAL (both in Patois)
 
 Respond ONLY with a JSON array (no other text):
 [
   {
     "question_en": "English question",
     "question_ja": "日本語の質問",
-    "options_en": ["A) opt1", "B) opt2", "C) opt3", "D) opt4"],
-    "options_ja": ["A) 選択肢1", "B) 選択肢2", "C) 選択肢3", "D) 選択肢4"],
+    "options_en": ["A) Patois option1", "B) Patois option2", "C) Patois option3", "D) Patois option4"],
+    "options_ja": ["A) Patois option1", "B) Patois option2", "C) Patois option3", "D) Patois option4"],
     "correct": "A",
     "explanation_en": "English explanation in Rude Bwoy style",
     "explanation_ja": "日本語の解説"
@@ -280,25 +483,20 @@ app.post("/culture-info", async (req, res) => {
       : type === 'music' ? `${topic} jamaican music genre`
       : artistAliases[topicLower] || `${topic} jamaican music artist`;
 
-    // Step1: web searchで情報収集
-    const searchRes = await openai.chat.completions.create({
-      model: "gpt-4o-search-preview",
-      messages: [
-        { role: "user", content: type === 'food'
-            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: ingredients, taste, cultural significance, how it is made. Return only the raw facts.`
-            : type === 'history'
-            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: historical context, timeline, significance, impact on Jamaica. Return only the raw facts.`
-            : type === 'people'
-            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: background, achievements, cultural impact, legacy. Return only the raw facts.`
-            : type === 'places'
-            ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: geography, what makes it special, culture/vibe, what visitors experience. Return only the raw facts.`
-            : type === 'music'
-            ? `Search the web and collect detailed factual information about the Jamaican music genre "${enhancedTopic}". Focus on: origins, key characteristics, era, how it evolved, cultural impact. Return only facts about the GENRE ITSELF. Return only the raw facts.`
-            : `Search the web and collect detailed factual information about "${enhancedTopic}" related to Jamaican music. Focus only on this specific artist's career and music. Return only the raw facts.`
-          }
-      ],
-    });
-    const searchInfo = searchRes.choices[0].message.content
+    // Step1: web searchで情報収集（フォールバック付き）
+    const cultureSearchPrompt = type === 'food'
+        ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: ingredients, taste, cultural significance, how it is made. Return only the raw facts.`
+        : type === 'history'
+        ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: historical context, timeline, significance, impact on Jamaica. Return only the raw facts.`
+        : type === 'people'
+        ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: background, achievements, cultural impact, legacy. Return only the raw facts.`
+        : type === 'places'
+        ? `Search the web and collect detailed factual information about "${enhancedTopic}". Focus on: geography, what makes it special, culture/vibe, what visitors experience. Return only the raw facts.`
+        : type === 'music'
+        ? `Search the web and collect detailed factual information about the Jamaican music genre "${enhancedTopic}". Focus on: origins, key characteristics, era, how it evolved, cultural impact. Return only facts about the GENRE ITSELF. Return only the raw facts.`
+        : `Search the web and collect detailed factual information about "${enhancedTopic}" related to Jamaican music. Focus only on this specific artist's career and music. Return only the raw facts.`;
+    const rawCultureSearch = await searchWithFallback(cultureSearchPrompt);
+    const searchInfo = rawCultureSearch
       .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
       .replace(/https?:\/\/\S+/g, '')
       .trim();
@@ -595,6 +793,140 @@ app.post('/tts', async (req, res) => {
   }
 });
 
+// --- IAP: Usage & Purchase endpoints ---
+
+// Get usage counts + purchase status for a device
+app.post('/get-usage', async (req, res) => {
+  const { device_id } = req.body;
+  if (!device_id) return res.status(400).json({ error: 'device_id required' });
+  try {
+    const { data, error } = await supabase
+      .from('user_purchases')
+      .select('*')
+      .eq('device_id', device_id)
+      .single();
+    if (error && error.code === 'PGRST116') {
+      // No row yet — create one
+      const { data: newRow, error: insertErr } = await supabase
+        .from('user_purchases')
+        .insert({ device_id, purchase_type: 'free' })
+        .select()
+        .single();
+      if (insertErr) return res.status(500).json({ error: insertErr.message });
+      return res.json(newRow);
+    }
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Increment usage count for a specific screen
+app.post('/increment-usage', async (req, res) => {
+  const { device_id, screen } = req.body;
+  if (!device_id || !screen) return res.status(400).json({ error: 'device_id and screen required' });
+
+  const columnMap = { patwa: 'patwa_count', culture: 'culture_count', guide: 'guide_count' };
+  const column = columnMap[screen];
+  if (!column) return res.status(400).json({ error: 'invalid screen' });
+
+  try {
+    // Upsert: create row if not exists, then increment
+    const { data: existing } = await supabase
+      .from('user_purchases')
+      .select('*')
+      .eq('device_id', device_id)
+      .single();
+
+    if (!existing) {
+      const { data, error } = await supabase
+        .from('user_purchases')
+        .insert({ device_id, purchase_type: 'free', [column]: 1 })
+        .select()
+        .single();
+      if (error) return res.status(500).json({ error: error.message });
+      return res.json(data);
+    }
+
+    const { data, error } = await supabase
+      .from('user_purchases')
+      .update({ [column]: existing[column] + 1, updated_at: new Date().toISOString() })
+      .eq('device_id', device_id)
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json(data);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Verify receipt and update purchase status
+app.post('/verify-receipt', async (req, res) => {
+  const { device_id, receipt_data, product_id } = req.body;
+  if (!device_id || !receipt_data) {
+    return res.status(400).json({ error: 'device_id and receipt_data required' });
+  }
+
+  try {
+    // TODO: Apple App Store Server API v2 verification
+    // For now, trust the receipt and update the purchase type
+    // In production, verify with Apple's /verifyReceipt or App Store Server API
+    const isSubscription = product_id?.includes('sub');
+    const purchaseType = isSubscription ? 'subscription' : 'lifetime';
+
+    const updateData = {
+      purchase_type: purchaseType,
+      original_transaction_id: receipt_data.transactionId || null,
+      updated_at: new Date().toISOString(),
+    };
+    if (isSubscription && receipt_data.expiresDate) {
+      updateData.expires_at = receipt_data.expiresDate;
+    }
+
+    const { data, error } = await supabase
+      .from('user_purchases')
+      .upsert({ device_id, ...updateData })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, purchase: data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// Restore purchases — look up by transaction ID
+app.post('/restore-purchase', async (req, res) => {
+  const { device_id, transaction_id } = req.body;
+  if (!device_id || !transaction_id) {
+    return res.status(400).json({ error: 'device_id and transaction_id required' });
+  }
+
+  try {
+    // Find existing purchase by transaction ID
+    const { data: existing } = await supabase
+      .from('user_purchases')
+      .select('*')
+      .eq('original_transaction_id', transaction_id)
+      .single();
+
+    if (!existing) {
+      return res.json({ success: false, message: 'No purchase found for this transaction' });
+    }
+
+    // Link to current device
+    const { data, error } = await supabase
+      .from('user_purchases')
+      .upsert({
+        device_id,
+        purchase_type: existing.purchase_type,
+        original_transaction_id: transaction_id,
+        expires_at: existing.expires_at,
+        updated_at: new Date().toISOString(),
+      })
+      .select()
+      .single();
+    if (error) return res.status(500).json({ error: error.message });
+    return res.json({ success: true, purchase: data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`🔥 IRIE server running on http://localhost:${PORT}`);
@@ -603,6 +935,12 @@ app.listen(PORT, "0.0.0.0", () => {
 app.post('/yardie-guide', async (req, res) => {
   const { message, history = [], lang = 'en' } = req.body;
   try {
+    // Check cache first (only for first message, not follow-ups with history)
+    if (history.length === 0) {
+      const cached = await getCachedAnswer(message, 'yardie', lang);
+      if (cached) return res.json({ reply: cached, source: 'cache' });
+    }
+
     const systemPrompt = `You are "YARDIE AI", a charismatic Jamaican cultural guide inside a mobile app.
 
 Your role is to teach users about Jamaican music (dancehall/reggae/sound system culture), food (street food, traditional dishes), travel spots (nature, beaches, party areas, hidden gems), lifestyle and street vibes, patois expressions.
@@ -620,23 +958,15 @@ STORYTELLING: Avoid encyclopedia tone. Use short vivid storytelling. Make users 
 COMPLETENESS: Never stop mid sentence. Always end naturally. Japanese mode must end with ラスタ。
 ACCURACY RULE: NEVER invent specific business names, guesthouse names, restaurant names, or place names. If you don't know a real specific name, describe the TYPE of place instead. Only mention venues or businesses you are 100% certain exist. When unsure, say "local spots" or "a yard-style guesthouse" instead of making up names. Lying destroys trust - always be honest if you don't know something specific.`;
 
-    // Step1: web searchで情報収集
-    const searchRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({
-        model: 'gpt-4o-search-preview',
-        messages: [{ role: 'user', content: `Translate this question to English if needed, then search for accurate current information about Jamaica: "${message}". Focus on finding specific real place names, businesses, or facts. Return only verified key facts with source context.` }]
-      })
-    });
-    const searchData = await searchRes.json();
-    const searchInfo = searchData.choices[0].message.content
+    // Step1: web searchで情報収集（フォールバック付き）
+    const rawYardieSearch = await searchWithFallback(`Translate this question to English if needed, then search for accurate current information about Jamaica: "${message}". Focus on finding specific real place names, businesses, or facts. Return only verified key facts with source context.`);
+    const searchInfo = rawYardieSearch
       .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, '$1')
       .replace(/https?:\/\/\S+/g, '')
       .trim();
 
     // Step2: Yardieキャラとして回答
-    const messages = [
+    const yardieMessages = [
       { role: 'system', content: systemPrompt },
       ...history.slice(-6).map(m => ({ role: m.role, content: m.content })),
       { role: 'user', content: `Here is accurate info about the topic: "${searchInfo}". Now answer this question as Yardie: ${message}. IMPORTANT: Only mention specific places, names, or businesses that appeared in the search results above. If the search results don't contain specific names, DO NOT invent any. Say 'local guesthouses' or describe types of places instead.` }
@@ -644,10 +974,17 @@ ACCURACY RULE: NEVER invent specific business names, guesthouse names, restauran
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${process.env.OPENAI_API_KEY}` },
-      body: JSON.stringify({ model: 'gpt-4o', messages, max_tokens: 800 })
+      body: JSON.stringify({ model: 'gpt-4o', messages: yardieMessages, max_tokens: 800 })
     });
     const data = await response.json();
-    res.json({ reply: data.choices[0].message.content });
+    const reply = data.choices[0].message.content;
+
+    // Cache the answer (yardie = 7 day TTL)
+    if (history.length === 0) {
+      await setCachedAnswer(message, 'yardie', lang, reply);
+    }
+
+    res.json({ reply });
   } catch (err) {
     res.status(500).json({ reply: "Bredren, something wrong! Try again nuh!" });
   }

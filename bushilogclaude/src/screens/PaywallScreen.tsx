@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
   ActivityIndicator, Alert,
 } from 'react-native';
+import {
+  initConnection,
+  endConnection,
+  getSubscriptions,
+  requestSubscription,
+  getAvailablePurchases,
+  purchaseUpdatedListener,
+  purchaseErrorListener,
+  finishTransaction,
+  type SubscriptionPurchase,
+  type PurchaseError,
+} from 'react-native-iap';
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
 
-// TODO: Replace with actual product ID from App Store Connect
 export const PRODUCT_ID_MONTHLY = 'com.hiroya.irie.premium.monthly';
 
 type Props = {
@@ -21,27 +32,71 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const [restoring, setRestoring] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
 
-  // TODO: Get dynamic price from react-native-iap (Step 8)
-  const price = '¥500/月';
+  const [price, setPrice] = useState('¥500/月');
+
+  useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      try {
+        await initConnection();
+        const products = await getSubscriptions({ skus: [PRODUCT_ID_MONTHLY] });
+        if (!cancelled && products.length > 0) {
+          setPrice(products[0].localizedPrice + '/月');
+        }
+      } catch (e) {
+        console.warn('IAP init/getSubscriptions failed:', e);
+      }
+    })();
+
+    const purchaseUpdate = purchaseUpdatedListener(async (purchase: SubscriptionPurchase) => {
+      const receiptData = {
+        transactionId: purchase.transactionId,
+        transactionReceipt: purchase.transactionReceipt,
+        originalTransactionId: purchase.originalTransactionIdentifierIOS ?? null,
+        expiresDate: null,
+      };
+
+      try {
+        const success = await submitReceipt(receiptData, PRODUCT_ID_MONTHLY);
+        if (success) {
+          await finishTransaction({ purchase, isConsumable: false });
+          onClose();
+        } else {
+          Alert.alert(t('Error', 'エラー'), t('Receipt verification failed', 'レシート検証に失敗しました'));
+        }
+      } catch (e: any) {
+        Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    const purchaseError = purchaseErrorListener((error: PurchaseError) => {
+      if (error.code === 'E_USER_CANCELLED') {
+        setLoading(false);
+        return;
+      }
+      Alert.alert(t('Error', 'エラー'), error.message || t('Purchase failed', '購入に失敗しました'));
+      setLoading(false);
+    });
+
+    return () => {
+      cancelled = true;
+      purchaseUpdate.remove();
+      purchaseError.remove();
+      endConnection();
+    };
+  }, []);
 
   const handleSubscribe = async () => {
     setLoading(true);
     try {
-      // TODO: react-native-iap purchase flow (Step 8)
-      // const purchase = await requestSubscription({ sku: PRODUCT_ID_MONTHLY });
-      // const success = await submitReceipt(
-      //   { transactionId: purchase.transactionId, ...purchase },
-      //   PRODUCT_ID_MONTHLY,
-      // );
-      // if (success) onClose();
-
-      Alert.alert(
-        t('Coming Soon', '準備中'),
-        t('Subscription will be available soon.', 'サブスクリプションは近日公開予定です。'),
-      );
+      await requestSubscription({ sku: PRODUCT_ID_MONTHLY });
     } catch (e: any) {
-      Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
-    } finally {
+      if (e.code !== 'E_USER_CANCELLED') {
+        Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
+      }
       setLoading(false);
     }
   };
@@ -49,16 +104,18 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const handleRestore = async () => {
     setRestoring(true);
     try {
-      // TODO: react-native-iap restore flow (Step 8)
-      // const purchases = await getAvailablePurchases();
-      // if (purchases.length > 0) {
-      //   const success = await restore(purchases[0].transactionId);
-      //   if (success) { onClose(); return; }
-      // }
-
+      const purchases = await getAvailablePurchases();
+      if (purchases.length > 0) {
+        const latest = purchases[purchases.length - 1];
+        const success = await restore(latest.transactionId);
+        if (success) {
+          onClose();
+          return;
+        }
+      }
       Alert.alert(
-        t('Coming Soon', '準備中'),
-        t('Restore will be available soon.', '復元機能は近日公開予定です。'),
+        t('Not Found', '見つかりません'),
+        t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
       );
     } catch (e: any) {
       Alert.alert(t('Error', 'エラー'), e.message || t('Restore failed', '復元に失敗しました'));

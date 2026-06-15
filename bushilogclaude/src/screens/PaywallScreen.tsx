@@ -118,7 +118,10 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     setRestoring(true);
     try {
       const purchases = await getAvailablePurchases();
+      console.log('[restore] getAvailablePurchases count:', purchases.length);
+      console.log('[restore] purchases:', JSON.stringify(purchases.map(p => ({ productId: p.productId, transactionId: p.transactionId, hasToken: !!p.purchaseToken }))));
       if (purchases.length === 0) {
+        console.log('[restore] FAIL: no purchases found');
         Alert.alert(
           t('Not Found', '見つかりません'),
           t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
@@ -133,8 +136,12 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         (p) => p.productId.includes('monthly') || p.productId.includes('annual'),
       );
       const target = lifetimePurchase || subscriptionPurchase;
+      console.log('[restore] lifetimePurchase:', lifetimePurchase?.productId ?? 'none');
+      console.log('[restore] subscriptionPurchase:', subscriptionPurchase?.productId ?? 'none');
+      console.log('[restore] target:', target?.productId ?? 'none');
 
       if (!target) {
+        console.log('[restore] FAIL: no target after filtering');
         Alert.alert(
           t('Not Found', '見つかりません'),
           t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
@@ -143,6 +150,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       }
 
       if (!target.purchaseToken) {
+        console.log('[restore] FAIL: target has no purchaseToken');
         Alert.alert(
           t('Error', 'エラー'),
           t(
@@ -153,6 +161,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         return;
       }
 
+      console.log('[restore] sending to submitReceipt, productId:', target.productId);
       const receiptData = {
         transactionId: target.transactionId,
         transactionReceipt: target.purchaseToken,
@@ -162,9 +171,11 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         expiresDate: null,
       };
       const success = await submitReceipt(receiptData, target.productId);
+      console.log('[restore] submitReceipt result:', success);
       if (success) {
         onClose();
       } else {
+        console.log('[restore] FAIL: submitReceipt returned false');
         Alert.alert(t('Error', 'エラー'), t('Restore failed', '復元に失敗しました'));
       }
     } catch (e: any) {

@@ -100,16 +100,20 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
   }, [deviceId]);
 
   const submitReceipt = useCallback(async (receiptData: Record<string, unknown>, productId: string) => {
-    if (!deviceId) return false;
+    console.log('[submitReceipt] called, deviceId:', deviceId, 'productId:', productId);
+    if (!deviceId) { console.log('[submitReceipt] FAIL: no deviceId'); return false; }
     try {
       const result = await verifyReceipt(deviceId, receiptData, productId);
+      console.log('[submitReceipt] server response:', JSON.stringify(result));
       if (result.success) {
+        console.log('[submitReceipt] SUCCESS, purchase_type:', result.purchase?.purchase_type);
         setPurchase(result.purchase);
         return true;
       }
+      console.log('[submitReceipt] FAIL: result.success is false');
       return false;
     } catch (e) {
-      console.warn('Receipt verification failed:', e);
+      console.warn('[submitReceipt] ERROR:', e);
       return false;
     }
   }, [deviceId]);

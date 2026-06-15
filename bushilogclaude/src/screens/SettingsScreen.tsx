@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  SafeAreaView, Linking, Alert, Modal, ActivityIndicator
+  SafeAreaView, Linking, Modal
 } from 'react-native';
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
@@ -12,11 +12,10 @@ type Props = { onBack: () => void };
 
 export default function SettingsScreen({ onBack }: Props) {
   const { lang, toggleLang } = useLang();
-  const { purchaseType, premium, purchase, restore, loading } = usePurchase();
+  const { purchaseType, premium, purchase } = usePurchase();
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
-  const [restoring, setRestoring] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
 
   const appVersion = '1.0.0';
@@ -27,19 +26,8 @@ export default function SettingsScreen({ onBack }: Props) {
     return t('Free', '無料プラン');
   };
 
-  const handleRestore = async () => {
-    setRestoring(true);
-    try {
-      // TODO: react-native-iap restore flow (Step 8)
-      Alert.alert(
-        t('Coming Soon', '準備中'),
-        t('Restore will be available soon.', '復元���能は近日公開予定です。'),
-      );
-    } catch (e: any) {
-      Alert.alert(t('Error', 'エラー'), e.message || t('Restore failed', '復元に失敗���ました'));
-    } finally {
-      setRestoring(false);
-    }
+  const handleRestore = () => {
+    setShowPaywall(true);
   };
 
   return (
@@ -80,9 +68,9 @@ export default function SettingsScreen({ onBack }: Props) {
               <Text style={s.rowValue}>→</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={s.row} onPress={handleRestore} disabled={restoring}>
+          <TouchableOpacity style={s.row} onPress={handleRestore}>
             <Text style={s.rowLabel}>{t('Restore Purchase', '購入を復元')}</Text>
-            {restoring ? <ActivityIndicator color="#C8860A" size="small" /> : <Text style={s.rowValue}>→</Text>}
+            <Text style={s.rowValue}>→</Text>
           </TouchableOpacity>
         </View>
 

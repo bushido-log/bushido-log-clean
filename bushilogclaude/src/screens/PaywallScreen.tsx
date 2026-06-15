@@ -78,7 +78,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     });
 
     const purchaseError = purchaseErrorListener((error: PurchaseError) => {
-      if (error.code === 'E_USER_CANCELLED') {
+      if (error.code === 'user-cancelled') {
         setLoading(false);
         return;
       }
@@ -103,7 +103,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     try {
       await requestPurchase({ type: 'subs', request: { apple: { sku: PRODUCT_ID_MONTHLY } } });
     } catch (e: any) {
-      if (e.code !== 'E_USER_CANCELLED') {
+      if (e.code !== 'user-cancelled') {
         Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
       }
       setLoading(false);

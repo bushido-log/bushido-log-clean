@@ -12,7 +12,7 @@ import {
   purchaseUpdatedListener,
   purchaseErrorListener,
   finishTransaction,
-  type SubscriptionPurchase,
+  type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
 import { useLang } from '../context/LanguageContext';
@@ -27,7 +27,7 @@ type Props = {
 
 export default function PaywallScreen({ onClose, screenName }: Props) {
   const { lang } = useLang();
-  const { submitReceipt, restore } = usePurchase();
+  const { submitReceipt } = usePurchase();
   const [loading, setLoading] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
@@ -49,11 +49,13 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       }
     })();
 
-    const purchaseUpdate = purchaseUpdatedListener(async (purchase: SubscriptionPurchase) => {
+    const purchaseUpdate = purchaseUpdatedListener(async (purchase: Purchase) => {
       const receiptData = {
         transactionId: purchase.transactionId,
-        transactionReceipt: purchase.transactionReceipt,
-        originalTransactionId: purchase.originalTransactionIdentifierIOS ?? null,
+        transactionReceipt: purchase.purchaseToken ?? null,
+        originalTransactionId: ('originalTransactionIdentifierIOS' in purchase)
+          ? purchase.originalTransactionIdentifierIOS ?? null
+          : null,
         expiresDate: null,
       };
 
@@ -105,18 +107,55 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     setRestoring(true);
     try {
       const purchases = await getAvailablePurchases();
-      if (purchases.length > 0) {
-        const latest = purchases[purchases.length - 1];
-        const success = await restore(latest.transactionId);
-        if (success) {
-          onClose();
-          return;
-        }
+      if (purchases.length === 0) {
+        Alert.alert(
+          t('Not Found', '見つかりません'),
+          t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
+        );
+        return;
       }
-      Alert.alert(
-        t('Not Found', '見つかりません'),
-        t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
+
+      const lifetimePurchase = purchases.find(
+        (p) => !p.productId.includes('monthly') && !p.productId.includes('annual'),
       );
+      const subscriptionPurchase = purchases.find(
+        (p) => p.productId.includes('monthly') || p.productId.includes('annual'),
+      );
+      const target = lifetimePurchase || subscriptionPurchase;
+
+      if (!target) {
+        Alert.alert(
+          t('Not Found', '見つかりません'),
+          t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
+        );
+        return;
+      }
+
+      if (!target.purchaseToken) {
+        Alert.alert(
+          t('Error', 'エラー'),
+          t(
+            'Could not retrieve receipt. Please try again.',
+            'レシートが取得できませんでした。再度お試しください。',
+          ),
+        );
+        return;
+      }
+
+      const receiptData = {
+        transactionId: target.transactionId,
+        transactionReceipt: target.purchaseToken,
+        originalTransactionId: ('originalTransactionIdentifierIOS' in target)
+          ? target.originalTransactionIdentifierIOS ?? null
+          : null,
+        expiresDate: null,
+      };
+      const success = await submitReceipt(receiptData, target.productId);
+      if (success) {
+        onClose();
+      } else {
+        Alert.alert(t('Error', 'エラー'), t('Restore failed', '復元に失敗しました'));
+      }
     } catch (e: any) {
       Alert.alert(t('Error', 'エラー'), e.message || t('Restore failed', '復元に失敗しました'));
     } finally {

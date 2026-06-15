@@ -6,8 +6,8 @@ import {
 import {
   initConnection,
   endConnection,
-  getSubscriptions,
-  requestSubscription,
+  fetchProducts,
+  requestPurchase,
   getAvailablePurchases,
   purchaseUpdatedListener,
   purchaseErrorListener,
@@ -33,6 +33,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
 
   const [price, setPrice] = useState('¥500/月');
+  const [iapReady, setIapReady] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -40,12 +41,14 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     (async () => {
       try {
         await initConnection();
-        const products = await getSubscriptions({ skus: [PRODUCT_ID_MONTHLY] });
+        if (cancelled) return;
+        setIapReady(true);
+        const products = await fetchProducts({ skus: [PRODUCT_ID_MONTHLY], type: 'subs' });
         if (!cancelled && products.length > 0) {
-          setPrice(products[0].localizedPrice + '/月');
+          setPrice(products[0].displayPrice + '/月');
         }
       } catch (e) {
-        console.warn('IAP init/getSubscriptions failed:', e);
+        console.warn('IAP init/fetchProducts failed:', e);
       }
     })();
 
@@ -92,9 +95,13 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   }, []);
 
   const handleSubscribe = async () => {
+    if (!iapReady) {
+      Alert.alert(t('Please wait', '準備中'), t('Store is loading. Please try again shortly.', 'ストアを読み込み中です。少し待ってからお試しください。'));
+      return;
+    }
     setLoading(true);
     try {
-      await requestSubscription({ sku: PRODUCT_ID_MONTHLY });
+      await requestPurchase({ type: 'subs', request: { apple: { sku: PRODUCT_ID_MONTHLY } } });
     } catch (e: any) {
       if (e.code !== 'E_USER_CANCELLED') {
         Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
@@ -104,6 +111,10 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   };
 
   const handleRestore = async () => {
+    if (!iapReady) {
+      Alert.alert(t('Please wait', '準備中'), t('Store is loading. Please try again shortly.', 'ストアを読み込み中です。少し待ってからお試しください。'));
+      return;
+    }
     setRestoring(true);
     try {
       const purchases = await getAvailablePurchases();

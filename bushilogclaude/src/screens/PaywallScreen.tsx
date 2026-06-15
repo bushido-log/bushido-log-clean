@@ -117,9 +117,9 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     }
     setRestoring(true);
     try {
-      const purchases = await getAvailablePurchases();
+      const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: false });
       console.log('[restore] getAvailablePurchases count:', purchases.length);
-      console.log('[restore] purchases:', JSON.stringify(purchases.map(p => ({ productId: p.productId, transactionId: p.transactionId, hasToken: !!p.purchaseToken }))));
+      console.log('[restore] purchases:', JSON.stringify(purchases.map(p => ({ productId: p.productId, transactionId: p.transactionId }))));
       if (purchases.length === 0) {
         console.log('[restore] FAIL: no purchases found');
         Alert.alert(

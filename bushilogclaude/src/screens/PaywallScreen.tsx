@@ -32,7 +32,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const [restoring, setRestoring] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
 
-  const [price, setPrice] = useState('¥500/月');
+  const [price, setPrice] = useState('¥700/月');
   const [iapReady, setIapReady] = useState(false);
 
   useEffect(() => {

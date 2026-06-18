@@ -12,6 +12,7 @@ import {
   purchaseUpdatedListener,
   purchaseErrorListener,
   finishTransaction,
+  getAppTransactionIOS,
   type Purchase,
   type PurchaseError,
 } from 'react-native-iap';
@@ -124,67 +125,79 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     }
     setRestoring(true);
     try {
+      // --- Step 1: Try IAP-based restore (subscriptions & IAP lifetime) ---
       const purchases = await getAvailablePurchases({ onlyIncludeActiveItemsIOS: false });
       console.log('[restore] getAvailablePurchases count:', purchases.length);
       console.log('[restore] purchases:', JSON.stringify(purchases.map(p => ({ productId: p.productId, transactionId: p.transactionId }))));
-      if (purchases.length === 0) {
-        console.log('[restore] FAIL: no purchases found');
-        Alert.alert(
-          t('Not Found', '見つかりません'),
-          t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
+
+      if (purchases.length > 0) {
+        const lifetimePurchase = purchases.find(
+          (p) => !p.productId.includes('monthly') && !p.productId.includes('annual'),
         );
-        return;
+        const subscriptionPurchase = purchases.find(
+          (p) => p.productId.includes('monthly') || p.productId.includes('annual'),
+        );
+        const target = lifetimePurchase || subscriptionPurchase;
+        console.log('[restore] lifetimePurchase:', lifetimePurchase?.productId ?? 'none');
+        console.log('[restore] subscriptionPurchase:', subscriptionPurchase?.productId ?? 'none');
+        console.log('[restore] target:', target?.productId ?? 'none');
+
+        if (target && target.purchaseToken) {
+          console.log('[restore] sending to submitReceipt, productId:', target.productId);
+          const receiptData = {
+            transactionId: target.transactionId,
+            transactionReceipt: target.purchaseToken,
+            originalTransactionId: ('originalTransactionIdentifierIOS' in target)
+              ? target.originalTransactionIdentifierIOS ?? null
+              : null,
+            expiresDate: null,
+          };
+          const success = await submitReceipt(receiptData, target.productId);
+          console.log('[restore] submitReceipt result:', success);
+          if (success) { onClose(); return; }
+        }
       }
 
-      const lifetimePurchase = purchases.find(
-        (p) => !p.productId.includes('monthly') && !p.productId.includes('annual'),
+      // --- Step 2: Legacy paid app check (pre-free, Build <= 58) ---
+      console.log('[restore] No IAP purchase found, checking legacy paid app...');
+      try {
+        const appTx = await getAppTransactionIOS();
+        console.log('[restore-appTx] result:', appTx ? JSON.stringify(appTx) : 'null');
+
+        if (appTx) {
+          const originalBuild = parseInt(appTx.originalAppVersion, 10);
+          console.log('[restore-appTx] originalAppVersion:', appTx.originalAppVersion, 'parsed:', originalBuild);
+          // Note: Sandbox returns originalAppVersion='1', will false-positive in test. Correct in production.
+          // appTx.environment can distinguish 'Sandbox' vs 'Production' if needed.
+          const LEGACY_MAX_BUILD = 58;
+
+          if (!isNaN(originalBuild) && originalBuild <= LEGACY_MAX_BUILD) {
+            console.log('[restore-appTx] LEGACY PAID USER detected, granting lifetime');
+            const receiptData = {
+              transactionId: appTx.appTransactionId ?? appTx.originalAppVersion,
+              transactionReceipt: null,
+              originalTransactionId: appTx.appTransactionId ?? null,
+              expiresDate: null,
+            };
+            const success = await submitReceipt(receiptData, 'legacy.paid.lifetime');
+            console.log('[restore-appTx] submitReceipt result:', success);
+            if (success) { onClose(); return; }
+            Alert.alert(t('Error', 'エラー'), t('Restore failed', '復元に失敗しました'));
+            return;
+          } else {
+            console.log('[restore-appTx] not a legacy paid user (build > 58 or NaN)');
+          }
+        }
+      } catch (appTxErr) {
+        console.warn('[restore-appTx] getAppTransactionIOS failed:', appTxErr);
+      }
+
+      // --- Step 3: Nothing found ---
+      console.log('[restore] No purchase or legacy entitlement found');
+      Alert.alert(
+        t('Not Found', '見つかりません'),
+        t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
       );
-      const subscriptionPurchase = purchases.find(
-        (p) => p.productId.includes('monthly') || p.productId.includes('annual'),
-      );
-      const target = lifetimePurchase || subscriptionPurchase;
-      console.log('[restore] lifetimePurchase:', lifetimePurchase?.productId ?? 'none');
-      console.log('[restore] subscriptionPurchase:', subscriptionPurchase?.productId ?? 'none');
-      console.log('[restore] target:', target?.productId ?? 'none');
-
-      if (!target) {
-        console.log('[restore] FAIL: no target after filtering');
-        Alert.alert(
-          t('Not Found', '見つかりません'),
-          t('No previous purchase found.', '過去の購入が見つかりませんでした。'),
-        );
-        return;
-      }
-
-      if (!target.purchaseToken) {
-        console.log('[restore] FAIL: target has no purchaseToken');
-        Alert.alert(
-          t('Error', 'エラー'),
-          t(
-            'Could not retrieve receipt. Please try again.',
-            'レシートが取得できませんでした。再度お試しください。',
-          ),
-        );
-        return;
-      }
-
-      console.log('[restore] sending to submitReceipt, productId:', target.productId);
-      const receiptData = {
-        transactionId: target.transactionId,
-        transactionReceipt: target.purchaseToken,
-        originalTransactionId: ('originalTransactionIdentifierIOS' in target)
-          ? target.originalTransactionIdentifierIOS ?? null
-          : null,
-        expiresDate: null,
-      };
-      const success = await submitReceipt(receiptData, target.productId);
-      console.log('[restore] submitReceipt result:', success);
-      if (success) {
-        onClose();
-      } else {
-        console.log('[restore] FAIL: submitReceipt returned false');
-        Alert.alert(t('Error', 'エラー'), t('Restore failed', '復元に失敗しました'));
-      }
     } catch (e: any) {
       Alert.alert(t('Error', 'エラー'), e.message || t('Restore failed', '復元に失敗しました'));
     } finally {

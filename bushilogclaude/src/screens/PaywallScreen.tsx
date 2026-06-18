@@ -19,6 +19,7 @@ import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
 
 export const PRODUCT_ID_MONTHLY = 'com.hiroya.irie.premium.monthly';
+export const PRODUCT_ID_ANNUAL = 'com.hiroya.irie.premium.annual';
 
 type Props = {
   onClose: () => void;
@@ -32,7 +33,9 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const [restoring, setRestoring] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
 
-  const [price, setPrice] = useState('¥700/月');
+  const [monthlyPrice, setMonthlyPrice] = useState('¥700');
+  const [annualPrice, setAnnualPrice] = useState('¥7,000');
+  const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [iapReady, setIapReady] = useState(false);
 
   useEffect(() => {
@@ -43,9 +46,12 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         await initConnection();
         if (cancelled) return;
         setIapReady(true);
-        const products = await fetchProducts({ skus: [PRODUCT_ID_MONTHLY], type: 'subs' });
-        if (!cancelled && products.length > 0) {
-          setPrice(products[0].displayPrice + '/月');
+        const products = await fetchProducts({ skus: [PRODUCT_ID_MONTHLY, PRODUCT_ID_ANNUAL], type: 'subs' });
+        if (!cancelled && products) {
+          products.forEach((p) => {
+            if (p.id.includes('monthly')) setMonthlyPrice(p.displayPrice);
+            if (p.id.includes('annual')) setAnnualPrice(p.displayPrice);
+          });
         }
       } catch (e) {
         console.warn('IAP init/fetchProducts failed:', e);
@@ -63,7 +69,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       };
 
       try {
-        const success = await submitReceipt(receiptData, PRODUCT_ID_MONTHLY);
+        const success = await submitReceipt(receiptData, purchase.productId);
         if (success) {
           await finishTransaction({ purchase, isConsumable: false });
           onClose();
@@ -101,7 +107,8 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     }
     setLoading(true);
     try {
-      await requestPurchase({ type: 'subs', request: { apple: { sku: PRODUCT_ID_MONTHLY } } });
+      const sku = selectedPlan === 'annual' ? PRODUCT_ID_ANNUAL : PRODUCT_ID_MONTHLY;
+      await requestPurchase({ type: 'subs', request: { apple: { sku } } });
     } catch (e: any) {
       if (e.code !== 'user-cancelled') {
         Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
@@ -209,10 +216,41 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
           <FeatureRow emoji="🏝" text={t('Jamaica Guide — ask anything', 'ジャマイカガイド — 何でも聞ける')} />
         </View>
 
-        {/* Price */}
-        <Text style={s.price}>{price}</Text>
+        {/* Plan selection */}
+        <View style={s.planCards}>
+          {/* Annual plan */}
+          <TouchableOpacity
+            style={[s.planCard, selectedPlan === 'annual' && s.planCardSelected]}
+            onPress={() => setSelectedPlan('annual')}
+            activeOpacity={0.8}
+          >
+            <View style={s.planCardHeader}>
+              <Text style={s.planLabel}>{t('Annual Plan', '年額プラン')}</Text>
+              <View style={s.recommendBadge}>
+                <Text style={s.recommendBadgeText}>{t('Best value', 'おすすめ')}</Text>
+              </View>
+            </View>
+            <Text style={s.planPrice}>{annualPrice}/{t('year', '年')}</Text>
+            <Text style={s.planSubtext}>
+              {t('¥583/mo · Save 2 months', '月あたり¥583 ・ 2ヶ月分お得')}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Monthly plan */}
+          <TouchableOpacity
+            style={[s.planCard, selectedPlan === 'monthly' && s.planCardSelected]}
+            onPress={() => setSelectedPlan('monthly')}
+            activeOpacity={0.8}
+          >
+            <Text style={s.planLabel}>{t('Monthly Plan', '月額プラン')}</Text>
+            <Text style={s.planPrice}>{monthlyPrice}/{t('mo', '月')}</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={s.priceNote}>
-          {t('Cancel anytime. Billed monthly.', 'いつでもキャンセル可能。月額課金。')}
+          {selectedPlan === 'annual'
+            ? t('Cancel anytime. Billed annually.', 'いつでもキャンセル可能。年額課金。')
+            : t('Cancel anytime. Billed monthly.', 'いつでもキャンセル可能。月額課金。')}
         </Text>
 
         {/* Subscribe button */}
@@ -277,7 +315,15 @@ const s = StyleSheet.create({
   featureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   featureEmoji: { fontSize: 20, width: 36 },
   featureText: { color: '#E8D8A0', fontSize: 15, flex: 1 },
-  price: { color: '#C8860A', fontSize: 32, fontWeight: '900', marginTop: 28 },
+  planCards: { width: '100%', marginTop: 28, gap: 12 },
+  planCard: { borderWidth: 2, borderColor: '#2A2010', borderRadius: 12, padding: 16, backgroundColor: '#1A1408' },
+  planCardSelected: { borderColor: '#C8860A' },
+  planCardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  planLabel: { color: '#E8D8A0', fontSize: 15, fontWeight: '700' },
+  planPrice: { color: '#C8860A', fontSize: 24, fontWeight: '900', marginTop: 4 },
+  planSubtext: { color: '#8B7355', fontSize: 12, marginTop: 2 },
+  recommendBadge: { backgroundColor: '#C8860A', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
+  recommendBadgeText: { color: '#0D0A05', fontSize: 10, fontWeight: '900' },
   priceNote: { color: '#8B7355', fontSize: 12, marginTop: 6 },
   subscribeBtn: { backgroundColor: '#C8860A', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 48, marginTop: 28, width: '100%', alignItems: 'center' },
   subscribeBtnText: { color: '#0D0A05', fontSize: 16, fontWeight: '900' },

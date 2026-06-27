@@ -110,22 +110,6 @@ async function searchWithFallback(searchPrompt) {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
-// Temporary: delete purchase record for testing (remove after verification)
-app.delete('/admin-delete-purchase', async (req, res) => {
-  const { secret, device_id } = req.query;
-  if (secret !== 'irie2026') return res.status(403).json({ error: 'forbidden' });
-  if (!device_id) return res.status(400).json({ error: 'device_id required' });
-  try {
-    const { data, error } = await supabase
-      .from('user_purchases')
-      .delete()
-      .eq('device_id', device_id)
-      .select();
-    if (error) return res.status(500).json({ error: error.message });
-    res.json({ deleted: data });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
 // Temporary debug endpoint — remove after fixing
 app.get("/debug-ai", async (_req, res) => {
   const results = {};
@@ -877,7 +861,6 @@ app.post('/increment-usage', async (req, res) => {
 // Verify receipt and update purchase status
 app.post('/verify-receipt', async (req, res) => {
   const { device_id, receipt_data, product_id } = req.body;
-  console.log('[verify-receipt] product_id:', product_id, 'expiresDate:', receipt_data?.expiresDate, 'device_id:', device_id);
   if (!device_id || !receipt_data) {
     return res.status(400).json({ error: 'device_id and receipt_data required' });
   }
@@ -901,14 +884,11 @@ app.post('/verify-receipt', async (req, res) => {
       updateData.expires_at = receipt_data.expiresDate
         || new Date(Date.now() + fallbackDays * 24 * 60 * 60 * 1000).toISOString();
     }
-    console.log('[verify-receipt] isSubscription:', isSubscription, 'fallbackDays:', isSubscription ? (product_id?.includes('annual') ? 365 : 30) : 'N/A', 'computed expires_at:', updateData.expires_at);
-
     const { data, error } = await supabase
       .from('user_purchases')
       .upsert({ device_id, ...updateData })
       .select()
       .single();
-    console.log('[verify-receipt] upsert result:', JSON.stringify(data), 'error:', error);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ success: true, purchase: data });
   } catch (e) { res.status(500).json({ error: e.message }); }

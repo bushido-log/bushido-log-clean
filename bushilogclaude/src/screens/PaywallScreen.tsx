@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert,
+  ActivityIndicator, Alert, ScrollView,
 } from 'react-native';
 import {
   initConnection,
@@ -212,7 +212,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         <Text style={s.closeBtnText}>×</Text>
       </TouchableOpacity>
 
-      <View style={s.content}>
+      <ScrollView contentContainerStyle={s.content} bounces={false}>
         {/* Header */}
         <Text style={s.logo}>IRIE</Text>
         <Text style={s.badge}>PREMIUM</Text>
@@ -302,7 +302,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
             '¥1,000の買い切り版を購入済み？上の「購入を復元」をタップしてください。',
           )}
         </Text>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -320,10 +320,10 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#0D0A05' },
   closeBtn: { position: 'absolute', top: 56, right: 20, zIndex: 10, width: 36, height: 36, borderRadius: 18, backgroundColor: '#1A1408', alignItems: 'center', justifyContent: 'center' },
   closeBtnText: { color: '#8B7355', fontSize: 20, lineHeight: 22 },
-  content: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  content: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, paddingBottom: 40 },
   logo: { color: '#C8860A', fontSize: 36, fontWeight: '900', letterSpacing: 6 },
   badge: { color: '#0D0A05', backgroundColor: '#C8860A', fontSize: 11, fontWeight: '900', letterSpacing: 3, paddingHorizontal: 14, paddingVertical: 4, borderRadius: 4, marginTop: 8, overflow: 'hidden' },
-  headline: { color: '#E8D8A0', fontSize: 20, fontWeight: '800', textAlign: 'center', marginTop: 28, lineHeight: 28 },
+  headline: { color: '#E8D8A0', fontSize: 20, fontWeight: '800', textAlign: 'center', marginTop: 28, lineHeight: 28, paddingHorizontal: 28 },
   features: { marginTop: 28, width: '100%' },
   featureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
   featureEmoji: { fontSize: 20, width: 36 },

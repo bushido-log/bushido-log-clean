@@ -110,6 +110,22 @@ async function searchWithFallback(searchPrompt) {
 
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
+// Temporary: delete purchase record for testing (remove after verification)
+app.delete('/admin-delete-purchase', async (req, res) => {
+  const { secret, device_id } = req.query;
+  if (secret !== 'irie2026') return res.status(403).json({ error: 'forbidden' });
+  if (!device_id) return res.status(400).json({ error: 'device_id required' });
+  try {
+    const { data, error } = await supabase
+      .from('user_purchases')
+      .delete()
+      .eq('device_id', device_id)
+      .select();
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ deleted: data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // Temporary debug endpoint — remove after fixing
 app.get("/debug-ai", async (_req, res) => {
   const results = {};
@@ -861,6 +877,7 @@ app.post('/increment-usage', async (req, res) => {
 // Verify receipt and update purchase status
 app.post('/verify-receipt', async (req, res) => {
   const { device_id, receipt_data, product_id } = req.body;
+  console.log('[verify-receipt] product_id:', product_id, 'expiresDate:', receipt_data?.expiresDate, 'device_id:', device_id);
   if (!device_id || !receipt_data) {
     return res.status(400).json({ error: 'device_id and receipt_data required' });
   }
@@ -869,7 +886,7 @@ app.post('/verify-receipt', async (req, res) => {
     // TODO: Apple App Store Server API v2 verification
     // For now, trust the receipt and update the purchase type
     // In production, verify with Apple's /verifyReceipt or App Store Server API
-    const isSubscription = product_id?.includes('sub');
+    const isSubscription = product_id?.includes('monthly') || product_id?.includes('annual');
     const purchaseType = isSubscription ? 'subscription' : 'lifetime';
 
     const updateData = {
@@ -877,15 +894,21 @@ app.post('/verify-receipt', async (req, res) => {
       original_transaction_id: receipt_data.transactionId || null,
       updated_at: new Date().toISOString(),
     };
-    if (isSubscription && receipt_data.expiresDate) {
-      updateData.expires_at = receipt_data.expiresDate;
+    if (isSubscription) {
+      // Use receipt expiresDate if available, otherwise fallback by plan duration
+      // TODO: replace with App Store Server API verification for production
+      const fallbackDays = product_id?.includes('annual') ? 365 : 30;
+      updateData.expires_at = receipt_data.expiresDate
+        || new Date(Date.now() + fallbackDays * 24 * 60 * 60 * 1000).toISOString();
     }
+    console.log('[verify-receipt] isSubscription:', isSubscription, 'fallbackDays:', isSubscription ? (product_id?.includes('annual') ? 365 : 30) : 'N/A', 'computed expires_at:', updateData.expires_at);
 
     const { data, error } = await supabase
       .from('user_purchases')
       .upsert({ device_id, ...updateData })
       .select()
       .single();
+    console.log('[verify-receipt] upsert result:', JSON.stringify(data), 'error:', error);
     if (error) return res.status(500).json({ error: error.message });
     return res.json({ success: true, purchase: data });
   } catch (e) { res.status(500).json({ error: e.message }); }

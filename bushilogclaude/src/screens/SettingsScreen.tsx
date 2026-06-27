@@ -36,7 +36,7 @@ export default function SettingsScreen({ onBack }: Props) {
         <TouchableOpacity onPress={onBack}>
           <Text style={s.backBtn}>{t('← Back', '← 戻る')}</Text>
         </TouchableOpacity>
-        <Text style={s.title}>{t('⚙️ Settings', '⚙�� 設定')}</Text>
+        <Text style={s.title}>{t('⚙ Settings', '⚙ 設定')}</Text>
         <View style={{ width: 60 }} />
       </View>
 
@@ -64,7 +64,7 @@ export default function SettingsScreen({ onBack }: Props) {
               style={s.row}
               onPress={() => Linking.openURL('https://apps.apple.com/account/subscriptions')}
             >
-              <Text style={s.rowLabel}>{t('Manage Subscription', '���ブスクリプション管理')}</Text>
+              <Text style={s.rowLabel}>{t('Manage Subscription', 'サブスクリプション管理')}</Text>
               <Text style={s.rowValue}>→</Text>
             </TouchableOpacity>
           )}
@@ -74,7 +74,7 @@ export default function SettingsScreen({ onBack }: Props) {
           </TouchableOpacity>
         </View>
 
-        {/* ���語設定 */}
+        {/* 言語設定 */}
         <View style={s.section}>
           <Text style={s.sectionTitle}>{t('🌐 Language', '🌐 言語')}</Text>
           <TouchableOpacity style={s.row} onPress={toggleLang}>
@@ -94,7 +94,7 @@ export default function SettingsScreen({ onBack }: Props) {
 
         {/* 法的情報 */}
         <View style={s.section}>
-          <Text style={s.sectionTitle}>{t('���� Legal', '📄 法的情報')}</Text>
+          <Text style={s.sectionTitle}>{t('📄 Legal', '📄 法的情報')}</Text>
           <TouchableOpacity style={s.row} onPress={() => setShowPrivacy(!showPrivacy)}>
             <Text style={s.rowLabel}>{t('Privacy Policy', 'プライバシーポリシー')}</Text>
             <Text style={s.rowValue}>{showPrivacy ? '▲' : '▼'}</Text>
@@ -106,7 +106,7 @@ export default function SettingsScreen({ onBack }: Props) {
           )}
 
           <TouchableOpacity style={s.row} onPress={() => setShowTerms(!showTerms)}>
-            <Text style={s.rowLabel}>{t('Terms of Service', '利用規���')}</Text>
+            <Text style={s.rowLabel}>{t('Terms of Service', '利用規約')}</Text>
             <Text style={s.rowValue}>{showTerms ? '▲' : '▼'}</Text>
           </TouchableOpacity>
           {showTerms && (

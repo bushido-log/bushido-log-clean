@@ -4,10 +4,35 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 import cors from "cors";
 import OpenAI from "openai";
 import { createHash } from "crypto";
+import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from "./legal.js";
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// --- Legal pages (for App Store Guideline 3.1.2) ---
+
+function legalPage(title, body) {
+  const html = body.replace(/\n/g, '<br>');
+  return `<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${title} - IRIE</title>
+<style>body{font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px 16px;line-height:1.8;color:#333}h1{font-size:1.2em}</style>
+</head>
+<body><h1>${title}</h1><p>${html}</p></body>
+</html>`;
+}
+
+app.get('/privacy', (_req, res) => {
+  res.type('html').send(legalPage('Privacy Policy', PRIVACY_POLICY_TEXT));
+});
+
+app.get('/terms', (_req, res) => {
+  res.type('html').send(legalPage('Terms of Service', TERMS_OF_SERVICE_TEXT));
+});
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 

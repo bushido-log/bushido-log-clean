@@ -36,6 +36,8 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
 
   const [monthlyPrice, setMonthlyPrice] = useState('¥700');
   const [annualPrice, setAnnualPrice] = useState('¥7,000');
+  const [annualPriceNum, setAnnualPriceNum] = useState<number | null>(null);
+  const [currencyCode, setCurrencyCode] = useState('JPY');
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [iapReady, setIapReady] = useState(false);
 
@@ -51,7 +53,13 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         if (!cancelled && products) {
           products.forEach((p) => {
             if (p.id.includes('monthly')) setMonthlyPrice(p.displayPrice);
-            if (p.id.includes('annual')) setAnnualPrice(p.displayPrice);
+            if (p.id.includes('annual')) {
+              setAnnualPrice(p.displayPrice);
+              if (p.price != null) {
+                setAnnualPriceNum(p.price);
+                setCurrencyCode(p.currency);
+              }
+            }
           });
         }
       } catch (e) {
@@ -245,7 +253,12 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
             </View>
             <Text style={s.planPrice}>{annualPrice}/{t('year', '年')}</Text>
             <Text style={s.planSubtext}>
-              {t('¥583/mo · Save 2 months', '月あたり¥583 ・ 2ヶ月分お得')}
+              {annualPriceNum != null
+                ? t(
+                    `${new Intl.NumberFormat(undefined, { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(Math.round(annualPriceNum / 12))}/mo · Save 2 months`,
+                    `月あたり${new Intl.NumberFormat('ja-JP', { style: 'currency', currency: currencyCode, maximumFractionDigits: 0 }).format(Math.round(annualPriceNum / 12))} ・ 2ヶ月分お得`,
+                  )
+                : t('Save 2 months', '2ヶ月分お得')}
             </Text>
           </TouchableOpacity>
 

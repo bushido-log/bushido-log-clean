@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, ScrollView,
+  ActivityIndicator, Alert, ScrollView, Linking,
 } from 'react-native';
 import {
   initConnection,
@@ -266,6 +266,23 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
             : t('Cancel anytime. Billed monthly.', 'いつでもキャンセル可能。月額課金。')}
         </Text>
 
+        <Text style={s.legalNote}>
+          {t(
+            'Subscription automatically renews unless cancelled at least 24 hours before the end of the current period. Payment is charged to your Apple ID account at confirmation of purchase. You can manage or cancel subscriptions in Settings > Apple ID > Subscriptions.',
+            'サブスクリプションは期間終了の24時間前までにキャンセルしない限り自動更新されます。お支払いは購入確定時にApple IDアカウントに請求されます。サブスクの管理・解約は 設定 > Apple ID > サブスクリプション からいつでも可能です。',
+          )}
+        </Text>
+
+        <View style={s.legalLinks}>
+          <TouchableOpacity onPress={() => Linking.openURL('https://irie-server.onrender.com/terms')}>
+            <Text style={s.legalLinkText}>{t('Terms of Use', '利用規約')}</Text>
+          </TouchableOpacity>
+          <Text style={s.legalSep}>・</Text>
+          <TouchableOpacity onPress={() => Linking.openURL('https://irie-server.onrender.com/privacy')}>
+            <Text style={s.legalLinkText}>{t('Privacy Policy', 'プライバシーポリシー')}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Subscribe button */}
         <TouchableOpacity
           style={[s.subscribeBtn, loading && s.btnDisabled]}
@@ -338,6 +355,10 @@ const s = StyleSheet.create({
   recommendBadge: { backgroundColor: '#C8860A', borderRadius: 4, paddingHorizontal: 8, paddingVertical: 2 },
   recommendBadgeText: { color: '#0D0A05', fontSize: 10, fontWeight: '900' },
   priceNote: { color: '#8B7355', fontSize: 12, marginTop: 6 },
+  legalNote: { color: '#8B7355', fontSize: 10, textAlign: 'center', marginTop: 12, lineHeight: 15, paddingHorizontal: 8 },
+  legalLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
+  legalLinkText: { color: '#C8860A', fontSize: 11, textDecorationLine: 'underline' },
+  legalSep: { color: '#8B7355', fontSize: 11, marginHorizontal: 6 },
   subscribeBtn: { backgroundColor: '#C8860A', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 48, marginTop: 28, width: '100%', alignItems: 'center' },
   subscribeBtnText: { color: '#0D0A05', fontSize: 16, fontWeight: '900' },
   btnDisabled: { opacity: 0.6 },

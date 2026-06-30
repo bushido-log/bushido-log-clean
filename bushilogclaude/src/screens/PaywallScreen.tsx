@@ -40,32 +40,54 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const [currencyCode, setCurrencyCode] = useState('JPY');
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [iapReady, setIapReady] = useState(false);
+  const [storeError, setStoreError] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    (async () => {
+    const loadProducts = async (retries = 2): Promise<void> => {
       try {
         await initConnection();
         if (cancelled) return;
-        setIapReady(true);
+
         const products = await fetchProducts({ skus: [PRODUCT_ID_MONTHLY, PRODUCT_ID_ANNUAL], type: 'subs' });
-        if (!cancelled && products) {
-          products.forEach((p) => {
-            if (p.id.includes('monthly')) setMonthlyPrice(p.displayPrice);
-            if (p.id.includes('annual')) {
-              setAnnualPrice(p.displayPrice);
-              if (p.price != null) {
-                setAnnualPriceNum(p.price);
-                setCurrencyCode(p.currency);
-              }
-            }
-          });
+        if (cancelled) return;
+
+        if (!products || products.length === 0) {
+          if (retries > 0) {
+            await new Promise((r) => setTimeout(r, 2000));
+            if (!cancelled) return loadProducts(retries - 1);
+            return;
+          }
+          console.warn('IAP: fetchProducts returned 0 products after retries');
+          setStoreError(true);
+          return;
         }
+
+        products.forEach((p) => {
+          if (p.id.includes('monthly')) setMonthlyPrice(p.displayPrice);
+          if (p.id.includes('annual')) {
+            setAnnualPrice(p.displayPrice);
+            if (p.price != null) {
+              setAnnualPriceNum(p.price);
+              setCurrencyCode(p.currency);
+            }
+          }
+        });
+        setIapReady(true);
       } catch (e) {
-        console.warn('IAP init/fetchProducts failed:', e);
+        if (cancelled) return;
+        if (retries > 0) {
+          await new Promise((r) => setTimeout(r, 2000));
+          if (!cancelled) return loadProducts(retries - 1);
+          return;
+        }
+        console.warn('IAP init/fetchProducts failed after retries:', e);
+        setStoreError(true);
       }
-    })();
+    };
+
+    loadProducts();
 
     const purchaseUpdate = purchaseUpdatedListener(async (purchase: Purchase) => {
       const receiptData = {
@@ -97,7 +119,8 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         setLoading(false);
         return;
       }
-      Alert.alert(t('Error', 'エラー'), error.message || t('Purchase failed', '購入に失敗しました'));
+      const detail = error.code ? ` (${error.code})` : '';
+      Alert.alert(t('Error', 'エラー'), (error.message || t('Purchase failed', '購入に失敗しました')) + detail);
       setLoading(false);
     });
 
@@ -120,7 +143,8 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       await requestPurchase({ type: 'subs', request: { apple: { sku } } });
     } catch (e: any) {
       if (e.code !== 'user-cancelled') {
-        Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
+        const detail = e.code ? ` (${e.code})` : '';
+        Alert.alert(t('Error', 'エラー'), (e.message || t('Purchase failed', '購入に失敗しました')) + detail);
       }
       setLoading(false);
     }
@@ -296,11 +320,21 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
           </TouchableOpacity>
         </View>
 
+        {/* Store error */}
+        {storeError && (
+          <Text style={s.storeError}>
+            {t(
+              'Could not connect to the App Store. Please try again later.',
+              'App Storeに接続できませんでした。後でもう一度お試しください。',
+            )}
+          </Text>
+        )}
+
         {/* Subscribe button */}
         <TouchableOpacity
-          style={[s.subscribeBtn, loading && s.btnDisabled]}
+          style={[s.subscribeBtn, (loading || storeError) && s.btnDisabled]}
           onPress={handleSubscribe}
-          disabled={loading || restoring}
+          disabled={loading || restoring || storeError}
         >
           {loading ? (
             <ActivityIndicator color="#0D0A05" />
@@ -372,6 +406,7 @@ const s = StyleSheet.create({
   legalLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   legalLinkText: { color: '#C8860A', fontSize: 11, textDecorationLine: 'underline' },
   legalSep: { color: '#8B7355', fontSize: 11, marginHorizontal: 6 },
+  storeError: { color: '#E85050', fontSize: 12, textAlign: 'center', marginTop: 16, paddingHorizontal: 8 },
   subscribeBtn: { backgroundColor: '#C8860A', borderRadius: 12, paddingVertical: 16, paddingHorizontal: 48, marginTop: 28, width: '100%', alignItems: 'center' },
   subscribeBtnText: { color: '#0D0A05', fontSize: 16, fontWeight: '900' },
   btnDisabled: { opacity: 0.6 },

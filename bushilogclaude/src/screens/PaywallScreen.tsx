@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
   ActivityIndicator, Alert, ScrollView, Linking,
@@ -41,6 +41,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
   const [selectedPlan, setSelectedPlan] = useState<'monthly' | 'annual'>('annual');
   const [iapReady, setIapReady] = useState(false);
   const [storeError, setStoreError] = useState(false);
+  const userInitiatedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +91,8 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
     loadProducts();
 
     const purchaseUpdate = purchaseUpdatedListener(async (purchase: Purchase) => {
+      const isRedelivery = !userInitiatedRef.current;
+
       const receiptData = {
         transactionId: purchase.transactionId,
         transactionReceipt: purchase.purchaseToken ?? null,
@@ -102,14 +105,25 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       try {
         const success = await submitReceipt(receiptData, purchase.productId);
         if (success) {
-          await finishTransaction({ purchase, isConsumable: false });
           onClose();
-        } else {
+        } else if (!isRedelivery) {
+          // Only alert the user if they initiated the purchase
           Alert.alert(t('Error', 'エラー'), t('Receipt verification failed', 'レシート検証に失敗しました'));
+        } else {
+          console.log('[purchaseUpdate] redelivered transaction failed verification, finishing silently');
         }
       } catch (e: any) {
-        Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
+        if (!isRedelivery) {
+          Alert.alert(t('Error', 'エラー'), e.message || t('Purchase failed', '購入に失敗しました'));
+        } else {
+          console.warn('[purchaseUpdate] redelivered transaction error, finishing silently:', e.message);
+        }
       } finally {
+        // Always finish the transaction to prevent redelivery loops
+        await finishTransaction({ purchase, isConsumable: false }).catch((err) =>
+          console.warn('[purchaseUpdate] finishTransaction failed:', err),
+        );
+        userInitiatedRef.current = false;
         setLoading(false);
       }
     });
@@ -138,6 +152,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       return;
     }
     setLoading(true);
+    userInitiatedRef.current = true;
     try {
       const sku = selectedPlan === 'annual' ? PRODUCT_ID_ANNUAL : PRODUCT_ID_MONTHLY;
       await requestPurchase({ type: 'subs', request: { apple: { sku } } });
@@ -147,6 +162,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
         Alert.alert(t('Error', 'エラー'), (e.message || t('Purchase failed', '購入に失敗しました')) + detail);
       }
       setLoading(false);
+      userInitiatedRef.current = false;
     }
   };
 

@@ -1,12 +1,13 @@
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
 import PaywallScreen from './PaywallScreen';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   TextInput, Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image
 } from "react-native";
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker, Callout, Region } from 'react-native-maps';
+import Supercluster from 'supercluster';
 import { supabase } from '../lib/supabase';
 
 const COLORS = {
@@ -63,6 +64,12 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const [chatTrivia, setChatTrivia] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
   const mapRef = useRef<MapView>(null);
+  const [mapRegion, setMapRegion] = useState<Region>({
+    latitude: 18.1096,
+    longitude: -77.2975,
+    latitudeDelta: 2.5,
+    longitudeDelta: 2.5,
+  });
 
   useEffect(() => { fetchSpots(); }, [activeCategory]);
 
@@ -173,7 +180,32 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
     </View>
   );
 
-  const mapSpots = spots.filter(s => s.latitude && s.longitude);
+  const mapSpots = useMemo(() => spots.filter(sp => sp.latitude && sp.longitude), [spots]);
+
+  const clusterIndex = useMemo(() => {
+    const index = new Supercluster<{ spot: any }>({ radius: 45, maxZoom: 16 });
+    index.load(mapSpots.map(sp => ({
+      type: 'Feature' as const,
+      geometry: { type: 'Point' as const, coordinates: [sp.longitude, sp.latitude] },
+      properties: { spot: sp },
+    })));
+    return index;
+  }, [mapSpots]);
+
+  const mapZoom = Math.max(0, Math.min(20, Math.round(Math.log2(360 / mapRegion.longitudeDelta))));
+
+  const clusters = useMemo(() => clusterIndex.getClusters([
+    mapRegion.longitude - mapRegion.longitudeDelta,
+    mapRegion.latitude - mapRegion.latitudeDelta,
+    mapRegion.longitude + mapRegion.longitudeDelta,
+    mapRegion.latitude + mapRegion.latitudeDelta,
+  ], mapZoom), [clusterIndex, mapRegion, mapZoom]);
+
+  const openCluster = (clusterId: number, coordinate: { latitude: number; longitude: number }) => {
+    const zoom = Math.min(clusterIndex.getClusterExpansionZoom(clusterId) + 1, 20);
+    const delta = 360 / Math.pow(2, zoom);
+    mapRef.current?.animateToRegion({ ...coordinate, latitudeDelta: delta, longitudeDelta: delta }, 500);
+  };
 
   return (
     <View style={s.container}>
@@ -207,32 +239,57 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           <MapView
             style={{ flex: 1 }}
             ref={mapRef}
+            userInterfaceStyle="dark"
             initialRegion={{
               latitude: 18.1096,
               longitude: -77.2975,
               latitudeDelta: 2.5,
               longitudeDelta: 2.5,
             }}
+            onRegionChangeComplete={setMapRegion}
           >
-            {mapSpots.map(spot => (
-              <Marker
-                key={spot.id}
-                coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
-                title={spot.name}
-              >
-                <View style={s.markerPin}>
-                  <Text style={{ fontSize: 20 }}>{getCategoryEmoji(spot.category)}</Text>
-                </View>
-                <Callout tooltip={false} onPress={() => openSpot(spot)}>
-                  <View style={{ width: 200, padding: 8 }}>
-                    <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{spot.name}</Text>
-                    <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>📍 {spot.parish}</Text>
-                    <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }} numberOfLines={2}>{lang === 'ja' && spot.description_ja ? spot.description_ja : spot.description}</Text>
-                    <Text style={{ color: '#C8860A', fontSize: 12, marginTop: 4 }}>{lang === 'ja' ? '詳細を見る →' : 'Tap for details →'}</Text>
+            {clusters.map((feature: any) => {
+              const [longitude, latitude] = feature.geometry.coordinates;
+              if (feature.properties.cluster) {
+                const count = feature.properties.point_count;
+                const size = count >= 25 ? 52 : count >= 10 ? 44 : 36;
+                return (
+                  <Marker
+                    key={`cluster-${feature.properties.cluster_id}`}
+                    coordinate={{ latitude, longitude }}
+                    anchor={{ x: 0.5, y: 0.5 }}
+                    tracksViewChanges={false}
+                    onPress={() => openCluster(feature.properties.cluster_id, { latitude, longitude })}
+                  >
+                    <View style={[s.clusterCircle, { width: size, height: size, borderRadius: size / 2 }, count >= 25 && { borderWidth: 2.5 }]}>
+                      {activeCategory !== 'all' && <Text style={{ fontSize: 11 }}>{getCategoryEmoji(activeCategory)}</Text>}
+                      <Text style={s.clusterCount}>{count}</Text>
+                    </View>
+                  </Marker>
+                );
+              }
+              const spot = feature.properties.spot;
+              return (
+                <Marker
+                  key={spot.id}
+                  coordinate={{ latitude: spot.latitude, longitude: spot.longitude }}
+                  title={spot.name}
+                  tracksViewChanges={false}
+                >
+                  <View style={s.markerPin}>
+                    <Text style={{ fontSize: 20 }}>{getCategoryEmoji(spot.category)}</Text>
                   </View>
-                </Callout>
-              </Marker>
-            ))}
+                  <Callout tooltip={false} onPress={() => openSpot(spot)}>
+                    <View style={{ width: 200, padding: 8 }}>
+                      <Text style={{ fontWeight: 'bold', fontSize: 14 }}>{spot.name}</Text>
+                      <Text style={{ color: '#666', fontSize: 12, marginTop: 2 }}>📍 {spot.parish}</Text>
+                      <Text style={{ color: '#888', fontSize: 12, marginTop: 4 }} numberOfLines={2}>{lang === 'ja' && spot.description_ja ? spot.description_ja : spot.description}</Text>
+                      <Text style={{ color: '#C8860A', fontSize: 12, marginTop: 4 }}>{lang === 'ja' ? '詳細を見る →' : 'Tap for details →'}</Text>
+                    </View>
+                  </Callout>
+                </Marker>
+              );
+            })}
           </MapView>
         </View>
 
@@ -352,6 +409,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
               <View style={{ flex: 1 }}>
                 <MapView
                   style={{ flex: 1 }}
+                  userInterfaceStyle="dark"
                   region={newLatitude && newLongitude ? {
                     latitude: newLatitude, longitude: newLongitude,
                     latitudeDelta: 0.05, longitudeDelta: 0.05,
@@ -472,6 +530,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
           </View>
           <MapView
             style={{ flex: 1 }}
+            userInterfaceStyle="dark"
             region={newLatitude && newLongitude ? {
               latitude: newLatitude,
               longitude: newLongitude,
@@ -595,4 +654,11 @@ const s = StyleSheet.create({
   bubbleUser: { backgroundColor: '#2D5A1B', alignSelf: 'flex-end' },
   chatInput: { flex: 1, backgroundColor: '#1A1408', borderWidth: 1, borderColor: '#2A2010', borderRadius: 20, color: '#F5E6C8', paddingHorizontal: 14, paddingVertical: 10, fontSize: 14 },
   markerPin: { backgroundColor: '#1A1408', borderRadius: 20, padding: 6, borderWidth: 2, borderColor: '#C8860A' },
+  clusterCircle: {
+    backgroundColor: '#1A1408', borderWidth: 2, borderColor: '#C8860A',
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 2,
+    shadowColor: '#C8860A', shadowOpacity: 0.5, shadowRadius: 6, shadowOffset: { width: 0, height: 0 },
+    elevation: 6,
+  },
+  clusterCount: { color: '#C8860A', fontWeight: 'bold', fontSize: 14 },
 });

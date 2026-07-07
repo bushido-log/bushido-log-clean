@@ -4,9 +4,10 @@ import PaywallScreen from './PaywallScreen';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  TextInput, Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image
+  TextInput, Modal, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Image, Linking
 } from "react-native";
 import MapView, { Marker, Callout, Region } from 'react-native-maps';
+import * as Location from 'expo-location';
 import Supercluster from 'supercluster';
 import { supabase } from '../lib/supabase';
 
@@ -64,6 +65,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   const [chatTrivia, setChatTrivia] = useState('');
   const chatScrollRef = useRef<ScrollView>(null);
   const mapRef = useRef<MapView>(null);
+  const [locationGranted, setLocationGranted] = useState(false);
   const [mapRegion, setMapRegion] = useState<Region>({
     latitude: 18.1096,
     longitude: -77.2975,
@@ -88,6 +90,51 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
   };
 
   const openSpot = (spot: any) => { setSelectedSpot(spot); fetchReviews(spot.id); };
+
+  const goToMyLocation = async () => {
+    const { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert(
+        lang === 'ja' ? '位置情報が許可されていません' : 'Location Not Allowed',
+        lang === 'ja'
+          ? '設定アプリから位置情報を許可すると、マップに現在地を表示できます。'
+          : 'Enable location access in Settings to see your position on the map.',
+        [
+          { text: lang === 'ja' ? 'キャンセル' : 'Cancel', style: 'cancel' },
+          { text: lang === 'ja' ? '設定を開く' : 'Open Settings', onPress: () => Linking.openSettings() },
+        ]
+      );
+      return;
+    }
+    setLocationGranted(true);
+    try {
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      mapRef.current?.animateToRegion({
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude,
+        latitudeDelta: 0.05,
+        longitudeDelta: 0.05,
+      }, 800);
+    } catch {
+      Alert.alert(
+        lang === 'ja' ? '現在地を取得できませんでした' : 'Could Not Get Location',
+        lang === 'ja' ? '電波の良い場所でもう一度お試しください。' : 'Please try again in a moment.'
+      );
+    }
+  };
+
+  const openDirections = async (spot: any) => {
+    if (!spot?.latitude || !spot?.longitude) return;
+    const dest = `${spot.latitude},${spot.longitude}`;
+    const url = Platform.OS === 'ios'
+      ? `http://maps.apple.com/?daddr=${dest}&dirflg=d`
+      : `google.navigation:q=${dest}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${dest}`).catch(() => {});
+    }
+  };
 
   const handleDeleteSpot = async (spot: any) => {
     Alert.alert(lang === 'ja' ? 'スポット削除' : 'Delete Spot', lang === 'ja' ? '本当に削除しますか？' : 'Are you sure?', [
@@ -240,6 +287,7 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
             style={{ flex: 1 }}
             ref={mapRef}
             userInterfaceStyle="dark"
+            showsUserLocation={locationGranted}
             initialRegion={{
               latitude: 18.1096,
               longitude: -77.2975,
@@ -291,6 +339,9 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
               );
             })}
           </MapView>
+          <TouchableOpacity style={s.locateBtn} onPress={goToMyLocation}>
+            <Text style={{ fontSize: 22 }}>📍</Text>
+          </TouchableOpacity>
         </View>
 
       {/* List View */}
@@ -369,9 +420,14 @@ export default function JamaicaGuideScreen({ onBack }: { onBack: () => void }) {
                 <Text style={{ color: COLORS.gold, fontSize: 14 }}>📍 {selectedSpot.parish}</Text>
                 {selectedSpot.address ? <Text style={s.spotMuted}>{selectedSpot.address}</Text> : null}
                 <Text style={{ color: COLORS.text, fontSize: 15, lineHeight: 22, marginVertical: 10 }}>{lang === 'ja' && selectedSpot.description_ja ? selectedSpot.description_ja : selectedSpot.description}</Text>
-                <TouchableOpacity style={s.likeBtn} onPress={() => handleLike(selectedSpot)}>
-                  <Text style={{ color: '#FF6B6B' }}>❤️ {selectedSpot.likes} IRIE</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <TouchableOpacity style={s.directionsBtn} onPress={() => openDirections(selectedSpot)}>
+                    <Text style={{ color: '#C8860A', fontWeight: 'bold', fontSize: 15 }}>🧭 {lang === 'ja' ? 'ここへ行く' : 'Get Directions'}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={s.likeBtn} onPress={() => handleLike(selectedSpot)}>
+                    <Text style={{ color: '#FF6B6B' }}>❤️ {selectedSpot.likes} IRIE</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
               <Text style={s.sectionTitle}>{lang === 'ja' ? `レビュー (${reviews.length})` : `Reviews (${reviews.length})`}</Text>
               {reviews.map(r => (
@@ -643,6 +699,13 @@ const s = StyleSheet.create({
   spotName: { color: '#F5E6C8', fontSize: 16, fontWeight: 'bold' },
   spotMuted: { color: '#8B7355', fontSize: 13, marginTop: 2 },
   likeBtn: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, backgroundColor: '#2A1515', borderWidth: 1, borderColor: '#4A2020' },
+  directionsBtn: { flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: '#1A1408', borderWidth: 1.5, borderColor: '#C8860A', alignItems: 'center' },
+  locateBtn: {
+    position: 'absolute', bottom: 100, right: 16, width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#1A1408', borderWidth: 1.5, borderColor: '#C8860A',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#C8860A', shadowOpacity: 0.4, shadowRadius: 5, shadowOffset: { width: 0, height: 0 }, elevation: 5,
+  },
   fab: { position: 'absolute', backgroundColor: '#C8860A', paddingHorizontal: 20, paddingVertical: 14, borderRadius: 28 },
   modal: { flex: 1, backgroundColor: '#0D0A05' },
   sectionTitle: { color: '#C8860A', fontSize: 16, fontWeight: 'bold', marginBottom: 10, marginTop: 10 },

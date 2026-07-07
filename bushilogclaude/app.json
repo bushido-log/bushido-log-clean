@@ -19,7 +19,8 @@
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
         "NSCameraUsageDescription": "観光スポットの写真を投稿するために使用します",
-        "NSPhotoLibraryUsageDescription": "観光スポットの写真を投稿するために使用します"
+        "NSPhotoLibraryUsageDescription": "観光スポットの写真を投稿するために使用します",
+        "NSLocationWhenInUseUsageDescription": "マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。"
       }
     },
     "android": {

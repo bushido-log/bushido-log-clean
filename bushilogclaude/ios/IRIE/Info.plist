@@ -49,11 +49,11 @@
     <key>NSCameraUsageDescription</key>
     <string>観光スポットの写真を投稿するために使用します</string>
     <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
-    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。</string>
+    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。/ Used to show your location on the map and help you find nearby spots in Jamaica.</string>
     <key>NSLocationAlwaysUsageDescription</key>
-    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。</string>
+    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。/ Used to show your location on the map and help you find nearby spots in Jamaica.</string>
     <key>NSLocationWhenInUseUsageDescription</key>
-    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。</string>
+    <string>マップ上にあなたの現在地を表示し、近くのジャマイカのスポットを見つけやすくするために使用します。/ Used to show your location on the map and help you find nearby spots in Jamaica.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>Allow $(PRODUCT_NAME) to access your microphone</string>
     <key>NSMotionUsageDescription</key>

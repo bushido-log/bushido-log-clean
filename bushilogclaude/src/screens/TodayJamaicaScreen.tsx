@@ -28,6 +28,10 @@ const FALLBACK_DAILY = [
 
 const DIGEST_URL = 'https://irie-server.onrender.com/daily-digest';
 
+// Both floors share the same "today": Jamaica time (America/Jamaica = fixed UTC-5, no DST),
+// matching the server's digest date key. For JST users this lags device time by 14h — by design.
+const jamaicaNow = () => new Date(Date.now() - 5 * 3600 * 1000);
+
 export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
   const { lang } = useLang();
   const { premium } = usePurchase();
@@ -41,13 +45,13 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
   useEffect(() => { if (premium) fetchDigest(); }, [premium]);
 
   const fetchDaily = async () => {
-    const now = new Date();
-    const mmdd = `${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const now = jamaicaNow();
+    const mmdd = `${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}`;
     try {
       const { data } = await supabase.from('daily_content').select('*').eq('mm_dd', mmdd).maybeSingle();
       if (data) { setDaily(data); return; }
     } catch { /* table not ready yet — fall through */ }
-    const dayOfYear = Math.floor((now.getTime() - new Date(now.getFullYear(), 0, 0).getTime()) / 86400000);
+    const dayOfYear = Math.floor((now.getTime() - Date.UTC(now.getUTCFullYear(), 0, 0)) / 86400000);
     setDaily(FALLBACK_DAILY[dayOfYear % FALLBACK_DAILY.length]);
   };
 
@@ -66,10 +70,10 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
   };
 
   const dateLabel = () => {
-    const now = new Date();
-    return lang === 'ja'
-      ? `${now.getMonth() + 1}月${now.getDate()}日`
-      : now.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+    const now = jamaicaNow();
+    const m = now.getUTCMonth() + 1, d = now.getUTCDate();
+    const monthEn = ['January','February','March','April','May','June','July','August','September','October','November','December'][m - 1];
+    return lang === 'ja' ? `${m}月${d}日 (ジャマイカ時間)` : `${monthEn} ${d} (Jamaica time)`;
   };
 
   return (
@@ -97,6 +101,7 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
             <View style={s.card}>
               <Text style={s.cardTag}>🗣️ {lang === 'ja' ? '今日のパトワ' : "Today's Patois"}</Text>
               <Text style={s.patwaWord}>{daily.patwa}</Text>
+              {daily.patwa_kana ? <Text style={s.patwaKana}>{daily.patwa_kana}</Text> : null}
               <Text style={s.cardBody}>{lang === 'ja' ? daily.patwa_ja : daily.patwa_en}</Text>
             </View>
           </>
@@ -185,7 +190,8 @@ const s = StyleSheet.create({
   },
   cardTag: { color: COLORS.gold, fontSize: 12, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
   cardBody: { color: COLORS.text, fontSize: 15, lineHeight: 23 },
-  patwaWord: { color: COLORS.gold, fontSize: 22, fontWeight: 'bold', marginBottom: 6 },
+  patwaWord: { color: COLORS.gold, fontSize: 22, fontWeight: 'bold', marginBottom: 2 },
+  patwaKana: { color: COLORS.muted, fontSize: 13, marginBottom: 6 },
   sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, marginBottom: 10 },
   sectionTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
   proBadge: {

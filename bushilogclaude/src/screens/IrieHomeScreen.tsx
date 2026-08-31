@@ -8,10 +8,19 @@ import {
 const { width } = Dimensions.get('window');
 
 type Props = {
-  onNavigate: (screen: 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings') => void;
+  onNavigate: (screen: 'today' | 'patwa' | 'culture' | 'jamaica' | 'quiz' | 'settings') => void;
 };
 
 const MENU_ITEMS = [
+  {
+    screen: 'today' as const,
+    icon: '☀',
+    title: "Today's Jamaica",
+    sub_en: 'Daily News & Facts', sub_ja: '今日は何の日 & ニュース',
+    tag: 'TODAY',
+    color: '#C86A0A',
+    bg: '#241200',
+  },
   {
     screen: 'patwa' as const,
     icon: '🎙',

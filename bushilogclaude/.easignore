@@ -1,9 +1,0 @@
-# Not needed for EAS builds — keeps the upload archive small
-App.tsx.backup*
-App.tsx.bak*
-App.tsx.save
-App_*.zip
-*.py
-scripts/
-ios/Pods/
-ios/build/

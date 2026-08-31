@@ -1,0 +1,10 @@
+# Not needed for EAS builds — keeps the upload archive small
+bushilogclaude/App.tsx.backup*
+bushilogclaude/App.tsx.bak*
+bushilogclaude/App.tsx.save
+bushilogclaude/App_*.zip
+bushilogclaude/*.py
+bushilogclaude/scripts/
+bushilogclaude/ios/Pods/
+bushilogclaude/ios/build/
+server/

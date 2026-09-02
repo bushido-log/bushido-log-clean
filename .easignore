@@ -1,10 +1,35 @@
-# Not needed for EAS builds — keeps the upload archive small
+# NOTE: when .easignore exists, EAS ignores .gitignore entirely —
+# so this file must cover BOTH .gitignore patterns and extra exclusions.
+
+# dependencies (EAS reinstalls)
+node_modules/
+**/node_modules/
+
+# native build artifacts (EAS runs pod install)
+bushilogclaude/ios/Pods/
+bushilogclaude/ios/build/
+.expo/
+dist/
+web-build/
+
+# old app backups at repo root (1.7GB!)
+bushilogclaude_apple/
+bushilogclaude_backup_20260507/
+
+# app-dir backups and scratch
 bushilogclaude/App.tsx.backup*
 bushilogclaude/App.tsx.bak*
 bushilogclaude/App.tsx.save
 bushilogclaude/App_*.zip
 bushilogclaude/*.py
 bushilogclaude/scripts/
-bushilogclaude/ios/Pods/
-bushilogclaude/ios/build/
+
+# server (deployed separately on Render)
 server/
+
+# secrets-adjacent
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision

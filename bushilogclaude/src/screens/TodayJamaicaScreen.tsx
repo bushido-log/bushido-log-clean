@@ -91,7 +91,11 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
         {daily && (
           <>
             <View style={s.card}>
-              <Text style={s.cardTag}>📅 {lang === 'ja' ? '今日は何の日' : 'On This Day'}</Text>
+              <Text style={s.cardTag}>
+                {daily.is_dated
+                  ? `📅 ${lang === 'ja' ? '今日は何の日' : 'On This Day'}`
+                  : `📖 ${lang === 'ja' ? '今日のジャマイカ話' : "Today's Jamaica Story"}`}
+              </Text>
               <Text style={s.cardBody}>{lang === 'ja' ? daily.event_ja : daily.event_en}</Text>
             </View>
             <View style={s.card}>

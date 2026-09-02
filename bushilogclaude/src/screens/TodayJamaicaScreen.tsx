@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, ActivityIndicator, Linking,
+  Modal, ActivityIndicator, Linking, Image,
 } from 'react-native';
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
@@ -27,6 +27,7 @@ const FALLBACK_DAILY = [
 ];
 
 const DIGEST_URL = 'https://irie-server.onrender.com/daily-digest';
+const CHART_URL = 'https://irie-server.onrender.com/weekly-chart';
 
 // Both floors share the same "today": Jamaica time (America/Jamaica = fixed UTC-5, no DST),
 // matching the server's digest date key. For JST users this lags device time by 14h — by design.
@@ -40,9 +41,12 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
   const [digest, setDigest] = useState<any>(null);
   const [digestLoading, setDigestLoading] = useState(false);
   const [digestError, setDigestError] = useState(false);
+  const [chart, setChart] = useState<any>(null);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [chartError, setChartError] = useState(false);
 
   useEffect(() => { fetchDaily(); }, []);
-  useEffect(() => { if (premium) fetchDigest(); }, [premium]);
+  useEffect(() => { if (premium) { fetchDigest(); fetchChart(); } }, [premium]);
 
   const fetchDaily = async () => {
     const now = jamaicaNow();
@@ -67,6 +71,24 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
       setDigestError(true);
     }
     setDigestLoading(false);
+  };
+
+  const fetchChart = async () => {
+    setChartLoading(true);
+    setChartError(false);
+    try {
+      const res = await fetch(CHART_URL);
+      const data = await res.json();
+      if (data.ok) setChart(data);
+      else setChartError(true);
+    } catch {
+      setChartError(true);
+    }
+    setChartLoading(false);
+  };
+
+  const openVideo = (videoId: string) => {
+    Linking.openURL(`https://www.youtube.com/watch?v=${videoId}`).catch(() => {});
   };
 
   const dateLabel = () => {
@@ -125,8 +147,8 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
             </Text>
             <Text style={s.lockedSub}>
               {lang === 'ja'
-                ? '音楽・カルチャー・観光・スポーツの実際のニュースを、毎日要約・翻訳。すべて出典リンク付き。'
-                : 'Real music, culture, tourism and sports news — summarized daily with source links.'}
+                ? '音楽・カルチャー・観光・スポーツの実際のニュースを、毎日要約・翻訳。すべて出典リンク付き。さらに週間ダンスホールチャートも。'
+                : 'Real music, culture, tourism and sports news — summarized daily with source links. Plus a weekly dancehall chart.'}
             </Text>
             <View style={s.lockedBtn}>
               <Text style={{ color: '#000', fontWeight: 'bold' }}>{lang === 'ja' ? 'Proで読む →' : 'Read with Pro →'}</Text>
@@ -168,6 +190,63 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
           <Text style={s.digestFooter}>
             {lang === 'ja' ? `ジャマイカ時間 ${digest.date} のニュース` : `News for ${digest.date} (Jamaica time)`}
           </Text>
+        )}
+
+        {/* ===== 2F: weekly dancehall chart (Pro) ===== */}
+        {premium && (
+          <>
+            <View style={s.sectionRow}>
+              <Text style={s.sectionTitle}>🎵 {lang === 'ja' ? '今週のダンスホール' : "This Week's Dancehall"}</Text>
+              <Text style={s.proBadge}>PRO</Text>
+            </View>
+
+            {chartLoading ? (
+              <ActivityIndicator color={COLORS.gold} size="large" style={{ marginTop: 24 }} />
+            ) : chartError ? (
+              <View style={s.card}>
+                <Text style={s.cardBody}>{lang === 'ja' ? 'チャートを取得できませんでした。' : 'Could not load the chart.'}</Text>
+                <TouchableOpacity style={s.retryBtn} onPress={fetchChart}>
+                  <Text style={{ color: COLORS.gold, fontWeight: 'bold' }}>{lang === 'ja' ? '再試行' : 'Retry'}</Text>
+                </TouchableOpacity>
+              </View>
+            ) : chart?.holiday || !chart?.items?.length ? (
+              <View style={s.card}>
+                <Text style={s.cardBody}>
+                  {lang === 'ja' ? '今週のチャートはお休みです。また来週! 🎧' : 'No chart this week. Check back soon! 🎧'}
+                </Text>
+              </View>
+            ) : (
+              <>
+                {chart.selector_pick?.videoId && (
+                  <TouchableOpacity style={[s.card, s.pickCard]} onPress={() => openVideo(chart.selector_pick.videoId)}>
+                    <Text style={s.cardTag}>🎤 {lang === 'ja' ? '現地セレクターの一曲' : "Selector's Pick"}</Text>
+                    <Image
+                      source={{ uri: `https://i.ytimg.com/vi/${chart.selector_pick.videoId}/hqdefault.jpg` }}
+                      style={s.pickThumb}
+                    />
+                    {(() => {
+                      const it = chart.items.find((x: any) => x.video_id === chart.selector_pick.videoId);
+                      return it ? <Text style={s.pickTitle}>{it.artist} - {it.song}</Text> : null;
+                    })()}
+                    {chart.selector_pick.comment ? <Text style={s.cardBody}>{chart.selector_pick.comment}</Text> : null}
+                  </TouchableOpacity>
+                )}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingVertical: 4 }}>
+                  {chart.items.map((it: any, i: number) => (
+                    <TouchableOpacity key={it.video_id} style={s.trackCard} onPress={() => openVideo(it.video_id)}>
+                      <Image source={{ uri: it.thumbnail_url }} style={s.trackThumb} />
+                      <Text style={s.trackRank}>{i + 1}</Text>
+                      <Text style={s.trackArtist} numberOfLines={1}>{it.artist}</Text>
+                      <Text style={s.trackSong} numberOfLines={2}>{it.song}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <Text style={s.digestFooter}>
+                  {lang === 'ja' ? `${chart.week_key} 週のチャート · タップでYouTube` : `Week of ${chart.week_key} · tap to open YouTube`}
+                </Text>
+              </>
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -216,5 +295,16 @@ const s = StyleSheet.create({
   },
   sourceBtnText: { color: COLORS.gold, fontSize: 13 },
   retryBtn: { marginTop: 12, alignSelf: 'flex-start' },
-  digestFooter: { color: COLORS.muted, fontSize: 12, textAlign: 'center', marginTop: 4 },
+  digestFooter: { color: COLORS.muted, fontSize: 12, textAlign: 'center', marginTop: 4, marginBottom: 8 },
+  pickCard: { borderColor: COLORS.gold, borderWidth: 1.5 },
+  pickThumb: { width: '100%', aspectRatio: 16 / 9, borderRadius: 10, marginBottom: 10, backgroundColor: '#000' },
+  pickTitle: { color: COLORS.gold, fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
+  trackCard: {
+    width: 150, backgroundColor: COLORS.card, borderRadius: 12, padding: 8,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  trackThumb: { width: '100%', aspectRatio: 16 / 9, borderRadius: 8, backgroundColor: '#000' },
+  trackRank: { color: COLORS.gold, fontSize: 12, fontWeight: 'bold', marginTop: 6 },
+  trackArtist: { color: COLORS.text, fontSize: 13, fontWeight: 'bold', marginTop: 2 },
+  trackSong: { color: COLORS.muted, fontSize: 12, marginTop: 1 },
 });

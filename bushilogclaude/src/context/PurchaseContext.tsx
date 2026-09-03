@@ -28,8 +28,8 @@ type PurchaseContextType = {
   checkAI: (screen: ScreenKey) => { allowed: boolean; remaining: number };
   /** Increment usage after successful AI call */
   recordUsage: (screen: ScreenKey) => Promise<void>;
-  /** Submit receipt after purchase */
-  submitReceipt: (receiptData: Record<string, unknown>, productId: string) => Promise<boolean>;
+  /** Submit receipt after purchase. premium=false with success=true means e.g. an expired restored subscription */
+  submitReceipt: (receiptData: Record<string, unknown>, productId: string) => Promise<{ success: boolean; premium: boolean }>;
   /** Restore previous purchase */
   restore: (transactionId: string) => Promise<boolean>;
   /** Refresh data from server */
@@ -44,7 +44,7 @@ const PurchaseContext = createContext<PurchaseContextType>({
   premium: false,
   checkAI: () => ({ allowed: true, remaining: 2 }),
   recordUsage: async () => {},
-  submitReceipt: async () => false,
+  submitReceipt: async () => ({ success: false, premium: false }),
   restore: async () => false,
   refresh: async () => {},
 });
@@ -101,20 +101,20 @@ export function PurchaseProvider({ children }: { children: React.ReactNode }) {
 
   const submitReceipt = useCallback(async (receiptData: Record<string, unknown>, productId: string) => {
     console.log('[submitReceipt] called, deviceId:', deviceId, 'productId:', productId);
-    if (!deviceId) { console.log('[submitReceipt] FAIL: no deviceId'); return false; }
+    if (!deviceId) { console.log('[submitReceipt] FAIL: no deviceId'); return { success: false, premium: false }; }
     try {
       const result = await verifyReceipt(deviceId, receiptData, productId);
       console.log('[submitReceipt] server response:', JSON.stringify(result));
       if (result.success) {
         console.log('[submitReceipt] SUCCESS, purchase_type:', result.purchase?.purchase_type);
         setPurchase(result.purchase);
-        return true;
+        return { success: true, premium: result.purchase ? isPremium(result.purchase) : false };
       }
       console.log('[submitReceipt] FAIL: result.success is false');
-      return false;
+      return { success: false, premium: false };
     } catch (e) {
       console.warn('[submitReceipt] ERROR:', e);
-      return false;
+      return { success: false, premium: false };
     }
   }, [deviceId]);
 

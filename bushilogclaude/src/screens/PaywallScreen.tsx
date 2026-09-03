@@ -103,7 +103,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
       };
 
       try {
-        const success = await submitReceipt(receiptData, purchase.productId);
+        const { success } = await submitReceipt(receiptData, purchase.productId);
         if (success) {
           onClose();
         } else if (!isRedelivery) {
@@ -200,14 +200,20 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
               : null,
             expiresDate: null,
           };
-          const success = await submitReceipt(receiptData, target.productId);
-          console.log('[restore] submitReceipt result:', success);
-          if (success) { onClose(); return; }
+          const { success, premium: restoredPremium } = await submitReceipt(receiptData, target.productId);
+          console.log('[restore] submitReceipt result:', success, 'premium:', restoredPremium);
+          if (success && restoredPremium) { onClose(); return; }
+          // success but not premium = e.g. an expired subscription was restored.
+          // Fall through to the legacy paid-app check so a legacy lifetime user
+          // whose row was overwritten by a lapsed subscription can recover.
+          if (success && !restoredPremium) {
+            console.log('[restore] restored purchase is not premium (expired) — continuing to legacy check');
+          }
         }
       }
 
       // --- Step 2: Legacy paid app check (pre-free, Build <= 58) ---
-      console.log('[restore] No IAP purchase found, checking legacy paid app...');
+      console.log('[restore] No premium IAP purchase found, checking legacy paid app...');
       try {
         const appTx = await getAppTransactionIOS();
         console.log('[restore-appTx] result:', appTx ? JSON.stringify(appTx) : 'null');
@@ -227,7 +233,7 @@ export default function PaywallScreen({ onClose, screenName }: Props) {
               originalTransactionId: appTx.appTransactionId ?? null,
               expiresDate: null,
             };
-            const success = await submitReceipt(receiptData, 'legacy.paid.lifetime');
+            const { success } = await submitReceipt(receiptData, 'legacy.paid.lifetime');
             console.log('[restore-appTx] submitReceipt result:', success);
             if (success) { onClose(); return; }
             Alert.alert(t('Error', 'エラー'), t('Restore failed', '復元に失敗しました'));

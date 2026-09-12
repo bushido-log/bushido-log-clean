@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
-  Modal, ActivityIndicator, Linking, Image,
+  Modal, ActivityIndicator, Linking, Image, Alert,
 } from 'react-native';
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
 import PaywallScreen from './PaywallScreen';
 import { supabase } from '../lib/supabase';
+import { wasPromptedForPush, markPromptedForPush, enablePush } from '../lib/pushNotifications';
 
 const COLORS = {
   bg: '#0D0A05', card: '#1A1408', gold: '#C8860A', green: '#2D5A1B',
@@ -35,7 +36,7 @@ const jamaicaNow = () => new Date(Date.now() - 5 * 3600 * 1000);
 
 export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
   const { lang } = useLang();
-  const { premium } = usePurchase();
+  const { premium, deviceId } = usePurchase();
   const [showPaywall, setShowPaywall] = useState(false);
   const [daily, setDaily] = useState<any>(null);
   const [digest, setDigest] = useState<any>(null);
@@ -47,6 +48,24 @@ export default function TodayJamaicaScreen({ onBack }: { onBack: () => void }) {
 
   useEffect(() => { fetchDaily(); }, []);
   useEffect(() => { if (premium) { fetchDigest(); fetchChart(); } }, [premium]);
+
+  // One-time push opt-in prompt, contextual before the OS dialog
+  useEffect(() => {
+    (async () => {
+      if (!deviceId || (await wasPromptedForPush())) return;
+      await markPromptedForPush();
+      Alert.alert(
+        lang === 'ja' ? '毎朝のパトワ通知' : 'Daily Patois Notifications',
+        lang === 'ja'
+          ? '毎朝、今日のパトワをお届けしますか?(設定画面からいつでも変更できます)'
+          : 'Get the Patois phrase of the day every morning? (You can change this anytime in Settings.)',
+        [
+          { text: lang === 'ja' ? 'あとで' : 'Not now', style: 'cancel' },
+          { text: lang === 'ja' ? '受け取る' : 'Yes, notify me', onPress: () => { enablePush(deviceId); } },
+        ],
+      );
+    })();
+  }, [deviceId]);
 
   const fetchDaily = async () => {
     const now = jamaicaNow();

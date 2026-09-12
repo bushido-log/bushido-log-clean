@@ -1,22 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  SafeAreaView, Linking, Modal
+  SafeAreaView, Linking, Modal, Switch, Alert
 } from 'react-native';
 import { useLang } from '../context/LanguageContext';
 import { usePurchase } from '../context/PurchaseContext';
 import PaywallScreen from './PaywallScreen';
 import { PRIVACY_POLICY_TEXT, TERMS_OF_SERVICE_TEXT } from '../data/texts';
+import { isPushEnabled, enablePush, disablePush, markPromptedForPush } from '../lib/pushNotifications';
 
 type Props = { onBack: () => void };
 
 export default function SettingsScreen({ onBack }: Props) {
   const { lang, toggleLang } = useLang();
-  const { purchaseType, premium, purchase } = usePurchase();
+  const { purchaseType, premium, purchase, deviceId } = usePurchase();
   const [showPrivacy, setShowPrivacy] = useState(false);
   const [showTerms, setShowTerms] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
+  const [pushOn, setPushOn] = useState(false);
   const t = (en: string, ja: string) => (lang === 'ja' ? ja : en);
+
+  useEffect(() => { isPushEnabled().then(setPushOn); }, []);
+
+  const togglePush = async () => {
+    if (!deviceId) return;
+    if (pushOn) {
+      await disablePush(deviceId);
+      setPushOn(false);
+    } else {
+      await markPromptedForPush(); // avoid double-prompting on the Today screen
+      const ok = await enablePush(deviceId);
+      setPushOn(ok);
+      if (!ok) {
+        Alert.alert(
+          t('Notifications Not Enabled', '通知を有効にできませんでした'),
+          t('Please allow notifications for IRIE in the Settings app.', '設定アプリでIRIEの通知を許可してください。'),
+        );
+      }
+    }
+  };
 
   const appVersion = '1.0.0';
 
@@ -81,6 +103,20 @@ export default function SettingsScreen({ onBack }: Props) {
             <Text style={s.rowLabel}>{t('Current Language', '現在の言語')}</Text>
             <Text style={s.rowValue}>{lang === 'ja' ? '日本語 →EN' : 'English →JA'}</Text>
           </TouchableOpacity>
+        </View>
+
+        {/* 通知 */}
+        <View style={s.section}>
+          <Text style={s.sectionTitle}>{t('🔔 Notifications', '🔔 通知')}</Text>
+          <View style={s.row}>
+            <Text style={s.rowLabel}>{t('Daily Patois (every morning)', '毎朝のパトワ通知')}</Text>
+            <Switch
+              value={pushOn}
+              onValueChange={togglePush}
+              trackColor={{ false: '#2A2010', true: '#C8860A' }}
+              thumbColor="#F5E6C8"
+            />
+          </View>
         </View>
 
         {/* サポート */}
